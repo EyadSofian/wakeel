@@ -1,0 +1,6 @@
+@import "tailwindcss";
+@import "@wakeel/ui/theme.css";
+@import "@wakeel/ui/fonts.css";
+
+/* Tailwind scans these for class names; the shared UI package lives outside this folder. */
+@source "../../../packages/ui/src";

@@ -87,6 +87,24 @@
   --shadow-drag: 0 10px 24px -6px oklch(0 0 0 / 0.14);
   --shadow-modal: 0 20px 48px -12px oklch(0 0 0 / 0.2);
   --elevation-border: var(--border-hairline);
+
+  /* §2.6 Motion for CSS transitions; must equal packages/ui/src/motion.ts (a test checks). */
+  --duration-instant: 80ms;
+  --duration-fast: 120ms;
+  --duration-base: 160ms;
+  --duration-slow: 200ms;
+  --duration-slower: 240ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* §2.6: reduced motion keeps colour changes at 80 ms and drops every longer transition. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 80ms;
+    --duration-base: 80ms;
+    --duration-slow: 80ms;
+    --duration-slower: 80ms;
+  }
 }
 
 /* §2.1 and §2.5, dark. Two selectors: the system preference, unless pinned light, and a pinned dark. */

@@ -18,7 +18,10 @@
     "dev:infra:reset": "docker compose --profile init down --volumes",
     "db:bootstrap": "tsx --env-file-if-exists=.env packages/db/src/cli/bootstrap.ts",
     "db:migrate": "tsx --env-file-if-exists=.env packages/db/src/cli/migrate.ts",
-    "ui:contrast": "node tools/contrast.ts"
+    "ui:contrast": "node tools/contrast.ts",
+    "studio:shots": "pnpm --filter @wakeel/studio shots --",
+    "studio:motion": "pnpm --filter @wakeel/studio motion --",
+    "dev": "turbo run dev"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.7",

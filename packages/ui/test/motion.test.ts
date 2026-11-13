@@ -48,3 +48,32 @@ describe("reduced motion", () => {
     expect(full.panInertia).toBe(true);
   });
 });
+
+describe("CSS motion tokens", () => {
+  test("tokens.css durations and easing equal motion.ts", async () => {
+    const { readFileSync } = await import("node:fs");
+    const css = readFileSync(new URL("../src/tokens.css", import.meta.url), "utf8");
+    const root = css.slice(0, css.indexOf("}"));
+    const ms = (name: string) => Number(new RegExp(`--duration-${name}:\\s*(\\d+)ms`).exec(root)?.[1]) / 1000;
+    for (const [name, seconds] of Object.entries(duration)) expect(ms(name)).toBe(seconds);
+    expect(root).toContain(`--ease-out: cubic-bezier(${ease.out.join(", ")});`);
+  });
+});
+
+describe("enter and exit transitions", () => {
+  test("travel springs, opacity eases (opacity never uses a spring)", async () => {
+    const { enterTransition, exitTransition } = await import("../src/motion");
+    const full = enterTransition(motionTokens(false));
+    expect(full.y).toEqual(spring.gentle);
+    expect(full.opacity).toEqual({ type: "tween", duration: 0.24, ease: [0.2, 0, 0, 1] });
+    expect(exitTransition(motionTokens(false))).toEqual({ type: "tween", duration: 0.18, ease: [0.2, 0, 0, 1] });
+  });
+
+  test("reduced motion: everything is an 80 ms tween", async () => {
+    const { enterTransition, exitTransition } = await import("../src/motion");
+    const reduced = enterTransition(motionTokens(true));
+    for (const t of [reduced.y, reduced.x, reduced.opacity, exitTransition(motionTokens(true))]) {
+      expect(t).toEqual({ type: "tween", duration: 0.08, ease: [0.2, 0, 0, 1] });
+    }
+  });
+});
