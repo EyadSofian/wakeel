@@ -34,9 +34,17 @@ export function stepIssue(
 
 /** "Main › Greeting › Send message", or "Bot settings" for issues outside every workflow. */
 export function issueLocation(issue: DefinitionIssue, workflows: Readonly<Record<string, Workflow>>): string {
-  if (issue.workflowId === undefined) return "Bot settings";
+  return issueLocationParts(issue, workflows).join(" › ");
+}
+
+/**
+ * The same location as separate names, so each one can be isolated with `<bdi>`: an Arabic node
+ * name in an English workflow must not reorder the path around it.
+ */
+export function issueLocationParts(issue: DefinitionIssue, workflows: Readonly<Record<string, Workflow>>): string[] {
+  if (issue.workflowId === undefined) return ["Bot settings"];
   const wf = workflows[issue.workflowId];
-  if (!wf) return "A deleted workflow";
+  if (!wf) return ["A deleted workflow"];
   const parts = [wf.name];
   const node = issue.nodeId ? wf.nodes.find((n) => n.id === issue.nodeId) : undefined;
   if (node) parts.push(node.name);
@@ -44,5 +52,5 @@ export function issueLocation(issue: DefinitionIssue, workflows: Readonly<Record
     const card = node.cards.find((c) => c.id === issue.cardId);
     if (card) parts.push(CARD_NAMES[card.type]);
   }
-  return parts.join(" › ");
+  return parts;
 }

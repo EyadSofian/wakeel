@@ -1,9 +1,9 @@
 import type { DefinitionIssue } from "@wakeel/contracts";
 import { Kbd, Sheet, Skeleton } from "@wakeel/ui";
 import { CircleAlert, TriangleAlert } from "lucide-react";
-import { useMemo, useRef } from "react";
+import { Fragment, useMemo, useRef } from "react";
 import { useCanvas } from "../canvas/context";
-import { canJump, issueKey, issueLocation, orderIssues } from "./issue-order";
+import { canJump, issueKey, issueLocationParts, orderIssues } from "./issue-order";
 import { useShell, useShellState } from "./shell-store";
 import { useGoTo } from "./use-go-to";
 
@@ -79,7 +79,7 @@ function List({ issues, onJump }: { issues: DefinitionIssue[]; onJump: () => voi
             <ul className="flex flex-col">
               {group.map((issue) => {
                 const Icon = issue.severity === "error" ? CircleAlert : TriangleAlert;
-                const where = issueLocation(issue, docs);
+                const where = issueLocationParts(issue, docs);
                 const body = (
                   <>
                     <Icon
@@ -88,12 +88,16 @@ function List({ issues, onJump }: { issues: DefinitionIssue[]; onJump: () => voi
                       aria-label={issue.severity === "error" ? "Error" : "Warning"}
                     />
                     <span className="flex min-w-0 flex-col gap-1">
-                      <span dir="auto" className="text-body text-primary">
-                        {issue.message}
-                      </span>
+                      {/* Messages and fixes are English sentences that quote names; only the names are isolated. */}
+                      <span className="text-body text-primary">{issue.message}</span>
                       <span className="text-small text-secondary">{issue.fix}</span>
-                      <span dir="auto" className="truncate text-small text-tertiary">
-                        {where}
+                      <span className="truncate text-small text-tertiary">
+                        {where.map((part, i) => (
+                          <Fragment key={where.slice(0, i + 1).join(" › ")}>
+                            {i > 0 ? " › " : null}
+                            <bdi>{part}</bdi>
+                          </Fragment>
+                        ))}
                       </span>
                     </span>
                   </>

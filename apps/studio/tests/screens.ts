@@ -33,10 +33,12 @@ export type ScreenState =
   | "palette"
   | "palette-search"
   | "issues-panel"
+  | "issues-panel-rtl"
   | "workflows"
   | "workflow-menu"
   | "workflow-delete"
-  | "workflows-rtl";
+  | "workflows-rtl"
+  | "save-offline";
 
 export interface Screen {
   id: string;
@@ -167,10 +169,12 @@ SCREENS.push({
     "palette",
     "palette-search",
     "issues-panel",
+    "issues-panel-rtl",
     "workflows",
     "workflow-menu",
     "workflow-delete",
     "workflows-rtl",
+    "save-offline",
   ],
   sizes: DESKTOP,
   mock: true,

@@ -6,7 +6,7 @@ import { DEFAULT_MODELS, SCHEMA_VERSION } from "@wakeel/contracts";
  * and §8.1). Ids are fixed so shots are deterministic; every draft parses with the contract schemas
  * (tests/canvas-fixtures.test.ts).
  */
-export type CanvasFixture = "typical" | "dense-300" | "rtl" | "issues" | "empty";
+export type CanvasFixture = "typical" | "dense-300" | "rtl" | "issues" | "issues-rtl" | "empty";
 
 export const BOT = "bot_01m7a256m0a13warwhczsjhx9b";
 
@@ -228,8 +228,9 @@ function empty(): Workflow {
 }
 
 export function canvasDraft(kind: CanvasFixture): { manifest: BotManifest; workflows: Workflow[] } {
-  const rtl = kind === "rtl";
-  const main = kind === "dense-300" ? dense() : kind === "empty" ? empty() : typical(rtl, kind === "issues");
+  const rtl = kind === "rtl" || kind === "issues-rtl";
+  const issues = kind === "issues" || kind === "issues-rtl";
+  const main = kind === "dense-300" ? dense() : kind === "empty" ? empty() : typical(rtl, issues);
   const name = rtl ? "مساعد متجر إنجوسوفت" : kind === "dense-300" ? "Large flow" : "Store assistant";
   return { manifest: manifest(name, main.id, rtl), workflows: [main] };
 }

@@ -15,7 +15,7 @@ const definition = (kind: CanvasFixture) => {
 };
 
 describe("canvas review fixtures", () => {
-  it.each(["typical", "rtl", "empty", "dense-300", "issues"] as const)(
+  it.each(["typical", "rtl", "empty", "dense-300", "issues", "issues-rtl"] as const)(
     "%s parses with the contract schemas",
     (kind) => {
       expect(() => definition(kind)).not.toThrow();
@@ -26,8 +26,8 @@ describe("canvas review fixtures", () => {
     expect(validateDefinition(definition(kind))).toEqual([]);
   });
 
-  it("issues has at least one error and one warning", () => {
-    const severities = new Set(validateDefinition(definition("issues")).map((i) => i.severity));
+  it.each(["issues", "issues-rtl"] as const)("%s has at least one error and one warning", (kind) => {
+    const severities = new Set(validateDefinition(definition(kind)).map((i) => i.severity));
     expect(severities).toEqual(new Set(["error", "warning"]));
   });
 

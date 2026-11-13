@@ -71,8 +71,9 @@ function Row({ wf, active, onOpen }: { wf: Workflow; active: boolean; onOpen: ()
           active ? "bg-accent-subtle text-accent-text" : "text-primary hover:bg-subtle",
         ].join(" ")}
       >
-        <span dir="auto" className="min-w-0 flex-1 truncate text-start font-medium">
-          {wf.name}
+        {/* bdi, not dir="auto": an Arabic name keeps its own direction but stays at the start edge. */}
+        <span className="min-w-0 flex-1 truncate text-start font-medium">
+          <bdi>{wf.name}</bdi>
         </span>
         {kind ? <span className="shrink-0 text-small text-tertiary">{kind}</span> : null}
         <span className="shrink-0 text-small text-tertiary tabular-nums" title="Nodes">

@@ -201,7 +201,7 @@ export async function mockApi(
       ? variablesDraft(state === "rtl" ? "rtl" : state === "empty" ? "empty" : "default")
       : canvas === "workflows"
         ? workflowsDraft(state === "rtl")
-        : canvasDraft(state === "rtl" ? "rtl" : canvas);
+        : canvasDraft(state === "rtl" && canvas === "typical" ? "rtl" : canvas);
   let rev = 3;
   await page.route("**/v1/**", async (route) => {
     const url = new URL(route.request().url());

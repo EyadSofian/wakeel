@@ -18,7 +18,7 @@ const MOCK_STATES: readonly MockState[] = ["default", "empty", "loading", "error
 const mockStateFor = (screen: Screen, state: ScreenState): MockState => {
   if (screen.id === "sign-in") return "signed-out";
   if (state === "empty" && screen.id === "canvas") return "default";
-  if (state === "card-rtl" || state === "palette-search" || state === "workflows-rtl") return "rtl";
+  if (["card-rtl", "palette-search", "workflows-rtl", "issues-panel-rtl"].includes(state)) return "rtl";
   return MOCK_STATES.find((m) => m === state) ?? "default";
 };
 
@@ -29,9 +29,11 @@ const canvasFor = (screen: Screen, state: ScreenState): CanvasFixture | "variabl
       ? state
       : state === "issues-panel"
         ? "issues"
-        : state.startsWith("workflow")
-          ? "workflows"
-          : "typical";
+        : state === "issues-panel-rtl"
+          ? "issues-rtl"
+          : state.startsWith("workflow")
+            ? "workflows"
+            : "typical";
 
 /** Which card row of the first standard node each inspector state opens. */
 const CARD_ROW: Partial<Record<ScreenState, number>> = {
@@ -140,7 +142,7 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
     if (state === "palette-search") await page.keyboard.type("الطلبات");
     await settled(page.getByRole("dialog", { name: "Command palette" }));
   }
-  if (state === "issues-panel") {
+  if (state === "issues-panel" || state === "issues-panel-rtl") {
     await page.getByRole("button", { name: /Show issues$/ }).click();
     await settled(page.getByRole("dialog", { name: "Issues" }));
   }
@@ -155,6 +157,16 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
   if (state === "workflow-delete") {
     await page.getByRole("menuitem", { name: "Delete workflow" }).click();
     await settled(page.getByRole("dialog", { name: 'Delete workflow "Track order"?' }));
+  }
+  if (state === "save-offline") {
+    // §4 SaveIndicator: the network is gone, so an edit stays in the browser and the top bar says so.
+    await page.route("**/v1/**/docs/**", (route) =>
+      route.request().method() === "PUT" ? route.abort("internetdisconnected") : route.fallback(),
+    );
+    await page.locator(".react-flow__node").nth(1).locator("header").click();
+    await page.keyboard.press("Shift+ArrowDown");
+    await expect(page.getByRole("status").filter({ hasText: "Offline — changes kept locally" })).toBeVisible();
+    await page.keyboard.press("Escape");
   }
   if (state === "selection") {
     // Two nodes: one by click, one by Shift+click (design system §5.1 Selection).
