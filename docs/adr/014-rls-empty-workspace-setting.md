@@ -1,6 +1,6 @@
 # ADR-014 — RLS policy: treat an empty workspace setting as unset
 
-Status: proposed · Date: 2026-11-13 · **Security-critical: amends ADR-004; needs human review**
+Status: accepted (approved by Eyad, 2026-11-13) · Date: 2026-11-13 · **Security-critical: amends ADR-004**
 
 ## Context
 ADR-004 fixes one policy shape:
@@ -52,7 +52,7 @@ Change set if accepted (one small PR on top of task 0.5, before any tenant table
 ## Consequences
 - ADR-004's "one policy shape" changes text; the migration-time check enforces the new one.
 - No runtime cost difference.
-- Until this is decided, task 0.5 implements ADR-004 exactly as written, and the gap is documented in its PR.
+- Task 0.5 implemented ADR-004 as first written; the change lands as migration 0002 on top of it.
 
 ## Revisit when
 Postgres changes how custom settings behave after a transaction-local assignment, or we move off session-variable RLS.

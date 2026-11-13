@@ -1,0 +1,5 @@
+import type { Container } from "dockerode";
+import type { ContainerRuntimeClient } from "../container-runtime";
+import type { BoundPorts } from "../utils/bound-ports";
+import type { WaitStrategy } from "./wait-strategy";
+export declare const waitForContainer: (client: ContainerRuntimeClient, container: Container, waitStrategy: WaitStrategy, boundPorts: BoundPorts, startTime?: Date) => Promise<void>;

@@ -77,7 +77,7 @@ Dependency rule: `engine` and `autonomy` import only `contracts` and declare por
 ### 2.1 Tenancy (ADR-004)
 
 - The tenant is the **workspace**. Every tenant-owned table has `workspace_id text not null`.
-- Row-level security is enabled and **forced** on every tenant-owned table: `using (workspace_id = current_setting('app.workspace_id', true))` and the same `with check`.
+- Row-level security is enabled and **forced** on every tenant-owned table: `using (workspace_id = nullif(current_setting('app.workspace_id', true), ''))` and the same `with check` (ADR-014).
 - Database roles: `app_migrator` (owns objects, used only by migrations), `app_rw` (used by api and worker; `NOBYPASSRLS`, no DDL), `app_admin_ro` (support tooling; read-only, still RLS-bound unless a break-glass function is called and audited).
 - All tenant queries run through `withWorkspace(workspaceId, fn)` in `packages/db`, which opens a transaction and issues `select set_config('app.workspace_id', $1, true)`. A lint rule forbids importing the raw pool outside `packages/db`.
 - Cross-tenant lookups that must happen before the workspace is known (API key prefix → workspace, session → memberships, bridge key → connection) go through `security definer` functions that return only the ids needed.

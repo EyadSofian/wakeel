@@ -1,0 +1,3 @@
+import type { ContainerInspectInfo } from "dockerode";
+import type { InspectResult } from "../types";
+export declare function mapInspectResult(inspectResult: ContainerInspectInfo): InspectResult;

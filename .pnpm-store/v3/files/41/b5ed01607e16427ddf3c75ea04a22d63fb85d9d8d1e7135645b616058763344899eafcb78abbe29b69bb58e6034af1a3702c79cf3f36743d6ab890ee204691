@@ -1,0 +1,6 @@
+import { CredentialProvider } from "./credential-provider";
+import type { ContainerRuntimeConfig } from "./types";
+export declare class CredsStore extends CredentialProvider {
+    getName(): string;
+    getCredentialProviderName(_registry: string, dockerConfig: ContainerRuntimeConfig): string | undefined;
+}
