@@ -1,0 +1,3 @@
+import type Dockerode from "dockerode";
+import type { ImageName } from "../image-name";
+export declare function imageExists(dockerode: Dockerode, imageName: ImageName): Promise<boolean>;

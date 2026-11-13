@@ -1,0 +1,10 @@
+import type Dockerode from "dockerode";
+import type { Network, NetworkCreateOptions } from "dockerode";
+import type { NetworkClient } from "./network-client";
+export declare class DockerNetworkClient implements NetworkClient {
+    protected readonly dockerode: Dockerode;
+    constructor(dockerode: Dockerode);
+    getById(id: string): Network;
+    create(opts: NetworkCreateOptions): Promise<Network>;
+    remove(network: Dockerode.Network): Promise<void>;
+}

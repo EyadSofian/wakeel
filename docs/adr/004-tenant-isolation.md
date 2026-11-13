@@ -1,17 +1,17 @@
 # ADR-004 — Tenant isolation: one database, forced row-level security
 
-Status: accepted · Date: 2026-11-13 · **Security-critical: changes need human review**
+Status: accepted · Date: 2026-11-13 · Amended by ADR-014 · **Security-critical: changes need human review**
 
 ## Context
 Many workspaces share one Postgres. Application-level `where workspace_id = ?` filters fail silently when one query forgets them; Flowise, Dify and Typebot all rely on that pattern.
 
 ## Decision
 - Every tenant-owned table carries `workspace_id` and has `enable row level security` and `force row level security`.
-- One policy shape: `using (workspace_id = current_setting('app.workspace_id', true)) with check (same)`.
+- One policy shape: `using (workspace_id = nullif(current_setting('app.workspace_id', true), '')) with check (same)`. The `nullif` is from ADR-014.
 - The application connects as `app_rw` (`NOBYPASSRLS`, no DDL). Migrations run as `app_migrator`.
 - The only way to run a tenant query is `withWorkspace(id, fn)`, which opens a transaction and sets `app.workspace_id` with `set_config(..., true)` (transaction-local, safe with connection pooling in transaction mode).
 - Pre-tenant lookups (key prefix → workspace, session → memberships) are `security definer` SQL functions owned by `app_migrator`, each returning only ids.
-- If `app.workspace_id` is unset, the policy compares against NULL and returns no rows. Failing closed is the default.
+- If `app.workspace_id` is unset or empty, the policy compares against NULL: no rows are visible and none can be written. Failing closed is the default. (Empty matters: after one transaction-local `set_config`, a pooled connection reports `''`, not NULL; see ADR-014.)
 - A migration test asserts that every table with a `workspace_id` column has RLS forced and exactly the standard policies.
 
 ## Alternatives considered

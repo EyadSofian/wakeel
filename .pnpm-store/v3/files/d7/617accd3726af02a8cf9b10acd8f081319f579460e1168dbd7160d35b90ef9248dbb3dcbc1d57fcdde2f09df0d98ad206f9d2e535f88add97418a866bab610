@@ -1,0 +1,13 @@
+import type { ContainerInspectInfo } from "dockerode";
+import { type ContainerRuntimeClient } from "../../container-runtime";
+import type { HealthCheck } from "../../types";
+import type { WaitStrategy } from "../wait-strategy";
+type WaitStrategySelectorOptions = {
+    client: ContainerRuntimeClient;
+    inspectResult: ContainerInspectInfo;
+    waitStrategy?: WaitStrategy;
+    healthCheck?: HealthCheck;
+    imageNames?: string[];
+};
+export declare const selectWaitStrategy: ({ client, inspectResult, waitStrategy, healthCheck, imageNames, }: WaitStrategySelectorOptions) => Promise<WaitStrategy>;
+export {};

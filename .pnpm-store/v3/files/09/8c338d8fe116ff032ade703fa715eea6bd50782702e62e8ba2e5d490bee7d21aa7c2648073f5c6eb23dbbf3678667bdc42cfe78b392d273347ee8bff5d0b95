@@ -1,0 +1,3 @@
+import type { IDockerComposeOptions } from "docker-compose";
+import type { ComposeOptions } from "./types";
+export declare function defaultComposeOptions(environment: NodeJS.ProcessEnv, options: ComposeOptions): Partial<IDockerComposeOptions>;

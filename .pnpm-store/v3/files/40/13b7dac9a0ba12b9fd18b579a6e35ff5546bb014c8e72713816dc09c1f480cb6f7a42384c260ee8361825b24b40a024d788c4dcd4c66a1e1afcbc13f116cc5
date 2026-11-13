@@ -1,0 +1,62 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.RootlessUnixSocketStrategy = void 0;
+const node_fs_1 = require("node:fs");
+const node_os_1 = __importDefault(require("node:os"));
+const node_path_1 = __importDefault(require("node:path"));
+const common_1 = require("../../common");
+class RootlessUnixSocketStrategy {
+    platform;
+    env;
+    constructor(platform = process.platform, env = process.env) {
+        this.platform = platform;
+        this.env = env;
+    }
+    getName() {
+        return "RootlessUnixSocketStrategy";
+    }
+    async getResult() {
+        if (this.platform !== "linux" && this.platform !== "darwin") {
+            return;
+        }
+        const socketPath = [
+            this.getSocketPathFromEnv(),
+            this.getSocketPathFromHomeRunDir(),
+            this.getSocketPathFromHomeDesktopDir(),
+            this.getSocketPathFromRunDir(),
+        ]
+            .filter(common_1.isDefined)
+            .find((candidateSocketPath) => (0, node_fs_1.existsSync)(candidateSocketPath));
+        if (!socketPath) {
+            return;
+        }
+        return {
+            uri: `unix://${socketPath}`,
+            dockerOptions: { socketPath },
+            composeEnvironment: {},
+            allowUserOverrides: true,
+        };
+    }
+    getSocketPathFromEnv() {
+        const xdgRuntimeDir = this.env.XDG_RUNTIME_DIR;
+        if (xdgRuntimeDir !== undefined) {
+            return node_path_1.default.join(xdgRuntimeDir, "docker.sock");
+        }
+        else {
+            return undefined;
+        }
+    }
+    getSocketPathFromHomeRunDir() {
+        return node_path_1.default.join(node_os_1.default.homedir(), ".docker", "run", "docker.sock");
+    }
+    getSocketPathFromHomeDesktopDir() {
+        return node_path_1.default.join(node_os_1.default.homedir(), ".docker", "desktop", "docker.sock");
+    }
+    getSocketPathFromRunDir() {
+        return node_path_1.default.join("/run", "user", `${node_os_1.default.userInfo().uid}`, "docker.sock");
+    }
+}
+exports.RootlessUnixSocketStrategy = RootlessUnixSocketStrategy;
