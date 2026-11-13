@@ -208,6 +208,12 @@ importers:
 
   packages/telemetry:
     dependencies:
+      '@wakeel/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@wakeel/db':
+        specifier: workspace:*
+        version: link:../db
       pino:
         specifier: 10.4.0
         version: 10.4.0

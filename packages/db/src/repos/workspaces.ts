@@ -41,6 +41,8 @@ export interface CreateWorkspaceInput {
 export async function createWorkspace(
   db: Database,
   input: CreateWorkspaceInput,
+  /** Runs in the same transaction after the rows exist, for example to write the audit entry. */
+  alsoInTransaction?: (tx: Tx, created: { workspace: Workspace; membershipId: string }) => Promise<void>,
 ): Promise<{ workspace: Workspace; membershipId: string }> {
   const name = WorkspaceName.parse(input.name);
   const slug = WorkspaceSlug.parse(input.slug);
@@ -54,7 +56,9 @@ export async function createWorkspace(
       .returning()
       .catch(rethrowUnique({ workspaces_slug_key: "slug" }));
     await tx.insert(memberships).values({ id: membershipId, workspaceId: id, userId: input.ownerUserId, role });
-    return { workspace: toWorkspace(must(row)), membershipId };
+    const created = { workspace: toWorkspace(must(row)), membershipId };
+    await alsoInTransaction?.(tx, created);
+    return created;
   });
 }
 

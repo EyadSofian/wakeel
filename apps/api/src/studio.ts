@@ -8,6 +8,7 @@ import {
   type Membership,
   touchApiKey,
 } from "@wakeel/db";
+import type { AuditActor } from "@wakeel/telemetry";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { requireSession } from "./session";
 
@@ -106,4 +107,10 @@ export async function requirePermission(
   if (workspaceId !== key.workspaceId) throw new AppError("not_found");
   if (!key.scopes.includes(permission)) throw new AppError("forbidden");
   return { type: "api_key", workspaceId, key };
+}
+
+/** The audit actor for a request: the signed-in user or the API key, with the client address. */
+export function auditActor(ctx: MemberContext | ActorContext, request: FastifyRequest): AuditActor {
+  if ("type" in ctx && ctx.type === "api_key") return { type: "api_key", id: ctx.key.id, ip: request.ip };
+  return { type: "user", id: ctx.session.user.id, ip: request.ip };
 }

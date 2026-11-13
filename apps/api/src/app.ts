@@ -3,6 +3,7 @@ import type { Logger } from "@wakeel/telemetry";
 import Fastify from "fastify";
 import { PROBLEM_CONTENT_TYPE, toAppError, toProblem } from "./problem";
 import { apiKeyRoutes } from "./routes/api-keys";
+import { auditRoutes } from "./routes/audit";
 import { authRoutes } from "./routes/auth";
 import { invitationRoutes } from "./routes/invitations";
 import { memberRoutes } from "./routes/members";
@@ -101,6 +102,7 @@ export function buildApp(options: AppOptions) {
     void app.register(memberRoutes, deps);
     void app.register(invitationRoutes, deps);
     void app.register(apiKeyRoutes, deps);
+    void app.register(auditRoutes, deps);
   }
 
   return app;
