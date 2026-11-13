@@ -1,0 +1,26 @@
+{
+  "name": "Late order, Egyptian dialect, asks for a person",
+  "tags": ["ar-EG", "code-switch", "handoff"],
+  "user": { "name": "منى", "locale": "ar-EG", "attributes": { "plan": "gold" } },
+  "turns": [
+    {
+      "user": "ازيك، الأوردر بتاعي اتأخر اوي. رقمه 45123",
+      "assert": [
+        { "type": "toolCalled", "name": "lookupOrder", "input": { "orderId": { "equals": "45123" } } },
+        { "type": "contains", "text": "45123" },
+        { "type": "maxLatencyMs", "value": 8000 }
+      ]
+    },
+    {
+      "postback": "ar"
+    },
+    {
+      "user": "please I want to talk to a real person بقى",
+      "assert": [
+        { "type": "handoffRequested" },
+        { "type": "exitTaken", "exit": "needsHuman" },
+        { "type": "judge", "rubric": "The reply is polite, in Egyptian Arabic, and says a person will follow up." }
+      ]
+    }
+  ]
+}

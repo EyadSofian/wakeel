@@ -1,0 +1,35 @@
+{
+  "v": 1,
+  "status": "waiting_input",
+  "stack": [
+    {
+      "workflowId": "wf_e3EcDF6eqB",
+      "nodeId": "node_qFcKpkyCk2",
+      "cardIndex": 1,
+      "vars": {}
+    },
+    {
+      "workflowId": "wf_UdZwzTnxBs",
+      "nodeId": "node_Vj4Dc5OSke",
+      "cardIndex": 0,
+      "vars": { "var_Ae0r9HReQO": { "passages": [] } },
+      "call": { "outputs": { "status": "var_70S80b1amf" } }
+    }
+  ],
+  "conversationVars": { "var_fQVXMTn0Vr": "ar", "var_SHEQsDRBjy": "٤٥١٢٣" },
+  "wait": {
+    "kind": "capture",
+    "nodeId": "node_qFcKpkyCk2",
+    "cardId": "card_RFPilKy6x7",
+    "attempts": 1,
+    "since": "2026-11-13T09:00:02Z"
+  },
+  "autonomy": {
+    "wf_e3EcDF6eqB:node_E9LhcsG1bp": {
+      "iteration": 2,
+      "memo": { "askedForOrderNumber": true },
+      "feedback": [{ "kind": "run_error", "text": "lookupOrder: order 45123 was not found" }]
+    }
+  },
+  "summary": { "text": "العميل سأل عن مواعيد الشحن.", "throughSeq": 4 }
+}
