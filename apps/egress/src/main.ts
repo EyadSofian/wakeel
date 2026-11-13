@@ -6,6 +6,14 @@ import { systemResolver } from "./resolver";
 import { createEgressServer } from "./server";
 
 const config = loadConfigOrExit({ ...commonEnv, ...egressEnv });
+
+// With this set, Node sends requests through HTTP_PROXY / HTTPS_PROXY instead of the address egress
+// checked, which would bypass DNS pinning. Refuse to start rather than run without the guarantee.
+if (config && process.env["NODE_USE_ENV_PROXY"]) {
+  process.stderr.write("NODE_USE_ENV_PROXY is set. Unset it: egress must dial the addresses it checks itself.\n");
+  process.exit(1);
+}
+
 if (config) {
   const logger = createLogger({ service: "egress", level: config.logLevel });
   const server = createEgressServer({
