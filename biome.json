@@ -24,6 +24,9 @@
       "suspicious": {
         "noExplicitAny": "error"
       },
+      "complexity": {
+        "useLiteralKeys": "off"
+      },
       "style": {
         "noDefaultExport": "error",
         "useFilenamingConvention": {
