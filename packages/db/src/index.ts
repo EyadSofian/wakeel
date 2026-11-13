@@ -4,5 +4,6 @@ export * from "./migrate";
 export * from "./repos/index";
 export * from "./rls";
 export * from "./roles";
+export * from "./schema/bots";
 export * from "./schema/platform";
 export * from "./sql";

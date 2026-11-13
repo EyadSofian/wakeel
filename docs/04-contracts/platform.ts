@@ -187,3 +187,54 @@ export const ListQuery = z.strictObject({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   cursor: z.string().max(200).optional(),
 });
+
+// Bots and draft documents (task 2.1, ADR-006). Documents carry an integer revision sent as ETag.
+
+/** `bots.settings`: platform settings of a bot (not its behaviour, which is the manifest). Closed until a task adds one. */
+export const BotRecordSettings = z.strictObject({});
+
+export const BotSlug = WorkspaceSlug;
+
+export const BotResponse = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  defaultLocale: z.string(),
+  publishedVersionId: z.string().nullable(),
+  createdAt: isoDate,
+  updatedAt: isoDate,
+});
+export type BotResponse = z.infer<typeof BotResponse>;
+
+export const DraftDocSummary = z.object({
+  kind: z.enum(["manifest", "workflow"]),
+  docId: z.string(),
+  rev: z.number().int(),
+  /** Workflow name, or the bot's name for the manifest. */
+  name: z.string(),
+  updatedAt: isoDate,
+});
+export type DraftDocSummary = z.infer<typeof DraftDocSummary>;
+
+export const BotDetailResponse = BotResponse.extend({ docs: z.array(DraftDocSummary) });
+
+export const CreateBotRequest = z.strictObject({
+  name: z.string().trim().min(1).max(80),
+  slug: BotSlug,
+  defaultLocale: z
+    .string()
+    .regex(/^[a-z]{2,3}(-[A-Z][a-z]{3})?(-[A-Z]{2})?$/)
+    .optional(),
+});
+export const UpdateBotRequest = z
+  .strictObject({ name: z.string().trim().min(1).max(80).optional(), slug: BotSlug.optional() })
+  .refine((v) => v.name !== undefined || v.slug !== undefined, "Change at least one field");
+
+/** GET and PUT of a draft document. The body of a PUT is `{ doc }`; the revision travels in If-Match. */
+export const DraftDocResponse = z.object({
+  kind: z.enum(["manifest", "workflow"]),
+  docId: z.string(),
+  rev: z.number().int(),
+  doc: z.record(z.string(), z.unknown()),
+});
+export type DraftDocResponse = z.infer<typeof DraftDocResponse>;

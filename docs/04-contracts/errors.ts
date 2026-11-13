@@ -109,6 +109,8 @@ export const Problem = z.object({
   errors: z
     .array(z.object({ path: z.string(), code: z.string(), message: z.string() }))
     .optional(),
+  /** `revision_conflict` only: the server's copy, so the client can merge or reload (architecture §3). */
+  current: z.object({ rev: z.number().int(), doc: z.unknown() }).optional(),
 });
 export type Problem = z.infer<typeof Problem>;
 

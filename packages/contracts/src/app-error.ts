@@ -20,11 +20,13 @@ export class AppError extends Error {
   readonly params: ErrorParams;
   readonly detail: string | undefined;
   readonly errors: FieldError[] | undefined;
+  /** `revision_conflict`: the server's copy of the document (architecture §3). */
+  readonly current: { rev: number; doc: unknown } | undefined;
 
   constructor(
     code: ErrorCode,
     params: ErrorParams = {},
-    options: { detail?: string; errors?: FieldError[]; cause?: unknown } = {},
+    options: { detail?: string; errors?: FieldError[]; current?: { rev: number; doc: unknown }; cause?: unknown } = {},
   ) {
     super(fill(ERRORS[code].title, params), options.cause === undefined ? undefined : { cause: options.cause });
     this.name = "AppError";
@@ -32,6 +34,7 @@ export class AppError extends Error {
     this.params = params;
     this.detail = options.detail;
     this.errors = options.errors;
+    this.current = options.current;
   }
 
   get status(): number {

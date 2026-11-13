@@ -1,5 +1,6 @@
 export * from "./api-keys";
 export * from "./audit";
+export * from "./bots";
 export * from "./invitations";
 export * from "./memberships";
 export * from "./scope";

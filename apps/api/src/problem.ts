@@ -54,5 +54,6 @@ export function toProblem(error: AppError, requestId: string): Problem {
   };
   if (error.detail !== undefined) problem.detail = error.detail;
   if (error.errors !== undefined) problem.errors = error.errors;
+  if (error.current !== undefined) problem.current = error.current;
   return problem;
 }
