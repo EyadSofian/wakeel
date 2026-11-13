@@ -221,6 +221,16 @@ importers:
         specifier: 12.2.1
         version: 12.2.1(bare-buffer@3.7.2)
 
+  packages/engine:
+    dependencies:
+      '@wakeel/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
+      '@wakeel/testing':
+        specifier: workspace:*
+        version: link:../testing
+
   packages/telemetry:
     dependencies:
       '@wakeel/contracts':
