@@ -64,6 +64,25 @@ importers:
         specifier: 12.2.1
         version: 12.2.1(bare-buffer@3.7.2)
 
+  apps/egress:
+    dependencies:
+      '@wakeel/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@wakeel/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@wakeel/telemetry':
+        specifier: workspace:*
+        version: link:../../packages/telemetry
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@wakeel/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+
   apps/studio:
     dependencies:
       '@tanstack/react-query':
