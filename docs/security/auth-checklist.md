@@ -54,7 +54,11 @@ Status: ✅ done and tested · ⏳ later task · ⚠️ known gap (accepted or o
 | T2 | Pre-tenant lookups return ids only and run as a role nobody can log in as | ✅ | `app_lookup` (ADR-015) | "lookups (ADR-015)", "roles around the platform tables" |
 | T3 | Support tooling cannot read credentials | ✅ | `app_admin_ro` has no grant on sessions, accounts, verifications | "app_admin_ro cannot read …" |
 | T4 | Audit log is append-only for the application | ✅ | `update`, `delete`, `truncate` revoked from `app_rw` | "app_rw cannot change or delete audit entries" |
-| T5 | Role checks on every mutation | ⏳ | 1.3 | — |
+| T5 | Role checks on every Studio route | ✅ | `requirePermission` (session, CSRF, membership, permission); matrix in `docs/security/rbac.md` | `apps/api/test/rbac.test.ts`; `packages/auth/test/rbac.test.ts` (every permission × role) |
+| T5a | A workspace the caller is not in is `not_found`, so ids cannot be probed | ✅ | Guard answers 404 before checking the permission | "a workspace the user does not belong to is not_found" |
+| T5b | Owners: only owners touch owners; the last owner stays | ✅ | `checkRoleChange` and `checkRemoval`; owner rows locked and the actor's role read again in the transaction | "the last owner cannot be demoted", "two owners demoting each other at once" |
+| T5c | Invitation links: random 32 bytes, only SHA-256 stored, shown once, 7 days, single use, only for the invited email | ✅ | `apps/api/src/routes/invitations.ts` | "invitations" tests |
+| T5d | Someone who signs up with the invitee's email before they do can accept the invitation | ⚠️ open | Needs email verification (P7) | — |
 | T6 | API keys hashed, shown once, revocable, scoped | ⏳ | 1.4 | — |
 | T7 | Secrets encrypted with per-row data keys | ⏳ | 1.5 | — |
 | T8 | Every mutation writes an audit entry | ⏳ | 1.6 | — |

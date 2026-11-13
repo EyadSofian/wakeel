@@ -1,12 +1,10 @@
-import type { AuthService, SessionView } from "@wakeel/auth";
+import type { SessionView } from "@wakeel/auth";
 import { SessionResponse, SignInRequest, SignUpRequest } from "@wakeel/contracts";
 import type { FastifyInstance } from "fastify";
 import { requestContext, requireSession, requireStudioOrigin } from "../session";
+import type { StudioDeps } from "../studio";
 
-export interface AuthRoutesOptions {
-  auth: AuthService;
-  studioOrigin: string;
-}
+export type AuthRoutesOptions = Pick<StudioDeps, "auth" | "studioOrigin">;
 
 const toResponse = (s: SessionView): SessionResponse =>
   SessionResponse.parse({ user: s.user, expiresAt: s.expiresAt.toISOString(), csrfToken: s.csrfToken });

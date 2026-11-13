@@ -1,9 +1,12 @@
-import type { AuthService } from "@wakeel/auth";
 import { AppError, newRequestId, REQUEST_ID_PATTERN } from "@wakeel/contracts";
 import type { Logger } from "@wakeel/telemetry";
 import Fastify from "fastify";
 import { PROBLEM_CONTENT_TYPE, toAppError, toProblem } from "./problem";
 import { authRoutes } from "./routes/auth";
+import { invitationRoutes } from "./routes/invitations";
+import { memberRoutes } from "./routes/members";
+import { workspaceRoutes } from "./routes/workspaces";
+import type { StudioDeps } from "./studio";
 
 export type Role = "studio" | "bridge" | "all";
 
@@ -17,8 +20,8 @@ export interface AppOptions {
   readiness?: Record<string, ReadinessCheck>;
   /** Per-check limit for /health/ready. */
   readinessTimeoutMs?: number;
-  /** Studio sign-in; mounted for roles studio and all. */
-  auth?: { service: AuthService; studioOrigin: string };
+  /** The Studio API (sign-in, workspaces, members); mounted for roles studio and all. */
+  studio?: Omit<StudioDeps, "now"> & { now?: () => Date };
   /** Fastify `trustProxy`: which proxies may set X-Forwarded-For. Off by default. */
   trustProxy?: boolean | string | string[];
 }
@@ -90,8 +93,12 @@ export function buildApp(options: AppOptions) {
   // Bridge API under /v1/bridge (roles bridge, all).
   app.decorate("role", options.role);
 
-  if (options.auth && options.role !== "bridge") {
-    void app.register(authRoutes, { auth: options.auth.service, studioOrigin: options.auth.studioOrigin });
+  if (options.studio && options.role !== "bridge") {
+    const deps: StudioDeps = { ...options.studio, now: options.studio.now ?? (() => new Date()) };
+    void app.register(authRoutes, deps);
+    void app.register(workspaceRoutes, deps);
+    void app.register(memberRoutes, deps);
+    void app.register(invitationRoutes, deps);
   }
 
   return app;

@@ -19,6 +19,11 @@ export const ERRORS = {
     title: "An account with this email already exists",
     fix: "Sign in instead, or use a different email.",
   },
+  last_owner: {
+    status: 409,
+    title: "A workspace needs at least one owner",
+    fix: "Make another member an owner first.",
+  },
   csrf_failed: {
     status: 403,
     title: "This request did not come from the Studio",
