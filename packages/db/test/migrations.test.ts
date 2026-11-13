@@ -1,9 +1,16 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pg from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, inject, test } from "vitest";
-import { bootstrapDatabase, findRlsProblems, MigrationError, migrate } from "../src/index";
+import {
+  bootstrapDatabase,
+  findRlsProblems,
+  MIGRATIONS_DIR,
+  MigrationError,
+  migrate,
+  STANDARD_POLICY_EXPRESSION,
+} from "../src/index";
 import { roleUrl } from "../src/testing/index";
 
 const urls = inject("db");
@@ -218,5 +225,40 @@ describe("migrate", () => {
     write("0001_a.sql", "create table a (id int);");
     const asSuperuser = roleUrl(urls.superuser, { database: dbName });
     expect((await failure(migrate(asSuperuser, { dir }))).code).toBe("wrong_role");
+  });
+});
+
+describe("0002 (ADR-014) on a database that already has tenant tables", () => {
+  test("rewrites their policies to the nullif form", async () => {
+    const dbName = `adr14_${Math.random().toString(36).slice(2, 10)}`;
+    await withClient(urls.superuser, (c) => c.query(`create database ${dbName}`));
+    await bootstrapDatabase(roleUrl(urls.superuser, { database: dbName }), urls.passwords);
+    const migratorUrl = roleUrl(urls.migrator, { database: dbName });
+
+    // A database that only has 0001, with a tenant table made by 0001's version of the helper.
+    const onlyFirst = mkdtempSync(join(tmpdir(), "wakeel-adr14-"));
+    try {
+      copyFileSync(join(MIGRATIONS_DIR, "0001_foundation.sql"), join(onlyFirst, "0001_foundation.sql"));
+      await migrate(migratorUrl, { dir: onlyFirst });
+    } finally {
+      rmSync(onlyFirst, { recursive: true, force: true });
+    }
+    const policy = () =>
+      withClient(migratorUrl, async (c) => {
+        const { rows } = await c.query(
+          "select pg_get_expr(polqual, polrelid) as using, pg_get_expr(polwithcheck, polrelid) as check from pg_policy where polrelid = 'legacy'::regclass",
+        );
+        return rows[0];
+      });
+    await withClient(migratorUrl, (c) =>
+      c.query(
+        "create table legacy (id text, workspace_id text not null); call app_internal.enable_tenant_rls('legacy')",
+      ),
+    );
+    expect((await policy()).using).not.toContain("NULLIF");
+
+    expect((await migrate(migratorUrl)).applied).toEqual(["0002_rls_empty_workspace"]);
+    expect(await policy()).toEqual({ using: STANDARD_POLICY_EXPRESSION, check: STANDARD_POLICY_EXPRESSION });
+    expect(await withClient(migratorUrl, findRlsProblems)).toEqual([]);
   });
 });

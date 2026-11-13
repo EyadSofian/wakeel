@@ -17,8 +17,12 @@ export interface RlsProblem {
   detail: string;
 }
 
-/** The expression Postgres stores for the standard policy, as `pg_get_expr` prints it. */
-export const STANDARD_POLICY_EXPRESSION = "(workspace_id = current_setting('app.workspace_id'::text, true))";
+/**
+ * The expression Postgres stores for the standard policy, as `pg_get_expr` prints it. `nullif` makes
+ * an empty setting (what a reused pooled connection reports) behave like an unset one (ADR-014).
+ */
+export const STANDARD_POLICY_EXPRESSION =
+  "(workspace_id = NULLIF(current_setting('app.workspace_id'::text, true), ''::text))";
 export const STANDARD_POLICY_NAME = "tenant_isolation";
 
 interface Row extends Record<string, unknown> {
