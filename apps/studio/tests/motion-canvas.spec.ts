@@ -27,7 +27,11 @@ test.skip(
 );
 test.use({ viewport: { width: 1440, height: 900 } });
 
-async function open(page: Page, reducedMotion: "reduce" | "no-preference", fixture: "typical" | "issues" = "typical") {
+async function open(
+  page: Page,
+  reducedMotion: "reduce" | "no-preference",
+  fixture: "typical" | "issues" | "code" = "typical",
+) {
   await page.emulateMedia({ reducedMotion });
   await mockApi(page, "default", fixture);
   await page.goto(ROUTE);
