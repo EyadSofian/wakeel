@@ -99,18 +99,21 @@ export function FieldShell({
   label,
   help,
   problem,
+  path,
   children,
 }: {
   label: string;
   help?: string;
   problem: Problem | undefined;
+  /** Issue path of the field: the Issues panel and `F8` focus the control inside (task 2.8). */
+  path?: string;
   children: (control: { id: string; "aria-describedby"?: string; invalid: boolean }) => ReactNode;
 }) {
   const id = useId();
   const noteId = `${id}-note`;
   const hasNote = problem !== undefined || help !== undefined;
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" data-issue-path={path}>
       <label htmlFor={id} className="text-small font-medium text-primary">
         {label}
       </label>
@@ -171,7 +174,7 @@ export function StringField({
     if (draft !== value && !local) onCommit(draft);
   };
   return (
-    <FieldShell label={label} {...(help ? { help } : {})} problem={problem}>
+    <FieldShell label={label} {...(help ? { help } : {})} problem={problem} path={path}>
       {({ id, invalid, ...rest }) =>
         check === "expression" || check === "optional-expression" ? (
           <ExpressionInput
