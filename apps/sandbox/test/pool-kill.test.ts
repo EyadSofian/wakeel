@@ -29,15 +29,20 @@ describe("hard kill", () => {
   });
 
   test("an aborted exec in a runner that ignores the cancel flag is terminated after the grace period", async () => {
-    const pool = new SandboxPool({ size: 1, workerUrl: stuck });
+    let killed: (reason: string) => void = () => undefined;
+    const kill = new Promise<string>((resolve) => {
+      killed = resolve;
+    });
+    const pool = new SandboxPool({ size: 1, workerUrl: stuck, onKill: ({ reason }) => killed(reason) });
     await pool.start();
     try {
       const controller = new AbortController();
       const pending = pool.exec({ ...job, timeoutMs: 10_000 }, { signal: controller.signal });
       controller.abort();
       await expect(pending).rejects.toThrow();
+      expect(await kill).toBe("cancelled");
       await pool.whenReady();
-      expect(pool.health().kills).toBe(1);
+      expect(pool.health()).toMatchObject({ kills: 1, live: 1 });
     } finally {
       await pool.close();
     }

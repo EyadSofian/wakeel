@@ -78,7 +78,12 @@ describe("runs code", () => {
 describe("errors", () => {
   test("a thrown error is code_error with its line and column", async () => {
     const e = errorOf(await run("const a = 1;\nconst b = 2;\n  throw new Error('boom');"));
-    expect(e).toMatchObject({ code: "code_error", message: "boom", line: 3, column: 9 });
+    // QuickJS points the column at the call that built the error: `Error(` on that line.
+    expect(e).toMatchObject({ code: "code_error", message: "boom", line: 3, column: 18 });
+  });
+
+  test("columns on the first line are counted from the start of the caller's code", async () => {
+    expect(errorOf(await run("null.x;"))).toMatchObject({ code: "code_error", line: 1, column: 5 });
   });
 
   test("a runtime type error is code_error", async () => {
@@ -151,7 +156,8 @@ describe("deadline", () => {
 describe("memory", () => {
   test.each([
     ["a 1 GB ArrayBuffer", "const a = new ArrayBuffer(1024 * 1024 * 1024); return a.byteLength;"],
-    ["a 1 GB string", "const s = 'x'.repeat(1024 * 1024 * 1024); return s.length;"],
+    // 10^9 characters: QuickJS refuses 2^30 and more as an invalid length before allocating.
+    ["a 1 GB string", "const s = 'x'.repeat(1000 * 1000 * 1000); return s.length;"],
     ["an array that grows without end", "const a = []; for (;;) a.push({ n: a.length, s: 'payload' });"],
   ])("%s fails with code_memory_exceeded", async (_name, source) => {
     const e = errorOf(await run(source, { timeoutMs: 5_000 }));
@@ -166,7 +172,7 @@ describe("memory", () => {
   });
 
   test("the pool keeps serving after running out of memory", async () => {
-    await run("'x'.repeat(1024 * 1024 * 1024);");
+    await run("'x'.repeat(1000 * 1000 * 1000);");
     expect(resultOf(await run("return [1, 2, 3].length;"))).toBe(3);
   });
 });
@@ -201,8 +207,17 @@ describe("promise floods", () => {
   });
 
   test("an endless fan-out of promises terminates", async () => {
-    const e = errorOf(await run("for (;;) { Promise.resolve(1).then(() => {}); }", { timeoutMs: 3_000 }));
-    expect(["code_memory_exceeded", "code_timeout"]).toContain(e.code);
+    // The job queue fills the heap so fast that QuickJS cannot even build its "out of memory" error.
+    const e = errorOf(await run("for (;;) { Promise.resolve(1).then(() => {}); }", { timeoutMs: 5_000 }));
+    expect(e.code).toBe("code_memory_exceeded");
+  });
+
+  test("throwing null on a small heap is still code_error", async () => {
+    expect(errorOf(await run("throw null;"))).toMatchObject({ code: "code_error", message: "null" });
+    expect(errorOf(await run("await Promise.reject(undefined);"))).toMatchObject({
+      code: "code_error",
+      message: "undefined",
+    });
   });
 
   test("an endless chain of awaits terminates", async () => {
@@ -255,8 +270,9 @@ describe("isolation", () => {
 
 describe("pool", () => {
   test("more execs than workers queue and all finish", async () => {
-    const outcomes = await Promise.all(Array.from({ length: 12 }, (_, i) => run(`return ${i} * 2;`)));
-    expect(outcomes.map(resultOf)).toEqual(Array.from({ length: 12 }, (_, i) => i * 2));
+    // Two runners plus a queue of eight (four per runner).
+    const outcomes = await Promise.all(Array.from({ length: 10 }, (_, i) => run(`return ${i} * 2;`)));
+    expect(outcomes.map(resultOf)).toEqual(Array.from({ length: 10 }, (_, i) => i * 2));
   });
 
   test("health reports the pool", () => {
