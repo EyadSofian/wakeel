@@ -39,7 +39,14 @@ export type ScreenState =
   | "workflow-menu"
   | "workflow-delete"
   | "workflows-rtl"
-  | "save-offline";
+  | "save-offline"
+  // Task 2.9: the Run code form and the code drawer.
+  | "card-code"
+  | "code-drawer"
+  | "code-drawer-rtl"
+  | "code-drawer-loading"
+  | "code-drawer-error"
+  | "code-drawer-empty";
 
 export interface Screen {
   id: string;
@@ -177,6 +184,12 @@ SCREENS.push({
     "workflow-delete",
     "workflows-rtl",
     "save-offline",
+    "card-code",
+    "code-drawer",
+    "code-drawer-rtl",
+    "code-drawer-loading",
+    "code-drawer-error",
+    "code-drawer-empty",
   ],
   sizes: DESKTOP,
   mock: true,

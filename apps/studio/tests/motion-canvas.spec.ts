@@ -166,6 +166,26 @@ for (const mode of MODES) {
   });
 }
 
+// Task 2.9 (design system §5.2): the code drawer slides up with spring.smooth; reduced motion fades.
+for (const mode of MODES) {
+  test(`code drawer open ${mode.id}`, async ({ page }) => {
+    mkdirSync(DIR, { recursive: true });
+    await open(page, mode.reducedMotion, "code");
+    await page.locator(".react-flow__node [data-card] > div:first-child").nth(4).click();
+    // Load Monaco first, so the frames show the drawer moving rather than the editor arriving.
+    await page.getByRole("complementary").getByRole("button", { name: "Edit code" }).click();
+    const drawer = page.getByRole("region", { name: /^Code of Run code in / });
+    await expect(drawer.locator(".monaco-editor")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(drawer).toHaveCount(0);
+    await page.getByRole("complementary").getByRole("button", { name: "Edit code" }).click();
+    const { timing } = await frames(page.locator(".wk-canvas").locator(".."), `${DIR}/code-drawer-open-${mode.id}`);
+    const props = timing.flatMap((t) => t.props);
+    if (mode.id === "reduced") expect(props).not.toContain("transform");
+    else expect(props).toContain("transform");
+  });
+}
+
 test.describe("videos", () => {
   for (const mode of MODES) {
     test(`all four, real time, ${mode.id}`, async ({ browser }) => {
