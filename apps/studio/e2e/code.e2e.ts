@@ -81,7 +81,7 @@ test("autocomplete shows workflow.email with its type, and the code is saved", a
   await page.keyboard.press("Escape");
   await expect(drawer(page)).toHaveCount(0);
   await expect(edit).toBeFocused();
-  await expect(inspector(page).locator("pre")).toHaveText("const to = workflow.email;");
+  await expect(inspector(page).locator("[data-code-preview]")).toHaveText("const to = workflow.email;");
   const wf = await stored(page, ws, bot);
   const card = wf.nodes.flatMap((n) => n.cards ?? []).find((c) => c.type === "code") as
     | { type: "code"; source: string }
