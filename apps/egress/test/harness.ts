@@ -22,6 +22,8 @@ export const PUBLIC_V6 = "2606:2800:21f:cb07:6820:80da:af6b:8b2c";
 export const PUBLIC_TLS = "93.184.215.15";
 
 export const TOKEN = "test-egress-token-0123456789abcdef";
+/** Signs exec capability tokens in tests (ADR-023 §4). */
+export const CAPABILITY_KEY = "test-capability-key-0123456789abcdef";
 export const WORKSPACE = "ws_01jcqz5p6q7r8s9t0v1w2x3y4z";
 export const OTHER_WORKSPACE = "ws_01jcqz5p6q7r8s9t0v1w2x3y5a";
 
@@ -193,6 +195,7 @@ export async function startHarness(overrides: Partial<Pick<EgressOptions, "rate"
   const clock = new FakeClock();
   const egress = createEgressServer({
     token: TOKEN,
+    capabilityKey: CAPABILITY_KEY,
     resolver,
     clock,
     rate: overrides.rate ?? { perMinute: 60_000, burst: 10_000 },
@@ -230,15 +233,17 @@ export interface EgressReply {
 export async function callEgress(
   h: Pick<Harness, "egressUrl">,
   body: Record<string, unknown>,
-  init: { token?: string | null } = {},
+  init: { token?: string | null; capability?: string } = {},
 ): Promise<EgressReply> {
   const headers: Record<string, string> = { "content-type": "application/json" };
   const token = init.token === undefined ? TOKEN : init.token;
-  if (token !== null) headers["authorization"] = `Bearer ${token}`;
+  if (init.capability !== undefined) headers["authorization"] = `Capability ${init.capability}`;
+  else if (token !== null) headers["authorization"] = `Bearer ${token}`;
   const res = await fetch(`${h.egressUrl}/v1/fetch`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ workspaceId: WORKSPACE, ...body }),
+    // A capability token names the workspace itself, so the sandbox sends none.
+    body: JSON.stringify(init.capability !== undefined ? body : { workspaceId: WORKSPACE, ...body }),
   });
   const text = await res.text();
   return { status: res.status, headers: res.headers, json: text === "" ? undefined : JSON.parse(text) };

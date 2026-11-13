@@ -392,8 +392,9 @@ describe("pool", () => {
     }
   });
 
-  test("kinds other than code are refused until their guest layer exists", async () => {
-    await expect(pool.exec({ ...job("1"), kind: "expressions" })).rejects.toMatchObject({ code: "validation_failed" });
+  test("autonomy_run is refused until its guest layer exists (Phase 6)", async () => {
+    // `expressions` gained its guest layer in 3.3; see expressions.test.ts.
+    await expect(pool.exec({ ...job("1"), kind: "autonomy_run" })).rejects.toMatchObject({ code: "validation_failed" });
   });
 });
 
