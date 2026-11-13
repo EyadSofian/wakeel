@@ -9,6 +9,7 @@
 import type { QuickJSContext, QuickJSHandle, QuickJSWASMModule } from "quickjs-emscripten-core";
 import { type GuestSession, type HostChannel, installGuest, PreludeError } from "../guest/index.ts";
 import type { ErrorFrame, ExecOutcome } from "../protocol.ts";
+import { createHeapGuard, type HeapGuard } from "./heap.ts";
 import type { ExecJob } from "./messages.ts";
 
 /** File name the guest's stack traces and syntax errors refer to. */
@@ -29,6 +30,11 @@ const JOB_BATCH = 512;
 export interface RunControl {
   /** True once the pool has cancelled this exec (the caller went away). */
   cancelled(): boolean;
+  /**
+   * True when the module's WASM memory has grown to its fixed maximum. The runner is replaced after
+   * any exec that leaves it there, so during an exec it means this exec filled the heap.
+   */
+  atCeiling(): boolean;
 }
 
 export interface RunReport {
@@ -53,8 +59,17 @@ export async function runExec(
   const ctx = runtime.newContext();
   const held: QuickJSHandle[] = [];
   let session: GuestSession | undefined;
+  let guard: HeapGuard | undefined;
   let report: RunReport;
   try {
+    guard = createHeapGuard(ctx);
+    if (job.reserveBytes > 0) {
+      // Held by the host, reachable from no guest value: it takes the share of the module's fixed
+      // WASM ceiling that this exec's lower limit does not grant. Taken before the limit is set.
+      const reserve = guard.hold(job.reserveBytes);
+      if (!reserve) return internal("the runner's memory is fragmented", true);
+      held.push(reserve);
+    }
     runtime.setMemoryLimit(job.memoryMb * 1024 * 1024);
     runtime.setMaxStackSize(job.stackBytes);
     runtime.setInterruptHandler(() => Date.now() >= job.deadline || control.cancelled());
@@ -65,13 +80,13 @@ export async function runExec(
     json.dispose();
     held.push(stringify);
 
-    session = installGuest(ctx, job, channel);
+    session = installGuest(ctx, job, channel, guard);
     const setupMs = performance.now() - started;
 
     const outcome =
       job.kind === "expressions"
-        ? evaluateExpressions(ctx, job, control, stringify)
-        : await evaluate(ctx, job, control, session, stringify);
+        ? evaluateExpressions(ctx, job, control, stringify, guard)
+        : await evaluate(ctx, job, control, session, stringify, guard);
     session.finish();
     const runMs = performance.now() - started - setupMs;
     report = {
@@ -85,7 +100,13 @@ export async function runExec(
     // Raised by the host layer, not the guest: QuickJS reports guest errors as values.
     if (error instanceof PreludeError) {
       // The guest API could not be installed: no guest code ran yet, so only the limits can be to blame.
-      report = { outcome: limitFailure(ctx, job, control) ?? internal(error.message, false).outcome, recycle: false };
+      const outcome: ErrorFrame | undefined =
+        error.reason === "memory"
+          ? memoryExceeded(job)
+          : error.reason === "nesting"
+            ? { t: "error", code: "code_error", message: error.message }
+            : limitFailure(ctx, job, control);
+      report = { outcome: outcome ?? internal(error.message, false).outcome, recycle: false };
     } else {
       report =
         error instanceof RangeError && /call stack/i.test(error.message)
@@ -97,6 +118,7 @@ export async function runExec(
   try {
     session?.dispose();
     for (const handle of held) handle.dispose();
+    guard?.dispose();
     ctx.dispose();
     runtime.dispose();
   } catch {
@@ -114,9 +136,13 @@ async function evaluate(
   control: RunControl,
   session: GuestSession,
   stringify: QuickJSHandle,
+  guard: HeapGuard,
 ): Promise<Settled> {
+  const wrapped = `${PREFIX}${job.source}${SUFFIX}`;
+  // The scopes are in the heap by now; the source is copied in only if it fits (see heap.ts).
+  if (!guard.room(Buffer.byteLength(wrapped, "utf8"))) return memoryExceeded(job);
   // Strict mode (ADR-023 §7): a write to a frozen scope throws at its line instead of being ignored.
-  const evaluated = ctx.evalCode(`${PREFIX}${job.source}${SUFFIX}`, SOURCE_NAME, { type: "global", strict: true });
+  const evaluated = ctx.evalCode(wrapped, SOURCE_NAME, { type: "global", strict: true });
   if (evaluated.error) {
     const handle = evaluated.error;
     try {
@@ -152,6 +178,8 @@ async function evaluate(
       }
 
       if (Date.now() >= job.deadline || control.cancelled()) return classify(ctx, job, control, undefined);
+      // A host answer that did not fit in the heap could not be delivered (see heap.ts).
+      if (session.outOfMemory()) return memoryExceeded(job);
 
       if (ctx.runtime.hasPendingJob()) {
         const ran = ctx.runtime.executePendingJobs(JOB_BATCH);
@@ -327,7 +355,7 @@ function classify(
     return { t: "error", code: "code_timeout", message: `ran longer than ${job.timeoutMs} ms` };
   }
   const outOfMemory = described.name === "InternalError" && described.message === "out of memory";
-  if (outOfMemory || (described.nullish && atMemoryLimit(ctx, job))) {
+  if (outOfMemory || (described.nullish && (control.atCeiling() || atMemoryLimit(ctx, job)))) {
     return { t: "error", code: "code_memory_exceeded", message: `used more than ${job.memoryMb} MB` };
   }
   return { t: "error", code: "code_error", message: described.message, ...position(described) };
@@ -335,8 +363,9 @@ function classify(
 
 /**
  * When QuickJS runs out of memory while building its own "out of memory" error (a flood of promise
- * jobs does this), the exception arrives as `null`. A nullish exception from a heap at its limit is
- * therefore a memory failure. A program that holds as much data and then throws `null` itself is
+ * jobs, or many small allocations up to the WASM ceiling, does this), the exception arrives as `null`.
+ * A nullish exception from a heap at its limit, or from a module at its ceiling, is therefore a
+ * memory failure. A program that holds as much data and then throws `null` itself is
  * reported the same way; nothing else can tell the two apart. Only called after the guest stopped:
  * the limit is lifted so the measurement itself can allocate.
  */
@@ -378,6 +407,7 @@ function evaluateExpressions(
   job: ExecJob,
   control: RunControl,
   stringify: QuickJSHandle,
+  guard: HeapGuard,
 ): Settled {
   const outcomes: ({ ok: true; value?: unknown } | { ok: false; message: string })[] = [];
   for (const expression of job.expressions ?? []) {
@@ -385,7 +415,10 @@ function evaluateExpressions(
       outcomes.push({ ok: false, message: expression.invalid });
       continue;
     }
-    const evaluated = ctx.evalCode(`(${expression.source}\n)`, EXPRESSION_NAME, { type: "global", strict: true });
+    const text = `(${expression.source}\n)`;
+    // An earlier expression may have filled the heap; the text is copied in only if it fits.
+    if (!guard.room(Buffer.byteLength(text, "utf8"))) return memoryExceeded(job);
+    const evaluated = ctx.evalCode(text, EXPRESSION_NAME, { type: "global", strict: true });
     if (evaluated.error) {
       const handle = evaluated.error;
       try {
@@ -434,6 +467,10 @@ function limitFailure(ctx: QuickJSContext, job: ExecJob, control: RunControl): E
     return { t: "error", code: "code_memory_exceeded", message: `used more than ${job.memoryMb} MB` };
   }
   return undefined;
+}
+
+function memoryExceeded(job: ExecJob): ErrorFrame {
+  return { t: "error", code: "code_memory_exceeded", message: `used more than ${job.memoryMb} MB` };
 }
 
 function internal(message: string, recycle: boolean): RunReport {

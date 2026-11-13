@@ -11,6 +11,7 @@ import { Worker } from "node:worker_threads";
 import { SANDBOX_LIMITS } from "@wakeel/config";
 import { AppError, parseExpression } from "@wakeel/contracts";
 import { fetchThroughEgress } from "./egress-client.ts";
+import { GUEST_LIMITS } from "./guest/index.ts";
 import type { ExecOutcome } from "./protocol.ts";
 import type {
   BatchExpression,
@@ -60,6 +61,9 @@ export interface PoolHealth {
 
 interface Task {
   job: ExecJobInput;
+  /** The scopes as JSON text and the values to redact, made here so a runner never sees the raw input. */
+  scopesText: string;
+  secrets: string[];
   /** `kind: "expressions"`: the batch, parsed on this thread (ADR-018). */
   expressions?: BatchExpression[];
   /** Aborts the guest's fetches when the exec ends. */
@@ -158,9 +162,21 @@ export class SandboxPool {
       return Promise.reject(new AppError("internal_error", {}, { detail: "the sandbox has no working runner" }));
     }
     if (options.signal?.aborted) return Promise.reject(options.signal.reason);
+    const scopesText = scopesAsJson(job.scopes);
+    if (scopesText instanceof AppError) return Promise.reject(scopesText);
+    const secrets = secretValues(job);
 
     return new Promise<ExecOutcome>((resolve, reject) => {
-      const task: Task = { job, options, resolve, reject, settled: false, fetches: new AbortController() };
+      const task: Task = {
+        job,
+        scopesText,
+        secrets,
+        options,
+        resolve,
+        reject,
+        settled: false,
+        fetches: new AbortController(),
+      };
       if (expressions) task.expressions = expressions;
       const idle = this.#idleRunner();
       if (idle) {
@@ -217,7 +233,14 @@ export class SandboxPool {
 
   #spawn(): Promise<void> {
     const cancel = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT);
-    const data: RunnerData = { cancel, wasmMemoryMaxBytes: SANDBOX_LIMITS.threadWasmMemoryMb * 1024 * 1024 };
+    const MB = 1024 * 1024;
+    const data: RunnerData = {
+      cancel,
+      wasmMemory: {
+        initialBytes: SANDBOX_LIMITS.wasmMemoryInitialMb * MB,
+        maximumBytes: (SANDBOX_LIMITS.maxMemoryMb + SANDBOX_LIMITS.wasmMemoryOverheadMb) * MB,
+      },
+    };
     const worker = new Worker(this.#workerUrl, {
       workerData: data,
       resourceLimits: {
@@ -319,10 +342,33 @@ export class SandboxPool {
     const deadline = Date.now() + task.job.timeoutMs;
     this.#deadlines.set(task, deadline);
     // The capability token stays on this thread: runners never see a credential.
-    const { capabilityToken: _token, ...rest } = task.job;
-    const job: ExecJob = { ...rest, deadline, stackBytes: SANDBOX_LIMITS.interpreterStackBytes };
+    const { capabilityToken: _token, scopes: _scopes, secretKeys: _keys, ...rest } = task.job;
+    const job: ExecJob = {
+      ...rest,
+      scopesText: task.scopesText,
+      secrets: task.secrets,
+      reserveBytes: reserveFor(task.job.memoryMb),
+      deadline,
+      stackBytes: SANDBOX_LIMITS.interpreterStackBytes,
+    };
     if (task.expressions) job.expressions = task.expressions;
-    runner.worker.postMessage({ type: "exec", job } satisfies MainToWorker);
+    try {
+      runner.worker.postMessage({ type: "exec", job } satisfies MainToWorker);
+    } catch (error) {
+      // Only plain strings and numbers are sent, so this should not happen; if it does, the runner
+      // must not stay marked busy with nothing running.
+      runner.task = undefined;
+      this.#settle(task, {
+        outcome: {
+          t: "error",
+          code: "internal_error",
+          message: `the exec could not be handed to a runner: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      });
+      runner.state = "idle";
+      this.#pump();
+      return;
+    }
 
     runner.killTimer = setTimeout(
       () => this.#kill(runner, "deadline"),
@@ -416,6 +462,57 @@ export class SandboxPool {
     if ("outcome" in how) task.resolve(how.outcome);
     else task.reject(how.reason);
   }
+}
+
+/**
+ * WASM memory held back for an exec with a lower limit than the maximum. The hold is one block, and
+ * the heap around it loses about 2 MB to fragmentation; that much is given back so the guest gets
+ * about what it asked for, never less.
+ */
+function reserveFor(memoryMb: number): number {
+  const MB = 1024 * 1024;
+  return Math.max(0, SANDBOX_LIMITS.maxMemoryMb - memoryMb - RESERVE_SLACK_MB) * MB;
+}
+const RESERVE_SLACK_MB = 2;
+
+/**
+ * The scopes as JSON text. Values from the HTTP edge always serialise; a caller of the pool can still
+ * pass a cycle or a value nested deeper than V8's stack, which is refused here, before a runner is
+ * involved, so it can never leave one marked busy.
+ */
+function scopesAsJson(scopes: Record<string, unknown> | undefined): string | AppError {
+  try {
+    return JSON.stringify(scopes ?? {});
+  } catch {
+    return new AppError(
+      "validation_failed",
+      {},
+      {
+        errors: [
+          {
+            path: "scopes",
+            code: "invalid_scopes",
+            message: "The scopes cannot be turned into JSON: they hold a cycle or are nested too deeply.",
+          },
+        ],
+      },
+    );
+  }
+}
+
+/** Secret values of this exec, longest first, with their JSON-escaped forms (ADR-023 §6). */
+function secretValues(job: ExecJobInput): string[] {
+  const env = job.scopes?.["env"];
+  if (typeof env !== "object" || env === null) return [];
+  const values = new Set<string>();
+  for (const key of job.secretKeys ?? []) {
+    const value = (env as Record<string, unknown>)[key];
+    if (typeof value !== "string" || value.length < GUEST_LIMITS.minSecretLength) continue;
+    values.add(value);
+    const escaped = JSON.stringify(value).slice(1, -1);
+    if (escaped !== value) values.add(escaped);
+  }
+  return [...values].sort((a, b) => b.length - a.length);
 }
 
 /** Parses an expression batch (ADR-018 §2): a JSON array of strings, each checked to be one expression. */

@@ -6,6 +6,7 @@
  * Runs inside the runner thread, so it imports only QuickJS types, Node built-ins and relative files.
  */
 import type { QuickJSContext, QuickJSDeferredPromise, QuickJSHandle } from "quickjs-emscripten-core";
+import type { HeapGuard } from "../runner/heap.ts";
 import type { ExecJob } from "../runner/messages.ts";
 import { PRELUDE, PRELUDE_NAME } from "./prelude.ts";
 
@@ -62,10 +63,14 @@ const TOOL_OPS = new Set([
 const LOG_LEVELS = new Set(["info", "warn", "error"]);
 const PATCH_SCOPES = new Set(["workflow", "conversation", "user", "turn"]);
 const CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
+/** Never a variable name in a patch: each would reach a prototype through a plain property write. */
+const RESERVED_NAMES = new Set(["__proto__", "constructor", "prototype"]);
 
 export interface GuestSession {
   /** Host operations the guest is waiting for; while above zero, a pending promise is not a hang. */
   inFlight(): number;
+  /** An answer could not be copied into the full heap; the run must end as `code_memory_exceeded`. */
+  outOfMemory(): boolean;
   /** Resolves once a host operation has settled a guest promise, at `until` (epoch ms), or within 50 ms. */
   waitForHost(until: number): Promise<void>;
   /** The prelude's snapshot function for `code`; absent for `expressions`. */
@@ -80,15 +85,49 @@ export interface GuestSession {
   dispose(): void;
 }
 
-/** A failure of the prelude itself: our code, not the guest's, so the runner reports it as such. */
-export class PreludeError extends Error {}
+/**
+ * The guest API could not be installed. No guest code has run yet, so the cause is the exec's input
+ * meeting a limit (`memory`: the scopes do not fit the heap; `nesting`: they are nested deeper than
+ * the interpreter's stack) or our own prelude (`other`).
+ */
+export class PreludeError extends Error {
+  // A plain field: Node's type stripping, which loads this file in the runner, has no parameter properties.
+  readonly reason: "memory" | "nesting" | "other";
+  constructor(message: string, reason: "memory" | "nesting" | "other" = "other") {
+    super(message);
+    this.reason = reason;
+  }
+}
+
+/** Why installing failed, from the exception QuickJS raised. Reads only `name` and `message`. */
+function preludeFailure(ctx: QuickJSContext, error: QuickJSHandle): PreludeError {
+  const read = (key: string) => {
+    let prop: QuickJSHandle | undefined;
+    try {
+      prop = ctx.getProp(error, key);
+      return ctx.typeof(prop) === "string" ? ctx.getString(prop) : undefined;
+    } catch {
+      return undefined;
+    } finally {
+      prop?.dispose();
+    }
+  };
+  // A heap too full to build an error object throws `null` instead.
+  if (ctx.typeof(error) !== "object" || ctx.sameValue(error, ctx.null)) {
+    return new PreludeError("the scopes do not fit in the memory limit", "memory");
+  }
+  const message = read("message") ?? "";
+  if (message === "out of memory") return new PreludeError("the scopes do not fit in the memory limit", "memory");
+  if (/stack overflow/i.test(message)) return new PreludeError("the scopes are nested too deeply", "nesting");
+  return new PreludeError(`the guest prelude failed to install: ${message}`);
+}
 
 /**
  * Installs the guest API for `job` into `ctx`. The context must be fresh: nothing of the guest's has
  * run in it yet.
  */
-export function installGuest(ctx: QuickJSContext, job: ExecJob, channel: HostChannel): GuestSession {
-  const secrets = secretValues(job);
+export function installGuest(ctx: QuickJSContext, job: ExecJob, channel: HostChannel, guard: HeapGuard): GuestSession {
+  const secrets = job.secrets;
   const redact = (text: string) => redactText(text, secrets);
   const pending = new Map<number, QuickJSDeferredPromise>();
   const toolWaiting: (() => void)[] = [];
@@ -103,6 +142,7 @@ export function installGuest(ctx: QuickJSContext, job: ExecJob, channel: HostCha
   /** A settle that happened while nobody was waiting; the next wait returns at once. */
   let woken = false;
   let disposed = false;
+  let starved = false;
   const owned: QuickJSHandle[] = [];
 
   const unsubscribe = channel.onFrame((frame) => onToolResult(frame));
@@ -119,11 +159,16 @@ export function installGuest(ctx: QuickJSContext, job: ExecJob, channel: HostCha
       text = JSON.stringify({ ok: false, code: "internal_error", message: "the answer could not be read" });
     }
     try {
-      const handle = ctx.newString(text);
-      try {
-        deferred.resolve(handle);
-      } finally {
-        handle.dispose();
+      // Never `ctx.newString` directly: a full heap makes it write through a null pointer (heap.ts).
+      const handle = guard.newString(text);
+      if (handle) {
+        try {
+          deferred.resolve(handle);
+        } finally {
+          handle.dispose();
+        }
+      } else {
+        starved = true;
       }
     } catch {
       // The heap is full or the deadline passed while resolving; the run loop reports which.
@@ -254,13 +299,10 @@ export function installGuest(ctx: QuickJSContext, job: ExecJob, channel: HostCha
   });
   owned.push(emitFn);
 
-  const config = JSON.stringify({
-    kind: job.kind,
-    scopes: job.scopes ?? {},
-    tables: job.tables ?? [],
-    idempotencyKey: job.idempotencyKey ?? job.execId,
-  });
+  // The scopes arrive as JSON text already; spliced in rather than parsed and serialised again.
+  const config = `{"kind":${JSON.stringify(job.kind)},"tables":${JSON.stringify(job.tables ?? [])},"idempotencyKey":${JSON.stringify(job.idempotencyKey ?? job.execId)},"scopes":${job.scopesText}}`;
 
+  if (!guard.room(Buffer.byteLength(PRELUDE, "utf8"))) throw new PreludeError("the prelude does not fit", "memory");
   const installed = ctx.evalCode(PRELUDE, PRELUDE_NAME, { type: "global", strict: true });
   if (installed.error) {
     installed.error.dispose();
@@ -269,12 +311,14 @@ export function installGuest(ctx: QuickJSContext, job: ExecJob, channel: HostCha
   const install = installed.value;
   let snapshot: QuickJSHandle | undefined;
   try {
-    const configHandle = ctx.newString(config);
+    const configHandle = guard.newString(config);
+    if (!configHandle) throw new PreludeError("the scopes do not fit in the memory limit", "memory");
     try {
       const result = ctx.callFunction(install, ctx.undefined, callFn, emitFn, configHandle);
       if (result.error) {
+        const failure = preludeFailure(ctx, result.error);
         result.error.dispose();
-        throw new PreludeError("the guest prelude failed to install");
+        throw failure;
       }
       if (ctx.typeof(result.value) === "function") {
         snapshot = result.value;
@@ -291,6 +335,7 @@ export function installGuest(ctx: QuickJSContext, job: ExecJob, channel: HostCha
 
   return {
     inFlight: () => pending.size,
+    outOfMemory: () => starved,
     waitForHost: (until) =>
       new Promise<void>((resolve) => {
         if (woken) {
@@ -347,31 +392,18 @@ function parsePatches(text: string): Record<string, unknown> {
       if (typeof set !== "object" || set === null || Array.isArray(set)) throw new Error("patches: bad set");
       if (scope === "user" && Object.hasOwn(set, "attributes"))
         throw new Error("patches: user.attributes is read-only");
+      if (Object.keys(set).some((name) => RESERVED_NAMES.has(name))) throw new Error("patches: reserved name");
       clean.set = set as Record<string, unknown>;
     }
     if (unset !== undefined) {
       if (!Array.isArray(unset) || !unset.every((n) => typeof n === "string")) throw new Error("patches: bad unset");
       if (scope === "user" && unset.includes("attributes")) throw new Error("patches: user.attributes is read-only");
+      if (unset.some((name) => RESERVED_NAMES.has(name))) throw new Error("patches: reserved name");
       clean.unset = unset as string[];
     }
     out[scope] = clean;
   }
   return out;
-}
-
-/** Secret values of this exec, longest first, with their JSON-escaped forms (ADR-023 §6). */
-function secretValues(job: ExecJob): string[] {
-  const env = job.scopes?.["env"];
-  if (typeof env !== "object" || env === null) return [];
-  const values = new Set<string>();
-  for (const key of job.secretKeys ?? []) {
-    const value = (env as Record<string, unknown>)[key];
-    if (typeof value !== "string" || value.length < GUEST_LIMITS.minSecretLength) continue;
-    values.add(value);
-    const escaped = JSON.stringify(value).slice(1, -1);
-    if (escaped !== value) values.add(escaped);
-  }
-  return [...values].sort((a, b) => b.length - a.length);
 }
 
 export function redactText(text: string, secrets: readonly string[]): string {

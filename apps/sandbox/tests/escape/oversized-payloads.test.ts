@@ -1,5 +1,6 @@
 import type { AddressInfo } from "node:net";
 import { SANDBOX_LIMITS } from "@wakeel/config";
+import { AppError } from "@wakeel/contracts";
 import { createLogger } from "@wakeel/telemetry";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { SandboxPool } from "../../src/pool";
@@ -119,8 +120,10 @@ describe("from the host", () => {
     const r = await runWithHost(pool, "return 1;", { scopes: { workflow: { deep: nested } } }).catch(
       (error: unknown) => error,
     );
-    if (r instanceof Error) expect(r.message).not.toMatch(/Maximum call stack/);
-    else expect(r.outcome.t).toBe("error");
+    // Refused on the pool's thread, before any runner is involved, with a code the caller can act on.
+    expect(r).toBeInstanceOf(AppError);
+    expect((r as AppError).code).toBe("validation_failed");
+    expect((r as AppError).message).not.toMatch(/Maximum call stack/);
     await stillServing();
   });
 
@@ -165,7 +168,7 @@ describe("at the HTTP edge", () => {
     const res = await fetch(`${base}/exec`, {
       method: "POST",
       body,
-      // @ts-expect-error Node's fetch needs duplex for a streamed body; the DOM types lack it.
+      // Node's fetch needs duplex for a streamed body.
       duplex: "half",
       signal: controller.signal,
     });

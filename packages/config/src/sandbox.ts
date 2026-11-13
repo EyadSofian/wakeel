@@ -58,8 +58,20 @@ export const SANDBOX_LIMITS = {
   threadStackMb: 16,
   /** V8 heap of each worker thread: holds the source, the result text and the WASM glue. */
   threadHeapMb: 512,
-  /** A runner whose WASM memory has grown past this is replaced after its exec finishes. */
-  threadWasmMemoryMb: 256,
+  /**
+   * WASM memory each runner's QuickJS module starts with. It is the variant's own initial size, so the
+   * module loads unchanged.
+   */
+  wasmMemoryInitialMb: 16,
+  /**
+   * The module's WASM memory can never pass `maxMemoryMb` plus this: room for its static data and C
+   * stack, and for the last growth step Emscripten cannot take (it grows by at least 5%). With it, a
+   * guest gets about `maxMemoryMb` of heap. QuickJS's own memory limit is not enough on its own: built
+   * for WASM it cannot measure an allocation's size, so it refuses one allocation over the limit but
+   * not many smaller ones (docs/security/sandbox-review.md §2). The fixed ceiling makes `malloc` fail,
+   * which QuickJS reports as "out of memory".
+   */
+  wasmMemoryOverheadMb: 6,
   /** Execs waiting per runner before the pool answers `rate_limited`. */
   queuePerRunner: 4,
   /** Largest NDJSON frame the service reads (source, scopes and tool manifest together). */

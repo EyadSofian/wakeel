@@ -12,6 +12,8 @@ import type { SandboxPool } from "./pool.ts";
 import { ExecRequestFrame, NDJSON_CONTENT_TYPE, ToolResultFrame } from "./protocol.ts";
 
 const PROBLEM_CONTENT_TYPE = "application/problem+json";
+/** How long the rest of a refused, oversized body is read before the connection is closed. */
+const DRAIN_MS = 10_000;
 
 export interface ServerOptions {
   pool: SandboxPool;
@@ -77,8 +79,17 @@ async function exec(options: ServerOptions, req: IncomingMessage, res: ServerRes
     return;
   }
   if (first.value.kind === "too_large") {
-    // Stop reading the rest of an oversized body once the answer is out.
-    res.on("finish", () => req.destroy());
+    // Keep reading, and throwing away, the rest of the body: a caller still sending it would see a
+    // broken pipe instead of the 413. The reader never holds more than one frame, and a body that has
+    // not ended within DRAIN_MS is cut off.
+    const cutOff = setTimeout(() => req.destroy(), DRAIN_MS);
+    cutOff.unref();
+    req.on("close", () => clearTimeout(cutOff));
+    void (async () => {
+      for await (const _ of lines) {
+        // Discarded.
+      }
+    })();
     sendProblem(res, tooLarge(options.requestFrameBytes), requestId, { connection: "close" });
     return;
   }
