@@ -1,0 +1,21 @@
+{
+  "name": "@wakeel/sandbox",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env src/main.ts",
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "bench": "tsx test/bench/context-overhead.ts"
+  },
+  "dependencies": {
+    "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
+    "@wakeel/config": "workspace:*",
+    "@wakeel/contracts": "workspace:*",
+    "@wakeel/telemetry": "workspace:*",
+    "quickjs-emscripten-core": "0.32.0",
+    "zod": "4.6.7"
+  }
+}
