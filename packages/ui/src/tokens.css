@@ -1,6 +1,6 @@
 /*
- * Design tokens (docs/05-design-system.md §2). The only file allowed to contain raw colour, size
- * and shadow values; everything else uses these through Tailwind utilities (theme.css) or var().
+ * Design tokens (docs/05-design-system.md §2, ADR-017). The only file allowed to contain raw colour,
+ * size and shadow values; everything else uses these through Tailwind utilities (theme.css) or var().
  * The theme follows the system unless the app pins it with data-theme="light" | "dark" on <html>.
  */
 
@@ -8,27 +8,48 @@
   color-scheme: light;
 
   /* §2.1 Colour, light */
-  --bg-canvas: oklch(0.975 0.002 265);
+  --bg-canvas: oklch(0.982 0.003 270);
   --bg-surface: oklch(1 0 0);
-  --bg-subtle: oklch(0.965 0.002 265);
-  --bg-muted: oklch(0.94 0.003 265);
-  --border-hairline: oklch(0.91 0.003 265);
-  --border-strong: oklch(0.84 0.004 265);
-  --text-primary: oklch(0.22 0.005 265);
-  --text-secondary: oklch(0.45 0.006 265);
-  --text-tertiary: oklch(0.58 0.006 265);
+  --bg-subtle: oklch(0.97 0.004 270);
+  --bg-muted: oklch(0.945 0.006 270);
+  --border-hairline: oklch(0.92 0.006 270);
+  --border-strong: oklch(0.86 0.008 270);
+  --text-primary: oklch(0.21 0.02 275);
+  --text-secondary: oklch(0.46 0.018 275);
+  --text-tertiary: oklch(0.58 0.014 275);
   --text-on-accent: oklch(1 0 0);
-  --accent: oklch(0.52 0.19 268);
-  --accent-hover: oklch(0.47 0.19 268);
-  --accent-subtle: oklch(0.955 0.03 268);
-  --accent-border: oklch(0.78 0.09 268);
+  --accent: oklch(0.53 0.22 277);
+  --accent-hover: oklch(0.48 0.22 277);
+  --accent-subtle: oklch(0.955 0.03 277);
+  --accent-border: oklch(0.72 0.14 277);
+  --accent-text: oklch(0.5 0.22 277);
   --error: oklch(0.55 0.2 27);
   --error-subtle: oklch(0.96 0.025 27);
   --warning: oklch(0.52 0.12 70);
   --warning-subtle: oklch(0.965 0.035 85);
-  --success: oklch(0.5 0.13 152);
+  --success: oklch(0.52 0.13 152);
   --success-subtle: oklch(0.96 0.03 152);
-  --scrim: oklch(0 0 0 / 0.32);
+  --scrim: oklch(0.21 0.02 275 / 0.32);
+
+  /* Node categories (ADR-017): strong = icon, port and border accent; subtle = icon tile. */
+  --cat-trigger: oklch(0.58 0.11 185);
+  --cat-trigger-subtle: oklch(0.955 0.03 185);
+  --cat-trigger-border: oklch(0.8 0.08 185);
+  --cat-logic: oklch(0.56 0.15 250);
+  --cat-logic-subtle: oklch(0.955 0.025 250);
+  --cat-logic-border: oklch(0.8 0.08 250);
+  --cat-ai: oklch(0.55 0.2 295);
+  --cat-ai-subtle: oklch(0.955 0.035 295);
+  --cat-ai-border: oklch(0.79 0.1 295);
+  --cat-tool: oklch(0.6 0.14 60);
+  --cat-tool-subtle: oklch(0.965 0.04 75);
+  --cat-tool-border: oklch(0.84 0.09 70);
+  --cat-human: oklch(0.57 0.18 15);
+  --cat-human-subtle: oklch(0.96 0.025 15);
+  --cat-human-border: oklch(0.81 0.08 15);
+  --cat-flow: oklch(0.52 0.02 270);
+  --cat-flow-subtle: oklch(0.955 0.006 270);
+  --cat-flow-border: oklch(0.85 0.01 270);
 
   /* §2.2 Type */
   --font-sans: "IBM Plex Sans", "IBM Plex Sans Arabic", system-ui, sans-serif;
@@ -50,42 +71,49 @@
   --space-12: 64px;
 
   /* §2.3 Sizes */
-  --size-control-sm: 24px;
-  --size-control: 28px;
-  --size-control-lg: 32px;
+  --size-control-sm: 28px;
+  --size-control: 32px;
+  --size-control-lg: 40px;
   --size-icon-sm: 14px;
   --size-icon: 16px;
   --size-icon-lg: 20px;
-  --size-row: 28px;
-  --size-row-table: 32px;
+  --size-tile-sm: 24px;
+  --size-tile: 32px;
+  --size-tile-lg: 40px;
+  --size-row: 32px;
+  --size-row-table: 52px;
   --size-row-card: 36px;
-  --size-topbar: 44px;
-  --size-rail: 48px;
-  --size-resource-panel: 240px;
-  --size-node: 280px;
+  --size-topbar: 52px;
+  --size-rail: 60px;
+  --size-resource-panel: 272px;
+  --size-node: 288px;
   --size-inspector: 360px;
   --size-inspector-min: 320px;
   --size-inspector-max: 520px;
   --size-emulator: 380px;
   --size-emulator-min: 340px;
   --size-emulator-max: 560px;
-  --size-sign-in: 360px;
+  --size-sign-in: 380px;
+  --size-page: 1200px;
   --size-hairline: 1px;
   --size-status-dot: 6px;
+  --size-port: 10px;
   --size-focus-ring: 2px;
 
   /* §2.4 Radius */
   --radius-0: 0px;
-  --radius-xs: 3px;
-  --radius-sm: 5px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
   --radius-full: 999px;
 
   /* §2.5 Elevation, light */
-  --shadow-pop: 0 4px 12px -2px oklch(0 0 0 / 0.08), 0 1px 2px oklch(0 0 0 / 0.04);
-  --shadow-drag: 0 10px 24px -6px oklch(0 0 0 / 0.14);
-  --shadow-modal: 0 20px 48px -12px oklch(0 0 0 / 0.2);
+  --shadow-node: 0 1px 2px oklch(0.21 0.02 275 / 0.05), 0 2px 8px -2px oklch(0.21 0.02 275 / 0.06);
+  --shadow-pop: 0 4px 12px -2px oklch(0.21 0.02 275 / 0.1), 0 1px 2px oklch(0.21 0.02 275 / 0.05);
+  --shadow-drag: 0 10px 24px -6px oklch(0.21 0.02 275 / 0.16);
+  --shadow-modal: 0 24px 56px -12px oklch(0.21 0.02 275 / 0.24);
   --elevation-border: var(--border-hairline);
 
   /* §2.6 Motion for CSS transitions; must equal packages/ui/src/motion.ts (a test checks). */
@@ -111,60 +139,100 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg-canvas: oklch(0.16 0.004 265);
-    --bg-surface: oklch(0.2 0.004 265);
-    --bg-subtle: oklch(0.235 0.005 265);
-    --bg-muted: oklch(0.27 0.006 265);
-    --border-hairline: oklch(0.29 0.006 265);
-    --border-strong: oklch(0.38 0.007 265);
-    --text-primary: oklch(0.94 0.003 265);
-    --text-secondary: oklch(0.72 0.006 265);
-    --text-tertiary: oklch(0.6 0.006 265);
-    --text-on-accent: oklch(0.16 0.004 265);
-    --accent: oklch(0.7 0.15 268);
-    --accent-hover: oklch(0.76 0.14 268);
-    --accent-subtle: oklch(0.28 0.06 268);
-    --accent-border: oklch(0.45 0.11 268);
+    --bg-canvas: oklch(0.155 0.012 275);
+    --bg-surface: oklch(0.195 0.014 275);
+    --bg-subtle: oklch(0.225 0.016 275);
+    --bg-muted: oklch(0.26 0.018 275);
+    --border-hairline: oklch(0.29 0.018 275);
+    --border-strong: oklch(0.37 0.02 275);
+    --text-primary: oklch(0.95 0.005 275);
+    --text-secondary: oklch(0.75 0.014 275);
+    --text-tertiary: oklch(0.62 0.014 275);
+    --text-on-accent: oklch(1 0 0);
+    --accent: oklch(0.55 0.2 277);
+    --accent-hover: oklch(0.5 0.2 277);
+    --accent-subtle: oklch(0.28 0.07 277);
+    --accent-border: oklch(0.6 0.17 277);
+    --accent-text: oklch(0.76 0.13 277);
     --error: oklch(0.7 0.17 27);
     --error-subtle: oklch(0.27 0.06 27);
     --warning: oklch(0.8 0.13 80);
     --warning-subtle: oklch(0.28 0.05 80);
     --success: oklch(0.74 0.14 152);
     --success-subtle: oklch(0.26 0.05 152);
-    --scrim: oklch(0 0 0 / 0.5);
-    --shadow-pop: 0 4px 12px -2px oklch(0 0 0 / 0.4), 0 1px 2px oklch(0 0 0 / 0.2);
-    --shadow-drag: 0 10px 24px -6px oklch(0 0 0 / 0.5);
-    --shadow-modal: 0 20px 48px -12px oklch(0 0 0 / 0.6);
+    --scrim: oklch(0 0 0 / 0.55);
+    --cat-trigger: oklch(0.76 0.12 185);
+    --cat-trigger-subtle: oklch(0.27 0.045 185);
+    --cat-trigger-border: oklch(0.5 0.09 185);
+    --cat-logic: oklch(0.74 0.13 250);
+    --cat-logic-subtle: oklch(0.27 0.055 250);
+    --cat-logic-border: oklch(0.5 0.11 250);
+    --cat-ai: oklch(0.74 0.15 295);
+    --cat-ai-subtle: oklch(0.28 0.075 295);
+    --cat-ai-border: oklch(0.52 0.14 295);
+    --cat-tool: oklch(0.8 0.14 75);
+    --cat-tool-subtle: oklch(0.28 0.05 75);
+    --cat-tool-border: oklch(0.55 0.1 70);
+    --cat-human: oklch(0.74 0.15 15);
+    --cat-human-subtle: oklch(0.27 0.055 15);
+    --cat-human-border: oklch(0.52 0.11 15);
+    --cat-flow: oklch(0.72 0.02 270);
+    --cat-flow-subtle: oklch(0.26 0.014 275);
+    --cat-flow-border: oklch(0.42 0.018 275);
+    --shadow-node: none;
+    --shadow-pop: 0 4px 16px -2px oklch(0 0 0 / 0.5), 0 1px 2px oklch(0 0 0 / 0.3);
+    --shadow-drag: 0 12px 28px -6px oklch(0 0 0 / 0.6);
+    --shadow-modal: 0 24px 56px -12px oklch(0 0 0 / 0.7);
     --elevation-border: var(--border-strong);
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg-canvas: oklch(0.16 0.004 265);
-  --bg-surface: oklch(0.2 0.004 265);
-  --bg-subtle: oklch(0.235 0.005 265);
-  --bg-muted: oklch(0.27 0.006 265);
-  --border-hairline: oklch(0.29 0.006 265);
-  --border-strong: oklch(0.38 0.007 265);
-  --text-primary: oklch(0.94 0.003 265);
-  --text-secondary: oklch(0.72 0.006 265);
-  --text-tertiary: oklch(0.6 0.006 265);
-  --text-on-accent: oklch(0.16 0.004 265);
-  --accent: oklch(0.7 0.15 268);
-  --accent-hover: oklch(0.76 0.14 268);
-  --accent-subtle: oklch(0.28 0.06 268);
-  --accent-border: oklch(0.45 0.11 268);
+  --bg-canvas: oklch(0.155 0.012 275);
+  --bg-surface: oklch(0.195 0.014 275);
+  --bg-subtle: oklch(0.225 0.016 275);
+  --bg-muted: oklch(0.26 0.018 275);
+  --border-hairline: oklch(0.29 0.018 275);
+  --border-strong: oklch(0.37 0.02 275);
+  --text-primary: oklch(0.95 0.005 275);
+  --text-secondary: oklch(0.75 0.014 275);
+  --text-tertiary: oklch(0.62 0.014 275);
+  --text-on-accent: oklch(1 0 0);
+  --accent: oklch(0.55 0.2 277);
+  --accent-hover: oklch(0.5 0.2 277);
+  --accent-subtle: oklch(0.28 0.07 277);
+  --accent-border: oklch(0.6 0.17 277);
+  --accent-text: oklch(0.76 0.13 277);
   --error: oklch(0.7 0.17 27);
   --error-subtle: oklch(0.27 0.06 27);
   --warning: oklch(0.8 0.13 80);
   --warning-subtle: oklch(0.28 0.05 80);
   --success: oklch(0.74 0.14 152);
   --success-subtle: oklch(0.26 0.05 152);
-  --scrim: oklch(0 0 0 / 0.5);
-  --shadow-pop: 0 4px 12px -2px oklch(0 0 0 / 0.4), 0 1px 2px oklch(0 0 0 / 0.2);
-  --shadow-drag: 0 10px 24px -6px oklch(0 0 0 / 0.5);
-  --shadow-modal: 0 20px 48px -12px oklch(0 0 0 / 0.6);
+  --scrim: oklch(0 0 0 / 0.55);
+  --cat-trigger: oklch(0.76 0.12 185);
+  --cat-trigger-subtle: oklch(0.27 0.045 185);
+  --cat-trigger-border: oklch(0.5 0.09 185);
+  --cat-logic: oklch(0.74 0.13 250);
+  --cat-logic-subtle: oklch(0.27 0.055 250);
+  --cat-logic-border: oklch(0.5 0.11 250);
+  --cat-ai: oklch(0.74 0.15 295);
+  --cat-ai-subtle: oklch(0.28 0.075 295);
+  --cat-ai-border: oklch(0.52 0.14 295);
+  --cat-tool: oklch(0.8 0.14 75);
+  --cat-tool-subtle: oklch(0.28 0.05 75);
+  --cat-tool-border: oklch(0.55 0.1 70);
+  --cat-human: oklch(0.74 0.15 15);
+  --cat-human-subtle: oklch(0.27 0.055 15);
+  --cat-human-border: oklch(0.52 0.11 15);
+  --cat-flow: oklch(0.72 0.02 270);
+  --cat-flow-subtle: oklch(0.26 0.014 275);
+  --cat-flow-border: oklch(0.42 0.018 275);
+  --shadow-node: none;
+  --shadow-pop: 0 4px 16px -2px oklch(0 0 0 / 0.5), 0 1px 2px oklch(0 0 0 / 0.3);
+  --shadow-drag: 0 12px 28px -6px oklch(0 0 0 / 0.6);
+  --shadow-modal: 0 24px 56px -12px oklch(0 0 0 / 0.7);
   --elevation-border: var(--border-strong);
 }
 

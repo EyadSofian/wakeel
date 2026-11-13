@@ -5,7 +5,7 @@
  */
 export function tabClasses(active: boolean): string {
   return [
-    "inline-flex h-topbar items-center border-b-2 px-1 text-body font-medium transition-colors",
+    "inline-flex h-control-lg items-center border-b-2 px-1 text-body font-medium transition-colors",
     active ? "border-accent text-primary" : "border-transparent text-secondary hover:text-primary",
   ].join(" ");
 }

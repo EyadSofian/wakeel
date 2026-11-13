@@ -34,6 +34,11 @@ const permissions = [
   "api_key.create",
   "api_key.revoke",
   "audit.read",
+  "bot.read",
+  "bot.create",
+  "bot.update",
+  "bot.delete",
+  "bot.publish",
 ];
 
 /** The fixture set's long unbroken token, in a member name, to check truncation (design system §6). */

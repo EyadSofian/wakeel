@@ -1,4 +1,5 @@
 import type { Card, CardType, MessageTemplate, Node, NodeType, Variable, Workflow } from "@wakeel/contracts";
+import type { Category } from "@wakeel/ui";
 import {
   BookOpenText,
   Braces,
@@ -219,5 +220,64 @@ export function cardOutputRows(card: Card): OutputRow[] {
         : [];
     default:
       return [];
+  }
+}
+
+/** Node and card categories (ADR-017): the colour of the icon tile, the border and the ports. */
+export const NODE_CATEGORY: Record<NodeType, Category> = {
+  start: "trigger",
+  entry: "trigger",
+  trigger: "trigger",
+  standard: "logic",
+  autonomous: "ai",
+  exit: "flow",
+  end: "flow",
+  error_handler: "human",
+  note: "tool",
+};
+
+export const CARD_CATEGORY: Record<CardType, Category> = {
+  say: "logic",
+  capture: "logic",
+  branch: "logic",
+  set_variable: "logic",
+  set_timeout: "logic",
+  log: "logic",
+  end: "flow",
+  ai_branch: "ai",
+  ai_generate: "ai",
+  ai_extract: "ai",
+  code: "tool",
+  kb_search: "tool",
+  table: "tool",
+  call_workflow: "tool",
+  handoff: "human",
+};
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** The second line of a node header: what the node is, and the one count that matters. */
+export function nodeSubtitle(node: Node): string {
+  switch (node.type) {
+    case "start":
+      return "The conversation starts here";
+    case "entry":
+      return "The workflow starts here";
+    case "standard":
+      return node.cards.length === 0
+        ? "Standard node"
+        : `Standard node · ${plural(node.cards.length, "card", "cards")}`;
+    case "autonomous":
+      return `Autonomous · ${plural(node.exits.length, "exit", "exits")} · ${plural(node.tools.length, "tool", "tools")}`;
+    case "exit":
+      return "Returns to the caller";
+    case "end":
+      return node.reason === "completed" ? "Ends the conversation" : `Ends: ${node.reason.replaceAll("_", " ")}`;
+    case "trigger":
+      return node.on.kind === "event" ? `On event ${node.on.name}` : `On ${node.on.kind.replaceAll("_", " ")}`;
+    case "error_handler":
+      return "Runs when a step fails";
+    case "note":
+      return "Note";
   }
 }

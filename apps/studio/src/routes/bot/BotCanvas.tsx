@@ -1,16 +1,20 @@
 import { Link } from "@tanstack/react-router";
 import type { DefinitionIssue } from "@wakeel/contracts";
-import { Banner, Skeleton } from "@wakeel/ui";
+import { Badge, Banner, Button, Skeleton } from "@wakeel/ui";
 import { ReactFlowProvider } from "@xyflow/react";
-import { CircleAlert, TriangleAlert } from "lucide-react";
+import { CircleAlert, CircleCheck, LoaderCircle, Play, Rocket, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ApiError } from "../../api/client";
 import { draftSaver, loadDraft } from "../../api/drafts";
 import { useWorkspace } from "../../api/queries";
+import { useAddNode } from "../../canvas/add-node";
 import { CanvasStoreContext, useCanvas } from "../../canvas/context";
+import { Inspector } from "../../canvas/inspector/Inspector";
 import { groupIssues, useIssues } from "../../canvas/issues";
+import { NodeLibrary } from "../../canvas/library/NodeLibrary";
 import { createSaver, type Saver } from "../../canvas/store/saver";
 import { type CanvasStore, createCanvasStore, isDirty } from "../../canvas/store/store";
+import { useSummaryContext } from "../../canvas/use-summary";
 import { Canvas } from "../../canvas/view/Canvas";
 import { AppShell } from "../../shell/AppShell";
 import { ProblemBanner } from "../../shell/ProblemBanner";
@@ -72,25 +76,36 @@ export function BotCanvas({ workspaceId, botId }: { workspaceId: string; botId: 
 
 /** Inside the store provider: validates once and shares the result with the top bar and canvas. */
 function Body({ workspaceId, state }: { workspaceId: string; state: "loading" | "ready" | { error: unknown } }) {
+  return (
+    <ReactFlowProvider>
+      <Frame workspaceId={workspaceId} state={state} />
+    </ReactFlowProvider>
+  );
+}
+
+function Frame({ workspaceId, state }: { workspaceId: string; state: "loading" | "ready" | { error: unknown } }) {
   const result = useIssues();
   const issues = useMemo(() => result ?? [], [result]);
   const active = useCanvas((s) => s.activeWorkflowId);
   const grouped = useMemo(() => groupIssues(issues, active), [issues, active]);
+  const summary = useSummaryContext();
+  const addNode = useAddNode();
+  const ready = state === "ready";
   return (
     <AppShell
-      title={<Breadcrumb workspaceId={workspaceId} ready={state === "ready"} />}
+      title={<Breadcrumb workspaceId={workspaceId} ready={ready} />}
       active="Workflows"
       workspaceId={workspaceId}
-      actions={state === "ready" ? <TopBarStatus issues={issues} validated={result !== undefined} /> : null}
+      actions={ready ? <TopBarStatus issues={issues} validated={result !== undefined} /> : null}
+      panel={ready ? <NodeLibrary onAdd={(type) => addNode(type)} /> : null}
+      inspector={ready ? <Inspector issues={issues} summary={summary} /> : null}
     >
       {state === "loading" ? (
         <CanvasSkeleton />
-      ) : state === "ready" ? (
-        <ReactFlowProvider>
-          <Canvas issues={grouped} />
-        </ReactFlowProvider>
+      ) : ready ? (
+        <Canvas issues={grouped} />
       ) : (
-        <div className="px-5 py-6">
+        <div className="mx-auto max-w-page px-9 py-9">
           {state.error instanceof ApiError ? (
             <ProblemBanner error={state.error} />
           ) : (
@@ -121,15 +136,24 @@ function Breadcrumb({ workspaceId, ready }: { workspaceId: string; ready: boolea
       <span aria-hidden="true" className="text-tertiary">
         /
       </span>
-      <span dir="auto" className="truncate text-secondary">
-        {ready ? bot : ""}
-      </span>
+      {ready ? (
+        <span dir="auto" className="truncate text-secondary">
+          {bot}
+        </span>
+      ) : (
+        <Skeleton className="h-4 w-12" />
+      )}
       <span aria-hidden="true" className="text-tertiary">
         /
       </span>
-      <span dir="auto" className="truncate font-medium text-primary" aria-current="page">
-        {ready ? wf : ""}
-      </span>
+      {ready ? (
+        <span dir="auto" className="truncate font-medium text-primary" aria-current="page">
+          {wf}
+        </span>
+      ) : (
+        <Skeleton className="h-4 w-11" />
+      )}
+      {ready ? <Badge tone="info">Draft</Badge> : null}
     </nav>
   );
 }
@@ -152,12 +176,17 @@ function TopBarStatus({ issues: all, validated }: { issues: DefinitionIssue[]; v
         ? "Saving…"
         : "Saved";
   return (
-    <div className="flex items-center gap-5" data-validated={validated}>
+    <div className="flex items-center gap-6" data-validated={validated}>
       <span
         role="status"
         aria-live="polite"
-        className={`text-small ${conflict || failed ? "text-warning" : "text-secondary"}`}
+        className={`flex items-center gap-2 text-small ${conflict || failed ? "text-warning" : "text-secondary"}`}
       >
+        {conflict || failed ? null : saving ? (
+          <LoaderCircle className="size-icon-sm" strokeWidth={1.75} aria-hidden="true" />
+        ) : (
+          <CircleCheck className="size-icon-sm text-success" strokeWidth={1.75} aria-hidden="true" />
+        )}
         {label}
       </span>
       {all.length > 0 ? (
@@ -180,6 +209,42 @@ function TopBarStatus({ issues: all, validated }: { issues: DefinitionIssue[]; v
           ) : null}
         </span>
       ) : null}
+      <span aria-hidden="true" className="h-control-sm border-s border-hairline" />
+      {/* Testing arrives with the emulator (4.6) and publishing with versions (7.1). */}
+      <Button
+        icon={<Play className="size-icon" strokeWidth={1.75} aria-hidden="true" />}
+        disabled
+        title="Testing is not available yet"
+      >
+        Test
+      </Button>
+      <Button
+        variant="primary"
+        icon={<Rocket className="size-icon" strokeWidth={1.75} aria-hidden="true" />}
+        disabled
+        title="Publishing is not available yet"
+      >
+        Publish
+      </Button>
+    </div>
+  );
+}
+
+/** Node-shaped placeholders while the draft loads: header tile and two lines, then rows. */
+function NodeSkeleton({ rows }: { rows: number }) {
+  return (
+    <div className="flex w-node flex-col gap-4 rounded-lg border border-hairline bg-surface p-5">
+      <div className="flex items-center gap-4">
+        <Skeleton className="size-tile rounded-sm" />
+        <div className="flex flex-1 flex-col gap-2">
+          <Skeleton className="h-4 w-12" />
+          <Skeleton className="h-3 w-11" />
+        </div>
+      </div>
+      {Array.from({ length: rows }, (_, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: static placeholders with no identity.
+        <Skeleton key={i} className="h-row-card w-full rounded-sm" />
+      ))}
     </div>
   );
 }
@@ -190,10 +255,11 @@ function CanvasSkeleton() {
       role="status"
       aria-busy="true"
       aria-label="Opening the workflow"
-      className="flex h-full items-start gap-11 bg-canvas px-11 py-11"
+      className="flex h-full items-start gap-11 bg-canvas px-11 py-12"
     >
-      <Skeleton className="h-12 w-node" />
-      <Skeleton className="h-12 w-node" />
+      <NodeSkeleton rows={0} />
+      <NodeSkeleton rows={3} />
+      <NodeSkeleton rows={2} />
     </div>
   );
 }

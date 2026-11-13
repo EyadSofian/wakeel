@@ -47,14 +47,14 @@ export function Members({ workspaceId }: { workspaceId: string }) {
         ) : null
       }
     >
-      <div className="flex flex-col gap-6 py-6">
+      <div className="flex flex-col gap-9">
         {changeRole.isError ? (
-          <div className="px-5">
+          <div>
             <ProblemBanner error={changeRole.error} />
           </div>
         ) : null}
         {members.isError ? (
-          <div className="px-5">
+          <div>
             <ProblemBanner error={members.error} />
           </div>
         ) : (
@@ -95,7 +95,7 @@ export function Members({ workspaceId }: { workspaceId: string }) {
                         {can("member.update_role") ? (
                           <Select
                             aria-label={`Role of ${m.name}`}
-                            className="w-node"
+                            className="w-resource-panel"
                             value={m.role}
                             disabled={changeRole.isPending}
                             onChange={(e) =>
@@ -128,15 +128,15 @@ export function Members({ workspaceId }: { workspaceId: string }) {
 
         {can("member.invite") ? (
           <section aria-labelledby="pending-title" className="flex flex-col gap-4">
-            <h2 id="pending-title" className="px-5 text-title text-primary">
+            <h2 id="pending-title" className="text-title text-primary">
               Pending invitations
             </h2>
             {invitations.isError ? (
-              <div className="px-5">
+              <div>
                 <ProblemBanner error={invitations.error} />
               </div>
             ) : invitations.data && invitations.data.length === 0 ? (
-              <p className="px-5 text-body text-secondary">No invitations are waiting.</p>
+              <p className="text-body text-secondary">No invitations are waiting.</p>
             ) : (
               <Table label="Pending invitations">
                 <THead>

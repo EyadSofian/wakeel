@@ -62,6 +62,10 @@ test("add a node, connect, reconnect, delete and undo; autosave keeps up", async
   await expect(page.locator(".react-flow__node")).toHaveCount(3);
   const added = (await stored(page, ws, bot)).nodes.find((n) => n.name === "Standard node");
   expect(added).toBeDefined();
+  // A new node is selected and opens the inspector; Esc closes it and gives the canvas its width back.
+  await expect(page.getByRole("complementary", { name: "Inspector: Standard node" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("complementary", { name: /^Inspector/ })).toHaveCount(0);
 
   // Connect Start's output to the new node: the existing transition moves (one per output).
   await drag(

@@ -1,6 +1,15 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { checkContrast, contrast, darkDrift, luminance, parseOklch, parseTokens, TOKENS_PATH } from "../contrast";
+import {
+  checkContrast,
+  contrast,
+  darkDrift,
+  luminance,
+  PAIRS,
+  parseOklch,
+  parseTokens,
+  TOKENS_PATH,
+} from "../contrast";
 
 describe("colour maths", () => {
   test("white and black are 21:1", () => {
@@ -35,7 +44,8 @@ describe("tokens.css", () => {
 
   test("every required pair passes in both themes (acceptance 0.7: pnpm ui:contrast)", () => {
     const results = checkContrast(tokens);
-    expect(results).toHaveLength(24);
+    // 12 text-on-background pairs and the ADR-017 fixed pairs, in both themes.
+    expect(results).toHaveLength(2 * (12 + PAIRS.length));
     expect(results.filter((r) => !r.pass)).toEqual([]);
   });
 

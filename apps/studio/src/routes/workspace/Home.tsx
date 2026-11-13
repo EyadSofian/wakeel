@@ -1,12 +1,27 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { BotResponse } from "@wakeel/contracts";
-import { Button, Dialog, EmptyState, Field, Input, Skeleton, Table, Td, THead, Th, Tr } from "@wakeel/ui";
-import { Plus } from "lucide-react";
+import {
+  Badge,
+  Button,
+  Dialog,
+  EmptyState,
+  Field,
+  IconTile,
+  Input,
+  Skeleton,
+  Table,
+  Td,
+  THead,
+  Th,
+  Tr,
+} from "@wakeel/ui";
+import { Bot, Plus } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { fieldErrors } from "../../api/client";
 import { useBots, useCreateBot, useWorkspace } from "../../api/queries";
 import { slugFrom } from "../../lib/slug";
 import { AppShell } from "../../shell/AppShell";
+import { Page, PageHeader } from "../../shell/PageHeader";
 import { ProblemBanner } from "../../shell/ProblemBanner";
 import { WorkspaceSwitcher } from "../../shell/WorkspaceSwitcher";
 
@@ -33,96 +48,112 @@ export function Home({ workspaceId }: { workspaceId: string }) {
   const error = workspace.error ?? bots.error;
   const loading = workspace.isPending || bots.isPending;
 
+  const list = bots.data ?? [];
+  const live = list.filter((b) => b.publishedVersionId !== null).length;
+  const summary =
+    loading || error || list.length === 0
+      ? undefined
+      : `${count(list.length, "bot", "bots")} · ${live} live · ${list.length - live} in draft`;
+
   return (
-    <AppShell
-      title={<WorkspaceSwitcher workspaceId={workspaceId} />}
-      workspaceId={workspaceId}
-      actions={
-        canCreate ? (
-          <Button
-            variant="primary"
-            icon={<Plus className="size-icon" strokeWidth={1.5} aria-hidden="true" />}
-            onClick={() => setCreating(true)}
-          >
-            New bot
-          </Button>
-        ) : null
-      }
-    >
-      <div className="flex flex-col">
-        <div className="flex h-topbar items-center border-b border-hairline px-5">
-          <h1 className="text-heading text-primary">Bots</h1>
-        </div>
+    <AppShell title={<WorkspaceSwitcher workspaceId={workspaceId} />} workspaceId={workspaceId} active="Home">
+      <Page>
+        <PageHeader
+          title="Bots"
+          description={summary ?? "Every bot in this workspace, with its status and last change."}
+          actions={
+            canCreate ? (
+              <Button
+                variant="primary"
+                icon={<Plus className="size-icon" strokeWidth={1.75} aria-hidden="true" />}
+                onClick={() => setCreating(true)}
+              >
+                New bot
+              </Button>
+            ) : null
+          }
+        />
         {error ? (
-          <div className="px-5 py-6">
-            <ProblemBanner error={error} />
+          <ProblemBanner error={error} />
+        ) : !loading && list.length === 0 ? (
+          <div className="rounded-lg border border-hairline bg-surface">
+            <EmptyState
+              title="No bots yet"
+              detail={
+                canCreate
+                  ? "Use New bot to create one. It opens on a canvas with a Start node and an Autonomous node."
+                  : "Bots built in this workspace appear here."
+              }
+            />
           </div>
         ) : (
-          <>
-            <Table label="Bots">
-              <THead>
-                <tr>
-                  {COLUMNS.map((c) => (
-                    <Th key={c}>{c}</Th>
-                  ))}
-                </tr>
-              </THead>
-              <tbody>
-                {loading
-                  ? [0, 1, 2].map((i) => (
-                      <Tr key={i} aria-hidden="true">
-                        {COLUMNS.map((c) => (
-                          <Td key={c}>
-                            <Skeleton className="h-3 w-12" />
-                          </Td>
-                        ))}
-                      </Tr>
-                    ))
-                  : (bots.data ?? []).map((b) => <BotRow key={b.id} bot={b} workspaceId={workspaceId} />)}
-              </tbody>
-            </Table>
-            {!loading && bots.data?.length === 0 ? (
-              <EmptyState
-                title="No bots yet"
-                detail={
-                  canCreate
-                    ? "Bots you build in this workspace appear here."
-                    : "Bots built in this workspace appear here."
-                }
-              />
-            ) : null}
-          </>
+          <Table label="Bots">
+            <THead>
+              <tr>
+                {COLUMNS.map((c) => (
+                  <Th key={c}>{c}</Th>
+                ))}
+              </tr>
+            </THead>
+            <tbody>
+              {loading
+                ? [0, 1, 2].map((i) => (
+                    <Tr key={i} aria-hidden="true">
+                      {COLUMNS.map((c, j) => (
+                        <Td key={c}>
+                          {j === 0 ? (
+                            <span className="flex items-center gap-5">
+                              <Skeleton className="size-tile rounded-sm" />
+                              <Skeleton className="h-4 w-12" />
+                            </span>
+                          ) : (
+                            <Skeleton className="h-3 w-11" />
+                          )}
+                        </Td>
+                      ))}
+                    </Tr>
+                  ))
+                : list.map((b) => <BotRow key={b.id} bot={b} workspaceId={workspaceId} />)}
+            </tbody>
+          </Table>
         )}
-      </div>
+      </Page>
       <NewBotDialog workspaceId={workspaceId} open={creating} onOpenChange={setCreating} />
     </AppShell>
   );
 }
 
+const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
 function BotRow({ bot, workspaceId }: { bot: BotResponse; workspaceId: string }) {
   return (
-    <Tr className="hover:bg-subtle">
+    <Tr>
       <Td className="max-w-node">
         <Link
           to="/w/$workspaceId/b/$botId"
           params={{ workspaceId, botId: bot.id }}
-          dir="auto"
-          className="block truncate font-medium text-primary hover:underline"
+          className="flex min-w-0 items-center gap-5 rounded-sm"
         >
-          {bot.name}
+          <IconTile category="ai" icon={Bot} />
+          <span className="flex min-w-0 flex-col">
+            <span dir="auto" className="truncate font-medium text-primary">
+              {bot.name}
+            </span>
+            <span className="truncate font-mono text-small text-tertiary">{bot.slug}</span>
+          </span>
         </Link>
       </Td>
-      <Td className="text-secondary">
+      <Td>
         {bot.publishedVersionId ? (
-          <span className="inline-flex items-center gap-2">
+          <Badge tone="success">
             <span aria-hidden="true" className="size-status-dot rounded-full bg-success" />
             Live
-          </span>
+          </Badge>
         ) : (
-          <span className="inline-flex items-center gap-2">
+          <Badge>
             <span aria-hidden="true" className="size-status-dot rounded-full border border-strong" />
             Draft
-          </span>
+          </Badge>
         )}
       </Td>
       <Td className="text-tertiary">—</Td>

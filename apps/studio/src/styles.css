@@ -18,78 +18,117 @@
   --xy-connectionline-stroke-default: var(--accent-border);
   --xy-minimap-background-color-default: var(--bg-surface);
   --xy-minimap-mask-background-color-default: var(--bg-muted);
-  --xy-minimap-node-background-color-default: var(--border-strong);
+  --xy-minimap-node-background-color-default: var(--text-tertiary);
   --xy-selection-background-color-default: var(--accent-subtle);
   --xy-selection-border-default: 1px solid var(--accent-border);
   background: var(--bg-canvas);
 }
 
-.wk-grid .react-flow__background-pattern circle,
-.wk-grid circle {
+.wk-grid .react-flow__background-pattern circle {
   fill: var(--text-tertiary);
-  fill-opacity: 0.2;
+  fill-opacity: 0.35;
 }
 
+/* Transitions (ADR-017): visible at rest, the accent when selected. */
 .wk-edge {
-  stroke: var(--border-strong);
+  stroke: var(--text-tertiary);
   stroke-width: 1.5;
   fill: none;
 }
 .wk-edge-selected {
-  stroke: var(--accent-border);
+  stroke: var(--accent);
+  stroke-width: 2;
 }
 .wk-arrow-fill {
-  fill: var(--border-strong);
+  fill: var(--text-tertiary);
 }
 .wk-arrow-fill-selected {
-  fill: var(--accent-border);
+  fill: var(--accent);
 }
 
-/* OutputDot: an 8 px dot with a 16 px hit area; inputs are an invisible strip on the left edge. */
-.wk-canvas .react-flow__handle.wk-output {
-  width: var(--space-4);
-  height: var(--space-4);
+/*
+ * Ports (ADR-017): a 10 px dot in the node's category colour with a surface ring, on the node's end
+ * edge; the hit area is 8 px larger on each side. Inputs are a dot on the start edge of the header.
+ */
+.wk-canvas .react-flow__handle.wk-output,
+.wk-canvas .react-flow__handle.wk-input {
+  width: var(--size-port);
+  height: var(--size-port);
   min-width: 0;
   min-height: 0;
-  border: 1px solid var(--border-strong);
+  border: 2px solid var(--bg-surface);
   border-radius: var(--radius-full);
-  background: var(--bg-surface);
-  right: calc(-1 * var(--space-2));
+  background: var(--text-tertiary);
+  transition: background-color var(--duration-instant) var(--ease-out);
 }
-.wk-canvas .react-flow__handle.wk-output::before {
-  content: "";
-  position: absolute;
-  inset: calc(-1 * var(--space-2));
-}
-.wk-canvas .react-flow__handle.wk-output:hover,
-.wk-canvas .react-flow__handle.wk-output.connectingfrom {
-  border-color: var(--accent-border);
+.wk-canvas .react-flow__handle.wk-output {
+  right: calc(-1 * var(--size-port) / 2);
 }
 .wk-canvas .react-flow__handle.wk-input {
-  width: var(--space-4);
-  height: var(--space-8);
-  border: 0;
-  border-radius: var(--radius-xs);
-  background: transparent;
-  left: calc(-1 * var(--space-2));
+  left: calc(-1 * var(--size-port) / 2);
 }
+.wk-canvas .react-flow__handle.wk-output::before,
+.wk-canvas .react-flow__handle.wk-input::before {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--space-4));
+}
+.wk-canvas .react-flow__handle.wk-port-trigger {
+  background: var(--cat-trigger);
+}
+.wk-canvas .react-flow__handle.wk-port-logic {
+  background: var(--cat-logic);
+}
+.wk-canvas .react-flow__handle.wk-port-ai {
+  background: var(--cat-ai);
+}
+.wk-canvas .react-flow__handle.wk-port-tool {
+  background: var(--cat-tool);
+}
+.wk-canvas .react-flow__handle.wk-port-human {
+  background: var(--cat-human);
+}
+.wk-canvas .react-flow__handle.wk-port-flow {
+  background: var(--cat-flow);
+}
+.wk-canvas .react-flow__handle.wk-output:hover,
+.wk-canvas .react-flow__handle.wk-output.connectingfrom,
 .wk-canvas .react-flow__handle.wk-input.connectingto,
 .wk-canvas .react-flow__handle.wk-input.valid {
-  background: var(--accent-border);
+  background: var(--accent);
 }
 
 .wk-canvas .react-flow__node:focus-visible,
 .wk-canvas .react-flow__edge:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
 }
 
 .wk-minimap {
   border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  margin-bottom: var(--space-11);
+  box-shadow: var(--shadow-pop);
+}
+
+.wk-minimap .wk-mm-trigger {
+  fill: var(--cat-trigger-border);
+}
+.wk-minimap .wk-mm-logic {
+  fill: var(--cat-logic-border);
+}
+.wk-minimap .wk-mm-ai {
+  fill: var(--cat-ai-border);
+}
+.wk-minimap .wk-mm-tool {
+  fill: var(--cat-tool-border);
+}
+.wk-minimap .wk-mm-human {
+  fill: var(--cat-human-border);
+}
+.wk-minimap .wk-mm-flow {
+  fill: var(--cat-flow-border);
 }
 
 .wk-canvas .react-flow__attribution {

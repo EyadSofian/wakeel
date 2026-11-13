@@ -79,9 +79,9 @@ export function ApiKeys({ workspaceId }: { workspaceId: string }) {
         ) : null
       }
     >
-      <div className="flex flex-col py-6">
+      <div className="flex flex-col gap-6">
         {workspace.isError ? (
-          <div className="px-5">
+          <div>
             <ProblemBanner error={workspace.error} />
           </div>
         ) : workspace.data && !canRead ? (
@@ -90,7 +90,7 @@ export function ApiKeys({ workspaceId }: { workspaceId: string }) {
             detail="Ask one of them to create a key for you."
           />
         ) : keys.isError ? (
-          <div className="px-5">
+          <div>
             <ProblemBanner error={keys.error} />
           </div>
         ) : keys.data && keys.data.length === 0 ? (

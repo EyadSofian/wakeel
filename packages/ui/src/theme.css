@@ -28,6 +28,7 @@
   --color-accent-hover: var(--accent-hover);
   --color-accent-subtle: var(--accent-subtle);
   --color-accent-border: var(--accent-border);
+  --color-accent-text: var(--accent-text);
   --color-error: var(--error);
   --color-error-subtle: var(--error-subtle);
   --color-warning: var(--warning);
@@ -35,6 +36,25 @@
   --color-success: var(--success);
   --color-success-subtle: var(--success-subtle);
   --color-scrim: var(--scrim);
+  /* Node categories (ADR-017): bg-cat-ai-subtle, text-cat-ai, border-cat-ai-border … */
+  --color-cat-trigger: var(--cat-trigger);
+  --color-cat-trigger-subtle: var(--cat-trigger-subtle);
+  --color-cat-trigger-border: var(--cat-trigger-border);
+  --color-cat-logic: var(--cat-logic);
+  --color-cat-logic-subtle: var(--cat-logic-subtle);
+  --color-cat-logic-border: var(--cat-logic-border);
+  --color-cat-ai: var(--cat-ai);
+  --color-cat-ai-subtle: var(--cat-ai-subtle);
+  --color-cat-ai-border: var(--cat-ai-border);
+  --color-cat-tool: var(--cat-tool);
+  --color-cat-tool-subtle: var(--cat-tool-subtle);
+  --color-cat-tool-border: var(--cat-tool-border);
+  --color-cat-human: var(--cat-human);
+  --color-cat-human-subtle: var(--cat-human-subtle);
+  --color-cat-human-border: var(--cat-human-border);
+  --color-cat-flow: var(--cat-flow);
+  --color-cat-flow-subtle: var(--cat-flow-subtle);
+  --color-cat-flow-border: var(--cat-flow-border);
   --color-transparent: transparent;
   --color-current: currentColor;
 
@@ -89,6 +109,11 @@
   --spacing-icon-sm: var(--size-icon-sm);
   --spacing-icon: var(--size-icon);
   --spacing-icon-lg: var(--size-icon-lg);
+  --spacing-tile-sm: var(--size-tile-sm);
+  --spacing-tile: var(--size-tile);
+  --spacing-tile-lg: var(--size-tile-lg);
+  --spacing-page: var(--size-page);
+  --spacing-port: var(--size-port);
   --spacing-row: var(--size-row);
   --spacing-row-table: var(--size-row-table);
   --spacing-row-card: var(--size-row-card);
@@ -112,9 +137,11 @@
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
   --radius-full: var(--radius-full);
 
   /* Elevation: shadow-pop, shadow-drag, shadow-modal. Nothing that does not float gets a shadow. */
+  --shadow-node: var(--shadow-node);
   --shadow-pop: var(--shadow-pop);
   --shadow-drag: var(--shadow-drag);
   --shadow-modal: var(--shadow-modal);

@@ -25,7 +25,7 @@ export function Banner({ tone = "info", title, children }: { tone?: Tone; title:
   return (
     <div
       role={tone === "error" ? "alert" : "status"}
-      className={`flex gap-4 rounded-sm px-5 py-4 ${toneClasses[tone]}`}
+      className={`flex gap-4 rounded-md px-6 py-5 ${toneClasses[tone]}`}
     >
       {toneIcon[tone]}
       <div className="flex min-w-0 flex-col gap-1">
@@ -56,5 +56,7 @@ export function Skeleton({ className = "h-4 w-full" }: { className?: string }) {
 
 export function Badge({ children, tone }: { children: ReactNode; tone?: Tone }) {
   const color = tone === undefined || tone === "info" ? "bg-muted text-secondary" : toneClasses[tone];
-  return <span className={`inline-flex h-7 items-center rounded-xs px-3 text-micro ${color}`}>{children}</span>;
+  return (
+    <span className={`inline-flex h-tile-sm items-center gap-2 rounded-full px-4 text-micro ${color}`}>{children}</span>
+  );
 }

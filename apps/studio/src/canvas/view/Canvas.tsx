@@ -1,4 +1,4 @@
-import { NON_TARGETABLE_NODE_TYPES, type Workflow } from "@wakeel/contracts";
+import { NON_TARGETABLE_NODE_TYPES, type NodeType, type Workflow } from "@wakeel/contracts";
 import {
   applyNodeChanges,
   Background,
@@ -8,18 +8,21 @@ import {
   MiniMap,
   type NodeChange,
   type NodeTypes,
+  type OnConnectEnd,
   type OnSelectionChangeParams,
   ReactFlow,
   useReactFlow,
 } from "@xyflow/react";
-import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type DragEvent, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAddNode } from "../add-node";
 import { useCanvas, useCanvasStore } from "../context";
 import type { groupIssues, NodeIssues } from "../issues";
+import { NODE_DRAG_TYPE } from "../library/NodeLibrary";
 import { type Command, commands } from "../store/commands";
-import { createNode } from "../store/factories";
+import { useSummaryContext } from "../use-summary";
 import { CanvasNode, type CanvasRFNode } from "./CanvasNode";
-import { CanvasToolbar } from "./CanvasToolbar";
-import type { SummaryContext } from "./summaries";
+import { type CanvasMode, CanvasToolbar } from "./CanvasToolbar";
+import { NODE_CATEGORY, type SummaryContext } from "./summaries";
 import { TransitionEdge, TransitionMarkers, type TransitionRFEdge } from "./TransitionEdge";
 import { FIT_VIEW } from "./viewport";
 
@@ -37,21 +40,14 @@ const SNAP: [number, number] = [8, 8];
 export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
   const store = useCanvasStore();
   const wf = useCanvas((s) => (s.activeWorkflowId ? s.workflows[s.activeWorkflowId]?.doc : undefined));
-  const manifest = useCanvas((s) => s.manifest?.doc);
-  const workflows = useCanvas((s) => s.workflows);
   const selection = useCanvas((s) => s.selection);
-  const flow = useReactFlow();
   const [minimap, setMinimap] = useState(true);
+  // Hand pans on drag (the default); Select draws a selection box and pans with the middle button.
+  const [mode, setMode] = useState<CanvasMode>("hand");
   const [notice, setNotice] = useState("");
   const pointer = useRef<{ x: number; y: number } | null>(null);
 
-  const summary = useMemo<SummaryContext>(
-    () => ({
-      variables: new Map([...(manifest?.variables ?? []), ...(wf?.variables ?? [])].map((v) => [v.id, v])),
-      workflows: new Map(Object.values(workflows).map((w) => [w.doc.id, { name: w.doc.name }])),
-    }),
-    [manifest, wf, workflows],
-  );
+  const summary = useSummaryContext();
 
   // Node objects keep their identity while nothing about them changed, so a selection or an edit
   // re-renders the nodes it touched, not all 300 (design system §5.1 budget).
@@ -144,6 +140,62 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
     [run],
   );
 
+  // Dropping a transition anywhere on a node connects to it, not only on its input port (§5.1
+  // "Connect: drag from an output to a node"). xyflow only reports drops near a handle.
+  const flow = useReactFlow<CanvasRFNode, TransitionRFEdge>();
+  // Hit-tested in canvas coordinates: while a transition is dragged, nodes do not receive pointer
+  // events, so the element under the pointer is never the node.
+  const nodeUnder = useCallback(
+    (event: globalThis.MouseEvent | TouchEvent): string | undefined => {
+      const screen = pointOf(event);
+      if (!screen) return undefined;
+      const p = flow.screenToFlowPosition(screen);
+      const hit = flow
+        .getNodes()
+        .find(
+          (n) =>
+            n.measured?.width !== undefined &&
+            n.measured.height !== undefined &&
+            p.x >= n.position.x &&
+            p.x <= n.position.x + n.measured.width &&
+            p.y >= n.position.y &&
+            p.y <= n.position.y + n.measured.height,
+        );
+      return hit?.id;
+    },
+    [flow],
+  );
+  const targetable = useCallback(
+    (nodeId: string, from: string) => {
+      const target = wf?.nodes.find((n) => n.id === nodeId);
+      return target !== undefined && nodeId !== from && !NON_TARGETABLE_NODE_TYPES.includes(target.type);
+    },
+    [wf],
+  );
+  const onConnectEnd: OnConnectEnd = useCallback(
+    (event, state) => {
+      if (state.isValid === true || !state.fromNode || state.fromHandle?.type !== "source" || !state.fromHandle.id)
+        return;
+      const to = nodeUnder(event);
+      if (to && targetable(to, state.fromNode.id))
+        run(commands.connect({ nodeId: state.fromNode.id, port: state.fromHandle.id }, to));
+    },
+    [run, targetable, nodeUnder],
+  );
+  const onReconnectEnd = useCallback(
+    (
+      event: globalThis.MouseEvent | TouchEvent,
+      old: TransitionRFEdge,
+      _type: unknown,
+      state: { isValid: boolean | null },
+    ) => {
+      if (state.isValid === true) return;
+      const to = nodeUnder(event);
+      if (to && to !== old.target && targetable(to, old.source)) run(commands.reconnect(old.id, to));
+    },
+    [run, targetable, nodeUnder],
+  );
+
   const isValidConnection = useCallback(
     (c: Connection | TransitionRFEdge) => {
       const target = wf?.nodes.find((n) => n.id === c.target);
@@ -164,12 +216,30 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
     [store],
   );
 
+  const addNode = useAddNode();
   const addNodeAt = useCallback(
-    (screen: { x: number; y: number }) => {
-      const p = flow.screenToFlowPosition(screen);
-      run(commands.addNode(createNode("standard"), { x: Math.round(p.x / 8) * 8, y: Math.round(p.y / 8) * 8 }));
+    (screen: { x: number; y: number }, type: NodeType = "standard") => {
+      const result = addNode(type, screen);
+      setNotice(result.ok ? "" : result.reason);
     },
-    [flow, run],
+    [addNode],
+  );
+
+  // Dropping a node from the library adds it where it lands.
+  const onDragOver = useCallback((e: DragEvent) => {
+    if (e.dataTransfer.types.includes(NODE_DRAG_TYPE)) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    }
+  }, []);
+  const onDrop = useCallback(
+    (e: DragEvent) => {
+      const type = e.dataTransfer.getData(NODE_DRAG_TYPE) as NodeType;
+      if (!type) return;
+      e.preventDefault();
+      addNodeAt({ x: e.clientX, y: e.clientY }, type);
+    },
+    [addNodeAt],
   );
 
   // Double-click on empty canvas adds a node there (§5.1). The add-node menu arrives in 2.5.
@@ -191,7 +261,9 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
       if (!onCanvas || e.defaultPrevented) return;
       if ((e.target as HTMLElement).closest("input, textarea, select, [contenteditable], [role=dialog]")) return;
       const mod = e.metaKey || e.ctrlKey;
-      if (mod && e.key.toLowerCase() === "z") {
+      if (e.key === "Escape") {
+        store.getState().clearSelection();
+      } else if (mod && e.key.toLowerCase() === "z") {
         e.preventDefault();
         if (e.shiftKey) store.getState().redo();
         else store.getState().undo();
@@ -201,6 +273,10 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
         addNodeAt(pointer.current ?? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
       } else if (!mod && !e.altKey && e.key === "m") {
         setMinimap((v) => !v);
+      } else if (!mod && !e.altKey && e.key === "v") {
+        setMode("select");
+      } else if (!mod && !e.altKey && e.key === "h") {
+        setMode("hand");
       }
     };
     document.addEventListener("keydown", onKeyDown);
@@ -214,6 +290,8 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
     <div
       ref={region}
       className="wk-canvas relative h-full w-full"
+      onDragOver={onDragOver}
+      onDrop={onDrop}
       onDoubleClick={onDoubleClick}
       onMouseMove={(e) => {
         pointer.current = { x: e.clientX, y: e.clientY };
@@ -237,6 +315,8 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
         }
         onConnect={onConnect}
         onReconnect={onReconnect}
+        onConnectEnd={onConnectEnd}
+        onReconnectEnd={onReconnectEnd}
         isValidConnection={isValidConnection}
         onSelectionChange={onSelectionChange}
         deleteKeyCode={["Backspace", "Delete"]}
@@ -249,12 +329,23 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
         onlyRenderVisibleElements
         fitView
         fitViewOptions={FIT_VIEW}
-        attributionPosition="bottom-left"
+        attributionPosition="bottom-center"
+        panOnDrag={mode === "hand" ? true : PAN_BUTTONS}
+        selectionOnDrag={mode === "select"}
         aria-label={`${wf.name} workflow`}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} className="wk-grid" />
-        {minimap ? <MiniMap pannable zoomable ariaLabel="Minimap" className="wk-minimap" nodeBorderRadius={8} /> : null}
-        <CanvasToolbar minimap={minimap} onToggleMinimap={() => setMinimap((v) => !v)} />
+        {minimap ? (
+          <MiniMap
+            pannable
+            zoomable
+            ariaLabel="Minimap"
+            className="wk-minimap"
+            nodeBorderRadius={8}
+            nodeClassName={minimapNodeClass}
+          />
+        ) : null}
+        <CanvasToolbar minimap={minimap} onToggleMinimap={() => setMinimap((v) => !v)} mode={mode} onMode={setMode} />
       </ReactFlow>
       <p role="status" aria-live="polite" className="sr-only">
         {notice}
@@ -270,7 +361,18 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
   );
 }
 
+/** Screen point of a mouse or touch end event. */
+function pointOf(event: globalThis.MouseEvent | TouchEvent): { x: number; y: number } | undefined {
+  const p = "changedTouches" in event ? event.changedTouches[0] : event;
+  return p ? { x: p.clientX, y: p.clientY } : undefined;
+}
+
 const ORIGIN = { x: 0, y: 0 };
+
+/** Minimap blocks take their node's category colour (ADR-017). */
+const minimapNodeClass = (n: CanvasRFNode) => `wk-mm-${NODE_CATEGORY[n.data.node.type]}`;
+/** In Select mode the middle and right buttons still pan. */
+const PAN_BUTTONS = [1, 2];
 
 /** Same severity and message for the node and each card: the drawing would not change. */
 function sameIssues(a: NodeIssues | undefined, b: NodeIssues | undefined): boolean {

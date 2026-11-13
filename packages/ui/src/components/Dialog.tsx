@@ -37,13 +37,13 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
             <div className="pointer-events-none fixed inset-0 flex items-start justify-center pt-12">
               <RadixDialog.Content asChild forceMount>
                 <motion.div
-                  className="pointer-events-auto flex w-inspector-max flex-col rounded-lg border border-hairline bg-surface shadow-modal"
+                  className="pointer-events-auto flex w-inspector-max flex-col rounded-xl border border-hairline bg-surface shadow-modal"
                   initial={{ opacity: 0, y: tokens.travel }}
                   animate={{ opacity: 1, y: 0, transition: enterTransition(tokens) }}
                   exit={{ opacity: 0, transition: exitTransition(tokens) }}
                   {...(description === undefined ? { "aria-describedby": undefined } : {})}
                 >
-                  <div className="flex flex-col gap-2 px-6 pt-6">
+                  <div className="flex flex-col gap-2 px-8 pt-8">
                     <RadixDialog.Title className="text-title text-primary">{title}</RadixDialog.Title>
                     {description ? (
                       <RadixDialog.Description className="text-body text-secondary">
@@ -51,8 +51,10 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
                       </RadixDialog.Description>
                     ) : null}
                   </div>
-                  <div className="flex flex-col gap-6 px-6 py-6">{children}</div>
-                  <div className="flex justify-end gap-4 border-t border-hairline px-6 py-5">{footer}</div>
+                  <div className="flex flex-col gap-6 px-8 py-7">{children}</div>
+                  <div className="flex justify-end gap-4 rounded-b-xl border-t border-hairline bg-subtle px-8 py-6">
+                    {footer}
+                  </div>
                 </motion.div>
               </RadixDialog.Content>
             </div>
