@@ -1,0 +1,17 @@
+{
+  "name": "@wakeel/testing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./fixtures/rtl": "./fixtures/rtl.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@wakeel/contracts": "workspace:*"
+  }
+}
