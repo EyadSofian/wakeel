@@ -1,0 +1,54 @@
+# Local development infrastructure (task 0.4, architecture §1.1). Not for production:
+# credentials are fixed dev values and ports bind to 127.0.0.1 only.
+#
+#   pnpm dev:infra         start and wait until every service is healthy
+#   pnpm dev:infra:down    stop, keep data
+#   pnpm dev:infra:reset   stop and delete data volumes
+#
+# Images are pinned by tag and digest (threat T11). The object store is not here yet:
+# MinIO no longer publishes images; see docs/adr/013-local-object-store.md (proposed).
+name: wakeel
+
+services:
+  postgres:
+    # Postgres 17 with pgvector 0.8.7 (architecture requires pgvector >= 0.8).
+    image: pgvector/pgvector:0.8.7-pg17-bookworm@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_dev_only
+      POSTGRES_DB: wakeel
+    ports:
+      - "127.0.0.1:${WAKEEL_PG_PORT:-5432}:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      # Ready only once init.sql has run: the extension is created during first start.
+      test:
+        [
+          "CMD-SHELL",
+          'psql -U postgres -d wakeel -tAc "select 1 from pg_extension where extname = ''vector''" | grep -q 1',
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+  redis:
+    # 7.2 is the last Redis line under BSD-3; 7.4 moved to RSAL/SSPL, which our licence policy rejects.
+    image: redis:7.2.17-alpine@sha256:2f66de68111e64c3927859f158f8e666066dae2b97d9f82770a6f37a5aa1c335
+    # BullMQ needs noeviction: an evicted job key is a lost job. AOF keeps queues across restarts.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "127.0.0.1:${WAKEEL_REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pg-data:
+  redis-data:
