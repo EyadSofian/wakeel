@@ -6,8 +6,11 @@ import {
   type Node,
   newElementId,
   nodePorts,
+  type Variable,
   type Workflow,
 } from "@wakeel/contracts";
+
+import { type Fragment, pasteFragment } from "../interaction/clipboard";
 
 /**
  * The only way the canvas changes a workflow document (CLAUDE.md §6: "The canvas document changes
@@ -65,6 +68,13 @@ export const commands = {
         return { ...wf, nodes: [...wf.nodes, node], layout: { ...wf.layout, [node.id]: { ...position } } };
       },
     };
+  },
+
+  /** Adds a node and wires `from` to it as one step (drag from an output into empty space, §5.1). */
+  addNodeFrom(node: Node, position: { x: number; y: number }, from: { nodeId: string; port: string }): Command {
+    const add = commands.addNode(node, position);
+    const link = commands.connect(from, node.id);
+    return { label: "Add node", apply: (wf) => link.apply(add.apply(wf)) };
   },
 
   deleteNodes(nodeIds: readonly string[]): Command {
@@ -191,6 +201,40 @@ export const commands = {
         return pruneEdges(replaceNode(wf, { ...node, cards }));
       },
     };
+  },
+
+  /**
+   * Adds a card and the workflow variable it writes to as one step, so undo removes both (the Ask
+   * and Set variable entries of the card menu, task 2.5).
+   */
+  addCardWithVariable(nodeId: string, card: Card, variable: Variable, index?: number): Command {
+    const add = commands.addCard(nodeId, card, index);
+    return {
+      label: "Add card",
+      apply: (wf) => {
+        if (wf.variables.some((v) => v.id === variable.id || v.name === variable.name)) {
+          throw new CommandRejected(`A variable named "${variable.name}" already exists.`);
+        }
+        return add.apply({ ...wf, variables: [...wf.variables, variable] });
+      },
+    };
+  },
+
+  /**
+   * Pastes a copied fragment with its top-left at `at` (`⌘V`, `⌘D`). The new node ids are on
+   * `created` after the command has run, so the canvas can select them.
+   */
+  paste(fragment: Fragment, at: { x: number; y: number }): Command & { created: string[] } {
+    const command = {
+      label: `Paste ${plural(fragment.nodes.length, "node", "nodes")}`,
+      created: [] as string[],
+      apply: (wf: Workflow) => {
+        const result = pasteFragment(wf, fragment, at);
+        command.created = result.nodeIds;
+        return result.wf;
+      },
+    };
+    return command;
   },
 
   updateCard(nodeId: string, card: Card): Command {

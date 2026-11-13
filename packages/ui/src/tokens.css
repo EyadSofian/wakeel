@@ -95,6 +95,8 @@
   --size-emulator-max: 560px;
   --size-sign-in: 380px;
   --size-page: 1200px;
+  --size-picker: 320px;
+  --size-picker-height: 420px;
   --size-hairline: 1px;
   --size-status-dot: 6px;
   --size-port: 10px;

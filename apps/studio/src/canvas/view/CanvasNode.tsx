@@ -1,9 +1,14 @@
-import { type Node as DefNode, NON_TARGETABLE_NODE_TYPES } from "@wakeel/contracts";
-import { CATEGORY_CLASSES, type Category, IconTile } from "@wakeel/ui";
-import { Handle, type NodeProps, Position, type Node as RFNode, useStore } from "@xyflow/react";
-import { CircleAlert, TriangleAlert } from "lucide-react";
-import { memo, type ReactNode } from "react";
+import { type Card, type Node as DefNode, NON_TARGETABLE_NODE_TYPES } from "@wakeel/contracts";
+import { CATEGORY_CLASSES, type Category, IconTile, useMotionTokens } from "@wakeel/ui";
+import { Handle, type NodeProps, Position, type Node as RFNode, useStore, useUpdateNodeInternals } from "@xyflow/react";
+import { CircleAlert, GripVertical, Plus, TriangleAlert } from "lucide-react";
+import { type HTMLMotionProps, motion, Reorder } from "motion/react";
+import { type HTMLAttributes, memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useCanvas, useCanvasStore } from "../context";
+import { nodeRows } from "../interaction/rows";
+import { useUi, useUiStore } from "../interaction/ui-store";
 import type { NodeIssues } from "../issues";
+import { commands } from "../store/commands";
 import {
   CARD_CATEGORY,
   CARD_ICONS,
@@ -24,6 +29,9 @@ import {
  * tile, the name and what the node is; then one inset row per card (standard) or the instructions
  * (autonomous); then its outputs, each with a dot in the category colour on the end edge.
  * Transitions enter at the header's start edge. Below 50% zoom only the header shows.
+ *
+ * Task 2.5: the name renames in place (double-click, `F2`); card rows reorder by dragging their
+ * grip; "Add card" opens the card menu; the keyboard cursor and connect target are drawn here.
  */
 export interface CanvasNodeData extends Record<string, unknown> {
   node: DefNode;
@@ -49,9 +57,27 @@ function IssueMarker({ severity, label }: { severity: "error" | "warning"; label
 }
 
 /** An output row with its dot. The dot's hit area is 16 px around an 8 px dot (§4 OutputDot). */
-function Output({ row, category, children }: { row: OutputRow; category: Category; children?: ReactNode }) {
+function Output({
+  row,
+  category,
+  cursor,
+  connecting,
+  children,
+}: {
+  row: OutputRow;
+  category: Category;
+  cursor: boolean;
+  connecting: boolean;
+  children?: ReactNode;
+}) {
   return (
-    <div className="relative flex h-row items-center gap-3 px-6">
+    <div
+      className={[
+        "relative mx-2 flex h-row items-center gap-3 rounded-sm px-4",
+        cursor ? "bg-accent-subtle" : "",
+        connecting ? "wk-connect-source" : "",
+      ].join(" ")}
+    >
       {children ?? (
         // Outputs sit on the end edge whatever the label's direction, so the margin is physical.
         <span dir="auto" className="ml-auto truncate text-small text-secondary">
@@ -69,29 +95,58 @@ function Output({ row, category, children }: { row: OutputRow; category: Categor
   );
 }
 
+/** Which row the keyboard cursor and connect mode are on, for this node only. */
+function useRowState(nodeId: string) {
+  const cursorRow = useUi((s) => (s.cursor?.nodeId === nodeId ? s.cursor.row : -1));
+  const connectingPort = useUi((s) => (s.connecting?.from.nodeId === nodeId ? s.connecting.from.port : undefined));
+  const selectedCard = useCanvas((s) => (s.selection.card?.nodeId === nodeId ? s.selection.card.cardId : undefined));
+  return { cursorRow, connectingPort, selectedCard };
+}
+
 function CardRow({
   card,
   summary,
   severity,
   message,
+  cardIndex,
+  outputIndex,
+  rowState,
+  dragging,
 }: {
-  card: Extract<DefNode, { type: "standard" }>["cards"][number];
+  card: Card;
   summary: SummaryContext;
   severity: "error" | "warning" | undefined;
   message: string | undefined;
+  cardIndex: number;
+  outputIndex: (port: string) => number;
+  rowState: ReturnType<typeof useRowState>;
+  dragging: boolean;
 }) {
   const Icon = CARD_ICONS[card.type];
   const category = CARD_CATEGORY[card.type];
   const outputs = cardOutputRows(card);
   const text = summarizeCard(card, summary);
+  const current = rowState.cursorRow === cardIndex || rowState.selectedCard === card.id;
   return (
     <div data-card={card.id} className={card.disabled ? "opacity-50" : ""}>
       <div
         className={[
-          "mx-4 flex h-row-card items-center gap-4 rounded-sm border bg-subtle px-4",
-          severity === "error" ? "border-error" : severity === "warning" ? "border-warning" : "border-transparent",
+          "group mx-4 flex h-row-card items-center gap-3 rounded-sm border px-3",
+          dragging ? "bg-surface shadow-drag" : "bg-subtle",
+          severity === "error"
+            ? "border-error"
+            : severity === "warning"
+              ? "border-warning"
+              : current
+                ? "border-accent"
+                : "border-transparent",
         ].join(" ")}
       >
+        <GripVertical
+          className="size-icon-sm shrink-0 cursor-grab text-tertiary opacity-0 transition-opacity group-hover:opacity-100"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
         <Icon
           className={`size-icon-sm shrink-0 ${CATEGORY_CLASSES[category].icon}`}
           strokeWidth={1.75}
@@ -103,30 +158,107 @@ function CardRow({
         {severity ? <IssueMarker severity={severity} label={message ?? ""} /> : null}
       </div>
       {outputs.map((row) => (
-        <Output key={row.port} row={row} category={category} />
+        <Output
+          key={row.port}
+          row={row}
+          category={category}
+          cursor={rowState.cursorRow === outputIndex(row.port)}
+          connecting={rowState.connectingPort === row.port}
+        />
       ))}
     </div>
   );
 }
 
-function Body({ node, summary, issues }: CanvasNodeData) {
+/**
+ * The cards of a standard node. Dragging a row's grip reorders with `spring.snappy` (§5.1 motion
+ * table); the new order is committed as one `moveCard` on release, so it is one undo step.
+ */
+function Cards({
+  node,
+  summary,
+  issues,
+  rowState,
+}: {
+  node: Extract<DefNode, { type: "standard" }>;
+  summary: SummaryContext;
+  issues: NodeIssues | undefined;
+  rowState: ReturnType<typeof useRowState>;
+}) {
+  const store = useCanvasStore();
+  const tokens = useMotionTokens();
+  const ids = useMemo(() => node.cards.map((c) => c.id), [node.cards]);
+  const [order, setOrder] = useState(ids);
+  const [dragging, setDragging] = useState<string>();
+  useEffect(() => setOrder(ids), [ids]);
+  const byId = useMemo(() => new Map(node.cards.map((c) => [c.id, c])), [node.cards]);
+  const rows = useMemo(() => nodeRows(node), [node]);
+  const rowIndex = (pred: (r: (typeof rows)[number]) => boolean) => rows.findIndex(pred);
+
+  const commit = (cardId: string) => {
+    setDragging(undefined);
+    const to = order.indexOf(cardId);
+    if (to !== -1 && to !== ids.indexOf(cardId)) store.getState().execute(commands.moveCard(node.id, cardId, to));
+  };
+
+  return (
+    <Reorder.Group as="div" axis="y" values={order} onReorder={setOrder} className="flex flex-col gap-2">
+      {order.map((id) => {
+        const card = byId.get(id);
+        if (!card) return null;
+        const issue = issues?.cards.get(card.id);
+        return (
+          <Reorder.Item
+            key={id}
+            as="div"
+            value={id}
+            // nodrag: dragging a card moves the card, not the node.
+            className="nodrag relative"
+            transition={tokens.spring.snappy}
+            onDragStart={() => setDragging(id)}
+            onDragEnd={() => commit(id)}
+          >
+            <CardRow
+              card={card}
+              summary={summary}
+              severity={issue?.severity}
+              message={issue?.message}
+              cardIndex={rowIndex((r) => r.kind === "card" && r.cardId === id)}
+              outputIndex={(port) => rowIndex((r) => r.kind === "output" && r.port === port)}
+              rowState={rowState}
+              dragging={dragging === id}
+            />
+          </Reorder.Item>
+        );
+      })}
+    </Reorder.Group>
+  );
+}
+
+function Body({ data, rowState }: { data: CanvasNodeData; rowState: ReturnType<typeof useRowState> }) {
+  const { node, summary, issues } = data;
+  const ui = useUiStore();
   switch (node.type) {
     case "standard":
       return (
         <>
-          {node.cards.map((card) => {
-            const issue = issues?.cards.get(card.id);
-            return (
-              <CardRow
-                key={card.id}
-                card={card}
-                summary={summary}
-                severity={issue?.severity}
-                message={issue?.message}
-              />
-            );
-          })}
-          {node.cards.length === 0 ? <p className="px-6 py-2 text-small text-tertiary">No cards yet</p> : null}
+          {node.cards.length === 0 ? (
+            <p className="px-6 py-2 text-small text-tertiary">No cards yet</p>
+          ) : (
+            <Cards node={node} summary={summary} issues={issues} rowState={rowState} />
+          )}
+          <button
+            type="button"
+            data-add-card={node.id}
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              ui.getState().set({ menu: { kind: "card", nodeId: node.id, at: { x: r.left, y: r.bottom + 4 } } });
+            }}
+            className="nodrag mx-4 flex h-control-sm items-center gap-3 rounded-sm border border-dashed border-hairline px-3 text-small text-secondary transition-colors hover:border-strong hover:text-primary"
+          >
+            <Plus className="size-icon-sm" strokeWidth={1.75} aria-hidden="true" />
+            Add card
+          </button>
         </>
       );
     case "autonomous": {
@@ -159,38 +291,108 @@ function Body({ node, summary, issues }: CanvasNodeData) {
   }
 }
 
-function CanvasNodeView({ data, selected }: NodeProps<CanvasRFNode>) {
+/** The name, or an input while renaming (double-click, `F2`). Enter or blur commits; Esc cancels. */
+function Name({ node }: { node: DefNode }) {
+  const renaming = useUi((s) => s.renaming === node.id);
+  const ui = useUiStore();
+  const store = useCanvasStore();
+  const [draft, setDraft] = useState(node.name);
+  useEffect(() => {
+    if (renaming) setDraft(node.name);
+  }, [renaming, node.name]);
+  const done = (commit: boolean) => {
+    const next = draft.trim();
+    if (commit && next && next !== node.name) store.getState().execute(commands.renameNode(node.id, next));
+    ui.getState().set({ renaming: undefined });
+  };
+  if (renaming) {
+    return (
+      <input
+        // biome-ignore lint/a11y/noAutofocus: renaming starts from the keyboard or a double-click and expects typing.
+        autoFocus
+        aria-label="Node name"
+        dir="auto"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onFocus={(e) => e.target.select()}
+        onBlur={() => done(true)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") done(true);
+          else if (e.key === "Escape") done(false);
+          e.stopPropagation();
+        }}
+        className="nodrag h-control-sm w-full rounded-xs border border-accent bg-surface px-2 text-body font-semibold text-primary"
+      />
+    );
+  }
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: double-click to rename mirrors F2, the keyboard path.
+    <span
+      dir="auto"
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        ui.getState().set({ renaming: node.id });
+      }}
+      // The name keeps its own direction but stays next to the icon in the left-to-right chrome.
+      className="truncate text-left text-body font-semibold text-primary"
+    >
+      {node.name}
+    </span>
+  );
+}
+
+function CanvasNodeView({ id, data, selected }: NodeProps<CanvasRFNode>) {
   const { node, issues } = data;
   const compact = useStore((s) => s.transform[2] < COMPACT_BELOW);
+  const fresh = useUi((s) => s.fresh.has(id));
+  const target = useUi((s) => s.dropTarget === id || s.connecting?.target === id);
+  const rowState = useRowState(id);
+  const updateInternals = useUpdateNodeInternals();
   const Icon = NODE_ICONS[node.type];
   const category = NODE_CATEGORY[node.type];
   const classes = CATEGORY_CLASSES[category];
   const targetable = !NON_TARGETABLE_NODE_TYPES.includes(node.type);
   const outputs = nodeOutputRows(node);
+  const rows = useMemo(() => nodeRows(node), [node]);
   const cardCount = node.type === "standard" ? node.cards.length : 0;
   const nodeIssue = issues?.node;
   const hasBody =
     !compact && (node.type === "standard" || node.type === "autonomous" || (node.type === "note" && node.text));
 
+  // Outputs move when cards are added, removed or reordered; xyflow re-measures handles only on
+  // resize, so tell it, or transitions would stay attached to where the dots used to be. Not on
+  // mount: xyflow measures new nodes itself, and 300 forced re-measures would slow opening.
+  const mounted = useRef(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the node document is the trigger.
+  useEffect(() => {
+    if (mounted.current) updateInternals(id);
+    mounted.current = true;
+  }, [node, id, updateInternals]);
+
   return (
-    <article
+    <Shell
+      fresh={fresh}
       aria-label={`${node.name}, ${NODE_TYPE_LABELS[node.type].toLowerCase()}${node.type === "standard" ? `, ${cardCount} ${cardCount === 1 ? "card" : "cards"}` : ""}`}
       className={[
         "flex w-node flex-col overflow-visible rounded-lg border bg-surface shadow-node transition-colors",
         selected ? "border-accent outline-2 outline-accent outline-offset-1" : `${classes.border} hover:border-strong`,
         nodeIssue?.severity === "error" && !selected ? "border-error" : "",
+        target ? "wk-drop-target" : "",
       ].join(" ")}
     >
       <header className="relative flex items-center gap-4 px-5 py-5">
         {targetable ? (
-          <Handle type="target" position={Position.Left} id="in" className={`wk-input ${classes.port}`} />
+          <Handle
+            type="target"
+            position={Position.Left}
+            id="in"
+            isConnectableStart={false}
+            className={`wk-input ${classes.port}`}
+          />
         ) : null}
         <IconTile category={category} icon={Icon} />
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* The name keeps its own direction but stays next to the icon in the left-to-right chrome. */}
-          <span dir="auto" className="truncate text-left text-body font-semibold text-primary">
-            {node.name}
-          </span>
+          <Name node={node} />
           <span className="truncate text-small text-secondary">{nodeSubtitle(node)}</span>
         </div>
         {nodeIssue ? <IssueMarker severity={nodeIssue.severity} label={nodeIssue.message} /> : null}
@@ -215,13 +417,19 @@ function CanvasNodeView({ data, selected }: NodeProps<CanvasRFNode>) {
         <>
           {hasBody ? (
             <div className="flex flex-col gap-2 border-t border-hairline pt-4">
-              <Body {...data} />
+              <Body data={data} rowState={rowState} />
             </div>
           ) : null}
           {outputs.length > 0 ? (
             <div className={`flex flex-col py-2 ${hasBody ? "" : "border-t border-hairline"}`}>
               {outputs.map((row) => (
-                <Output key={row.port} row={row} category={category} />
+                <Output
+                  key={row.port}
+                  row={row}
+                  category={category}
+                  cursor={rowState.cursorRow === rows.findIndex((r) => r.kind === "output" && r.port === row.port)}
+                  connecting={rowState.connectingPort === row.port}
+                />
               ))}
             </div>
           ) : hasBody ? (
@@ -229,7 +437,26 @@ function CanvasNodeView({ data, selected }: NodeProps<CanvasRFNode>) {
           ) : null}
         </>
       )}
-    </article>
+    </Shell>
+  );
+}
+
+/**
+ * The node's outer element. Only a node added a moment ago is a Motion element, for its entrance
+ * (§5.1 motion table: scale 0.96 → 1 and fade in on spring.gentle); the other 299 stay plain, so
+ * opening a large workflow does not create 300 Motion components.
+ */
+function Shell({ fresh, children, ...rest }: { fresh: boolean; children: ReactNode } & HTMLAttributes<HTMLElement>) {
+  const tokens = useMotionTokens();
+  if (!fresh) return <article {...rest}>{children}</article>;
+  return (
+    <motion.article
+      {...(rest as HTMLMotionProps<"article">)}
+      initial={{ opacity: 0, scale: tokens.reduced ? 1 : 0.96 }}
+      animate={{ opacity: 1, scale: 1, transition: tokens.spring.gentle }}
+    >
+      {children}
+    </motion.article>
   );
 }
 

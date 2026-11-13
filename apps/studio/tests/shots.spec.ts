@@ -12,11 +12,13 @@ import { type Screen, type ScreenState, selectedScreens, THEMES } from "./screen
  */
 const SHOTS_DIR = fileURLToPath(new URL("../.shots", import.meta.url));
 
+const MOCK_STATES: readonly MockState[] = ["default", "empty", "loading", "error", "rtl", "signed-out"];
+
+/** Screen states that only change what is on screen use the default data. */
 const mockStateFor = (screen: Screen, state: ScreenState): MockState => {
   if (screen.id === "sign-in") return "signed-out";
-  if (state === "focus" || state === "dense-300" || state === "selection" || state === "issues") return "default";
   if (state === "empty" && screen.id === "canvas") return "default";
-  return state;
+  return MOCK_STATES.find((m) => m === state) ?? "default";
 };
 
 const canvasFor = (state: ScreenState): CanvasFixture =>
@@ -42,6 +44,33 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
     await expect(page.locator(".react-flow__node").first()).toBeVisible();
     // Validation runs in a worker; the issue count settles before the shot.
     await expect(page.locator('[data-validated="true"]')).toBeVisible();
+  }
+  if (state === "node-menu") {
+    const pane = await page.locator(".react-flow__pane").boundingBox();
+    if (!pane) throw new Error("no canvas");
+    await page.mouse.dblclick(pane.x + 60, pane.y + 140);
+    await expect(page.getByRole("dialog", { name: "Add node" })).toBeVisible();
+  }
+  if (state === "card-menu") {
+    await page
+      .locator(".react-flow__node")
+      .filter({ hasText: "Greeting" })
+      .getByRole("button", { name: "Add card" })
+      .click();
+    await expect(page.getByRole("dialog", { name: "Add card" })).toBeVisible();
+  }
+  if (state === "shortcuts") {
+    await page.keyboard.press("?");
+    await expect(page.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeVisible();
+  }
+  if (state === "cursor") {
+    // Keyboard: select Greeting, go inside, move to the Condition card's "Order" output, start connecting.
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Enter");
+    for (let i = 0; i < 4; i++) await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("ArrowRight");
   }
   if (state === "selection") {
     // Two nodes: one by click, one by Shift+click (design system §5.1 Selection).

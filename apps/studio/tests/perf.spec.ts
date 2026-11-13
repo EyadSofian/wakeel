@@ -6,9 +6,8 @@ import { mockApi, WS } from "./mock-api";
  * 450-transition fixture: open < 800 ms to interactive, selection < 50 ms, node add < 100 ms to
  * next paint, pan and zoom ≥ 55 fps average with no frame over 32 ms.
  *
- * "Mid-range laptop profile" is CPU throttling at 2× on the CI runner. Adding a *card* has no UI
- * until the inspector and add menu (2.5, 2.6); until then the add-to-paint budget is measured on a
- * node add, which renders the same NodeShell.
+ * "Mid-range laptop profile" is CPU throttling at 2× on the CI runner. Adding a card is measured
+ * through the card menu (task 2.5), from Enter to the next paint with the new row.
  */
 const ROUTE = `/w/${WS}/b/bot_01m7a256m0a13warwhczsjhx9b`;
 const CPU_THROTTLE = 2;
@@ -95,23 +94,41 @@ test("300-node canvas meets the §5.1 budget", async ({ page }) => {
     for (let i = 0; i < 30; i++) await page.mouse.wheel(0, i < 15 ? -40 : 40);
   });
 
-  // Node add: double-click empty canvas; time to the next paint after the node count changes.
-  const count = await page.locator(".react-flow__node").count();
+  // Card add (task 2.5 made it possible): open the card menu on a visible node, filter to "Log",
+  // then time from Enter to the next paint after the node has one more card row.
+  // At the fit (about 11%) nodes are compact and have no "Add card"; zoom to 100% first.
+  await page.keyboard.press("ControlOrMeta+1");
+  await expect(page.getByRole("toolbar", { name: "Zoom" })).toContainText("100%");
+  await expect(page.locator("[data-add-card]").first()).toBeVisible();
+  const visibleId = await page.evaluate(() => {
+    const pane = (document.querySelector(".react-flow__pane") as HTMLElement).getBoundingClientRect();
+    const inside = [...document.querySelectorAll<HTMLElement>("[data-add-card]")].find((b) => {
+      const r = b.getBoundingClientRect();
+      return r.left >= pane.left && r.right <= pane.right && r.top >= pane.top + 80 && r.bottom <= pane.bottom - 80;
+    });
+    return inside?.dataset["addCard"];
+  });
+  const target = page.locator(`.react-flow__node[data-id="${visibleId}"]`);
+  await target.locator("[data-add-card]").click();
+  await expect(page.getByRole("dialog", { name: "Add card" })).toBeVisible();
+  await page.keyboard.type("log");
+  const nodeId = await target.getAttribute("data-id");
   const add = await page.evaluate(
-    ({ x, y, before }) =>
+    (id) =>
       new Promise<number>((resolve) => {
-        const root = document.querySelector(".react-flow__nodes") as HTMLElement;
+        const node = document.querySelector(`.react-flow__node[data-id="${id}"]`) as HTMLElement;
+        const before = node.querySelectorAll("[data-card]").length;
+        const input = document.querySelector('[role="dialog"][aria-label="Add card"] input') as HTMLElement;
         const start = performance.now();
         new MutationObserver((_, obs) => {
-          if (root.querySelectorAll(".react-flow__node").length > before) {
+          if (node.querySelectorAll("[data-card]").length > before) {
             obs.disconnect();
             requestAnimationFrame(() => resolve(performance.now() - start));
           }
-        }).observe(root, { childList: true });
-        const target = document.elementFromPoint(x, y) as HTMLElement;
-        target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, clientX: x, clientY: y }));
+        }).observe(node, { childList: true, subtree: true });
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
       }),
-    { x: box.x + 30, y: box.y + 30, before: count },
+    nodeId,
   );
 
   const report = { open, select, add, pan, zoom, throttle: CPU_THROTTLE };
@@ -120,7 +137,7 @@ test("300-node canvas meets the §5.1 budget", async ({ page }) => {
 
   expect(open, "open to interactive (ms)").toBeLessThan(800);
   expect(select, "selection response (ms)").toBeLessThan(50);
-  expect(add, "node add to next paint (ms)").toBeLessThan(100);
+  expect(add, "card add to next paint (ms)").toBeLessThan(100);
   expect(pan.fps, "pan fps").toBeGreaterThanOrEqual(55);
   expect(pan.worst, "pan worst frame (ms)").toBeLessThanOrEqual(32);
   expect(zoom.fps, "zoom fps").toBeGreaterThanOrEqual(55);

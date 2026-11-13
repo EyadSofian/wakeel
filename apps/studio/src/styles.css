@@ -67,8 +67,14 @@
 .wk-canvas .react-flow__handle.wk-input {
   left: calc(-1 * var(--size-port) / 2);
 }
-.wk-canvas .react-flow__handle.wk-output::before,
-.wk-canvas .react-flow__handle.wk-input::before {
+/*
+ * Inputs take no pointer events: a transition can be dropped anywhere on a node (task 2.4b), and a
+ * hit area here would sit on top of the transition's end and swallow the press that reconnects it.
+ */
+.wk-canvas .react-flow__handle.wk-input {
+  pointer-events: none;
+}
+.wk-canvas .react-flow__handle.wk-output::before {
   content: "";
   position: absolute;
   inset: calc(-1 * var(--space-4));
@@ -96,6 +102,17 @@
 .wk-canvas .react-flow__handle.wk-input.connectingto,
 .wk-canvas .react-flow__handle.wk-input.valid {
   background: var(--accent);
+}
+
+/* Task 2.5: the node a dragged or keyboard transition would enter, and the output it starts from. */
+.wk-canvas .wk-drop-target {
+  box-shadow:
+    inset 3px 0 0 var(--accent-border),
+    var(--shadow-node);
+  border-color: var(--accent-border);
+}
+.wk-canvas .wk-connect-source {
+  background: var(--accent-subtle);
 }
 
 .wk-canvas .react-flow__node:focus-visible,

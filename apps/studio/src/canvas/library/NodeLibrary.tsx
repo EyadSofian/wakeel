@@ -12,9 +12,9 @@ import { NODE_CATEGORY, NODE_ICONS, NODE_TYPE_LABELS } from "../view/summaries";
  */
 export const NODE_DRAG_TYPE = "application/x-wakeel-node";
 
-type Group = "Triggers" | "Logic" | "AI" | "Flow";
+export type Group = "Triggers" | "Logic" | "AI" | "Flow";
 
-interface Entry {
+export interface Entry {
   type: NodeType;
   group: Group;
   description: string;
@@ -22,7 +22,7 @@ interface Entry {
   kinds?: Workflow["kind"][];
 }
 
-const ENTRIES: Entry[] = [
+export const NODE_ENTRIES: readonly Entry[] = [
   { type: "trigger", group: "Triggers", description: "Runs on an event, a new conversation or inactivity" },
   { type: "standard", group: "Logic", description: "Runs cards in order: messages, questions, conditions" },
   { type: "autonomous", group: "AI", description: "The model decides, using only the tools you list" },
@@ -74,7 +74,7 @@ function Nodes({ onAdd }: { onAdd: (type: NodeType) => void }) {
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return ENTRIES.filter(
+    return NODE_ENTRIES.filter(
       (e) =>
         (!e.kinds || (kind !== undefined && e.kinds.includes(kind))) &&
         (filter === "All" || e.group === filter) &&

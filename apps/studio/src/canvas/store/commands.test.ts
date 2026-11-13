@@ -1,7 +1,8 @@
 import { checkWorkflowStructure, type Node, nodePorts, Workflow } from "@wakeel/contracts";
 import { describe, expect, test } from "vitest";
+import { copyFragment } from "../interaction/clipboard";
 import { type Command, CommandRejected, commands } from "./commands";
-import { createCard, createNode, type SimpleCardType } from "./factories";
+import { createCard, createMenuCard, createNode, type SimpleCardType } from "./factories";
 import { rng, seededDraft } from "./fixtures.test-utils";
 import { createCanvasStore } from "./store";
 
@@ -104,6 +105,62 @@ describe("each command, done, undone and redone", () => {
             expect(a.nodes.map((n) => n.id)).not.toContain(f.ask.id);
             expect(a.edges.some((e) => e.from.nodeId === f.ask.id || e.to.nodeId === f.ask.id)).toBe(false);
             if (edge) expect(a.edges.map((e) => e.id)).not.toContain(edge.id);
+          },
+        };
+      },
+    ],
+    [
+      "addCardWithVariable adds the card and its workflow variable together",
+      () => {
+        const f = fixture();
+        const made = createMenuCard("capture", f.wf, [f.wf]);
+        if (!("card" in made) || !made.variable) throw new Error("expected a card and a variable");
+        return {
+          wf: f.wf,
+          command: commands.addCardWithVariable(f.ask.id, made.card, made.variable),
+          check: (a) => {
+            expect(a.variables.map((v) => v.name)).toEqual(["answer"]);
+            const node = a.nodes.find((n) => n.id === f.ask.id);
+            expect(node?.type === "standard" && node.cards.at(-1)?.id).toBe(made.card.id);
+          },
+        };
+      },
+    ],
+    [
+      "paste adds the copied nodes with new ids and reports them",
+      () => {
+        const f = fixture();
+        const fragment = copyFragment(f.wf, [f.ask.id, f.agent.id]);
+        if (!fragment) throw new Error("no fragment");
+        const command = commands.paste(fragment, { x: 1_200, y: 400 });
+        return {
+          wf: f.wf,
+          command,
+          check: (a, b) => {
+            expect(a.nodes).toHaveLength(b.nodes.length + 2);
+            expect(command.created).toHaveLength(2);
+            expect(command.created).not.toContain(f.ask.id);
+            // The ask → agent transitions came along, pointing at the copies.
+            const copies = new Set(command.created);
+            expect(a.edges.filter((e) => copies.has(e.from.nodeId) && copies.has(e.to.nodeId))).toHaveLength(2);
+          },
+        };
+      },
+    ],
+    [
+      "addNodeFrom adds a node and wires the output to it in one step",
+      () => {
+        const f = fixture();
+        const node = createNode("end");
+        return {
+          wf: f.wf,
+          command: commands.addNodeFrom(node, { x: 900, y: 0 }, { nodeId: f.ask.id, port: "next" }),
+          check: (a) => {
+            expect(a.nodes.at(-1)?.id).toBe(node.id);
+            // One transition per output: Ask's `next` now goes to the new node.
+            expect(
+              a.edges.filter((e) => e.from.nodeId === f.ask.id && e.from.port === "next").map((e) => e.to.nodeId),
+            ).toEqual([node.id]);
           },
         };
       },
@@ -313,7 +370,7 @@ describe("100 random command sequences", () => {
     const pick = <T>(xs: readonly T[]): T | undefined => xs[Math.floor(r() * xs.length)];
     const node = pick(wf.nodes);
     const standard = pick(wf.nodes.filter((n): n is Extract<Node, { type: "standard" }> => n.type === "standard"));
-    switch (Math.floor(r() * 10)) {
+    switch (Math.floor(r() * 12)) {
       case 0:
         return commands.addNode(createNode(pick(NODE_TYPES) ?? "standard"), {
           x: Math.round(r() * 2000),
@@ -341,6 +398,19 @@ describe("100 random command sequences", () => {
         return commands.deleteCard(standard?.id ?? "", pick(standard?.cards ?? [])?.id ?? "");
       case 8:
         return commands.renameNode(node?.id ?? "", r() < 0.5 ? "عقدة جديدة" : "Renamed");
+      case 10: {
+        // Copy one or two nodes and paste them somewhere else (2.5).
+        const fragment = copyFragment(wf, [node?.id ?? "", pick(wf.nodes)?.id ?? ""]);
+        return fragment
+          ? commands.paste(fragment, { x: Math.round(r() * 2000), y: Math.round(r() * 1200) })
+          : commands.moveNodes({});
+      }
+      case 11: {
+        const made = createMenuCard(r() < 0.5 ? "capture" : "set_variable", wf, [wf]);
+        return "card" in made && made.variable
+          ? commands.addCardWithVariable(standard?.id ?? "", made.card, made.variable)
+          : commands.moveNodes({});
+      }
       default:
         return commands.reconnect(pick(wf.edges)?.id ?? "", pick(wf.nodes)?.id ?? "");
     }
@@ -371,4 +441,31 @@ describe("100 random command sequences", () => {
       expect(store.getState().undo()).toBe(false);
     },
   );
+});
+
+describe("createMenuCard", () => {
+  test.each(["say", "capture", "branch", "set_variable", "code", "handoff", "end", "log"] as const)(
+    "%s makes a schema-valid card",
+    (type) => {
+      const { wf } = fixture();
+      const made = createMenuCard(type, wf, [wf]);
+      expect("card" in made).toBe(true);
+    },
+  );
+
+  test("names a new variable that does not collide: answer, answer_2", () => {
+    const { wf } = fixture();
+    const first = createMenuCard("capture", wf, [wf]);
+    if (!("card" in first) || !first.variable) throw new Error("expected a variable");
+    const withOne = { ...wf, variables: [first.variable] };
+    const second = createMenuCard("capture", withOne, [withOne]);
+    expect("card" in second && second.variable?.name).toBe("answer_2");
+  });
+
+  test("cards that need something the bot does not have yet say what to create", () => {
+    const { wf } = fixture();
+    expect(createMenuCard("kb_search", wf, [wf])).toEqual({ unavailable: "Create a knowledge base first" });
+    expect(createMenuCard("table", wf, [wf])).toEqual({ unavailable: "Create a table first" });
+    expect(createMenuCard("call_workflow", wf, [wf])).toEqual({ unavailable: "Create a sub-workflow first" });
+  });
 });
