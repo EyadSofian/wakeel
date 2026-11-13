@@ -8,7 +8,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!docs", "!**/*.md", "!**/.turbo", "!**/coverage", "!**/dist"]
+    "includes": ["**", "!docs", "!**/*.md", "!**/.turbo", "!**/coverage", "!**/dist", "!**/__snapshots__"]
   },
   "css": {
     "parser": {

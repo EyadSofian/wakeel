@@ -10,7 +10,7 @@ import type {
   WorkspaceSummary,
 } from "@wakeel/contracts";
 import { SCREENSHOT_FIXTURES } from "@wakeel/testing/fixtures/rtl";
-import { BOT, type CanvasFixture, canvasDraft, variablesDraft, workflowsDraft } from "./canvas-fixtures";
+import { BOT, type CanvasFixture, canvasDraft, codeDraft, variablesDraft, workflowsDraft } from "./canvas-fixtures";
 
 /**
  * The mock API layer for the screenshot review (design system §8.1): every `/v1` call is answered
@@ -193,7 +193,7 @@ const json = (route: Route, status: number, body: unknown) =>
 export async function mockApi(
   page: Page,
   state: MockState,
-  canvas: CanvasFixture | "variables" | "workflows" = "typical",
+  canvas: CanvasFixture | "variables" | "workflows" | "code" | "code-empty" = "typical",
 ): Promise<void> {
   const d = data(state);
   const draft =
@@ -201,7 +201,9 @@ export async function mockApi(
       ? variablesDraft(state === "rtl" ? "rtl" : state === "empty" ? "empty" : "default")
       : canvas === "workflows"
         ? workflowsDraft(state === "rtl")
-        : canvasDraft(state === "rtl" && canvas === "typical" ? "rtl" : canvas);
+        : canvas === "code" || canvas === "code-empty"
+          ? codeDraft(state === "rtl", canvas === "code-empty")
+          : canvasDraft(state === "rtl" && canvas === "typical" ? "rtl" : canvas);
   let rev = 3;
   await page.route("**/v1/**", async (route) => {
     const url = new URL(route.request().url());

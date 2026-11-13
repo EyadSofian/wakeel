@@ -16,7 +16,7 @@ import {
   type SummaryContext,
   summarizeCard,
 } from "../canvas/view/summaries";
-import { AskForm, ConditionForm, EndForm, LogForm, SayForm, SetVariableForm } from "./cards/CardForms";
+import { AskForm, CodeForm, ConditionForm, EndForm, LogForm, SayForm, SetVariableForm } from "./cards/CardForms";
 import { IssuesContext, Section, StringField, useCommitCard, useDraft } from "./fields";
 
 /**
@@ -476,7 +476,8 @@ function CardView({
         {card.type === "set_variable" ? <SetVariableForm card={card} {...props} /> : null}
         {card.type === "log" ? <LogForm card={card} {...props} /> : null}
         {card.type === "end" ? <EndForm card={card} {...props} /> : null}
-        {["say", "capture", "branch", "set_variable", "log", "end"].includes(card.type) ? null : (
+        {card.type === "code" ? <CodeForm card={card} {...props} /> : null}
+        {["say", "capture", "branch", "set_variable", "log", "end", "code"].includes(card.type) ? null : (
           <p className="rounded-md border border-dashed border-hairline px-5 py-6 text-center text-small text-secondary">
             This card's settings are not editable here yet.
           </p>

@@ -425,3 +425,55 @@ export function workflowsDraft(rtl: boolean): { manifest: BotManifest; workflows
     workflows: [...base.workflows, refunds, errors],
   };
 }
+
+/**
+ * The code drawer (task 2.9): the Variables draft with a Run code card on Greeting, a workflow
+ * variable `email` and a config variable, so the code and its typings name real things. The RTL
+ * variant writes Arabic messages inside the code; code itself stays left to right.
+ */
+export function codeDraft(rtl: boolean, empty = false): { manifest: BotManifest; workflows: Workflow[] } {
+  const base = variablesDraft(rtl ? "rtl" : "default");
+  const main = base.workflows[0] as Workflow;
+  const reply = rtl
+    ? `  await say(\`طلبك رقم \${conversation.orderNumber} حالته الآن: \${order.status}\`);`
+    : `  await say(\`Order \${conversation.orderNumber} is \${order.status}.\`);`;
+  const source = [
+    rtl ? "// ابحث عن الطلب وأخبر العميل بحالته." : "// Look the order up and tell the customer where it is.",
+    `const res = await fetch(\`\${env.SHOP_URL}/orders/\${conversation.orderNumber}\`);`,
+    "if (!res.ok) {",
+    '  log.warn("Order lookup failed", res.status);',
+    "  return;",
+    "}",
+    "const order = await res.json();",
+    "workflow.email = user.email;",
+    "if (order.status) {",
+    reply,
+    "}",
+  ].join("\n");
+  const code = empty ? "" : source;
+  const withCode: Workflow = {
+    ...main,
+    variables: [
+      ...main.variables,
+      { id: id("var", 12), name: "email", scope: "workflow", type: "string", sensitive: false },
+    ],
+    nodes: main.nodes.map((n) =>
+      n.type === "standard" && n.id === id("node", 2)
+        ? {
+            ...n,
+            cards: [
+              ...n.cards,
+              { id: id("card", 950), type: "code", disabled: false, source: code, timeoutMs: 10_000 },
+            ],
+          }
+        : n,
+    ),
+  };
+  return {
+    manifest: {
+      ...base.manifest,
+      configVars: [{ key: "SHOP_URL", secret: false, description: "Base URL of the shop's API." }],
+    },
+    workflows: [withCode, ...base.workflows.slice(1)],
+  };
+}

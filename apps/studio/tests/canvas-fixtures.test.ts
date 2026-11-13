@@ -4,6 +4,7 @@ import { usageCounts } from "../src/routes/variables/model";
 import {
   type CanvasFixture,
   canvasDraft,
+  codeDraft,
   DRAFT_SCHEMA_VERSION,
   variablesDraft,
   workflowsDraft,
@@ -68,5 +69,19 @@ describe("canvas review fixtures", () => {
       }
     }
     expect(counts.variable(d.manifest.variables[1] as never)).toBeGreaterThan(0);
+  });
+
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+  ])("code (rtl %s, empty %s) parses and validates clean", (rtl, empty) => {
+    const d = codeDraft(rtl, empty);
+    const def = BotDefinition.parse({
+      schemaVersion: DRAFT_SCHEMA_VERSION,
+      manifest: d.manifest,
+      workflows: d.workflows,
+    });
+    expect(validateDefinition(def)).toEqual([]);
   });
 });

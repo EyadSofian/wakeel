@@ -18,22 +18,30 @@ const MOCK_STATES: readonly MockState[] = ["default", "empty", "loading", "error
 const mockStateFor = (screen: Screen, state: ScreenState): MockState => {
   if (screen.id === "sign-in") return "signed-out";
   if (state === "empty" && screen.id === "canvas") return "default";
-  if (["card-rtl", "palette-search", "workflows-rtl", "issues-panel-rtl"].includes(state)) return "rtl";
+  if (["card-rtl", "palette-search", "workflows-rtl", "issues-panel-rtl", "code-drawer-rtl"].includes(state))
+    return "rtl";
   return MOCK_STATES.find((m) => m === state) ?? "default";
 };
 
-const canvasFor = (screen: Screen, state: ScreenState): CanvasFixture | "variables" | "workflows" =>
+const canvasFor = (
+  screen: Screen,
+  state: ScreenState,
+): CanvasFixture | "variables" | "workflows" | "code" | "code-empty" =>
   screen.id === "variables"
     ? "variables"
-    : state === "dense-300" || state === "issues" || state === "empty"
-      ? state
-      : state === "issues-panel"
-        ? "issues"
-        : state === "issues-panel-rtl"
-          ? "issues-rtl"
-          : state.startsWith("workflow")
-            ? "workflows"
-            : "typical";
+    : state === "code-drawer-empty"
+      ? "code-empty"
+      : state === "card-code" || state.startsWith("code-drawer")
+        ? "code"
+        : state === "dense-300" || state === "issues" || state === "empty"
+          ? state
+          : state === "issues-panel"
+            ? "issues"
+            : state === "issues-panel-rtl"
+              ? "issues-rtl"
+              : state.startsWith("workflow")
+                ? "workflows"
+                : "typical";
 
 /** Which card row of the first standard node each inspector state opens. */
 const CARD_ROW: Partial<Record<ScreenState, number>> = {
@@ -43,6 +51,13 @@ const CARD_ROW: Partial<Record<ScreenState, number>> = {
   "card-invalid": 0,
   "card-rtl": 0,
   picker: 1,
+  // Greeting's cards in the code fixture: say, ask, condition, run workflow, run code.
+  "card-code": 4,
+  "code-drawer": 4,
+  "code-drawer-rtl": 4,
+  "code-drawer-loading": 4,
+  "code-drawer-error": 4,
+  "code-drawer-empty": 4,
 };
 
 /** Overlays fade in with Motion (JavaScript, not CSS), so the shot waits until they are opaque. */
@@ -111,6 +126,23 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
       await text.press("End");
       await text.pressSequentially(" {{user.name");
       await expect(page.getByRole("complementary").getByRole("alert")).toBeVisible();
+    }
+  }
+  if (state.startsWith("code-drawer")) {
+    // Monaco is a separate download: hold it back for the loading state, refuse it for the error.
+    if (state === "code-drawer-loading") await page.route(/\/assets\/.*\.js$/, () => undefined);
+    if (state === "code-drawer-error") await page.route(/\/assets\/.*\.js$/, (route) => route.abort());
+    const drawer = page.getByRole("region", { name: /^Code of Run code in / });
+    await page.getByRole("complementary").getByRole("button", { name: "Edit code" }).click();
+    await settled(drawer);
+    if (state === "code-drawer-loading")
+      await expect(drawer.getByRole("status", { name: "Loading the code editor" })).toBeVisible();
+    else if (state === "code-drawer-error") await expect(drawer.getByRole("alert")).toContainText("did not load");
+    else {
+      await expect(drawer.locator(".monaco-editor .view-lines")).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      // Leave the editor so no caret blinks in the shot.
+      await drawer.getByRole("heading", { name: "Run code" }).click();
     }
   }
   if (state === "picker") {

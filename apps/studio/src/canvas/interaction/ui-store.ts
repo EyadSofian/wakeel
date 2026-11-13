@@ -1,6 +1,7 @@
 import { createContext, useContext } from "react";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
+import { DRAWER } from "../../code/drawer-size";
 
 /**
  * Canvas interaction state (task 2.5) that is not part of the document: open menus, the inline
@@ -32,6 +33,10 @@ export interface UiState {
   /** Nodes added moments ago; they play the entrance once. */
   fresh: ReadonlySet<string>;
   sheet: boolean;
+  /** The Run code card open in the code drawer (task 2.9), in the open workflow. */
+  code: { nodeId: string; cardId: string } | undefined;
+  /** The drawer's height as a share of the canvas; kept while the screen is open. */
+  codeShare: number;
   set(patch: Partial<Omit<UiState, "set" | "markFresh">>): void;
   markFresh(ids: readonly string[]): void;
 }
@@ -47,6 +52,8 @@ export function createUiStore(): UiStore {
     dropTarget: undefined,
     fresh: new Set(),
     sheet: false,
+    code: undefined,
+    codeShare: DRAWER.initial,
     set: (patch) => set(patch),
     markFresh: (ids) => set({ fresh: new Set(ids) }),
   }));
