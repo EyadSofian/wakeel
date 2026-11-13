@@ -98,6 +98,35 @@ export const masterKeyEnv = defineEnv({
       "32 random bytes encoded as base64; generate one with `openssl rand -base64 32`. Wraps per-row data keys.",
     secret: true,
   },
+  masterKeyVersion: {
+    env: "MASTER_KEY_VERSION",
+    schema: z.coerce.number().int().min(1).default(1),
+    description: "Version number of MASTER_KEY, stored with every row it encrypts. Raise it by one when rotating.",
+  },
+  previousMasterKeys: {
+    env: "MASTER_KEYS_PREVIOUS",
+    schema: z
+      .string()
+      .default("")
+      .transform((s, ctx) => {
+        const out: { version: number; key: Uint8Array }[] = [];
+        for (const part of s
+          .split(",")
+          .map((p) => p.trim())
+          .filter((p) => p !== "")) {
+          const m = /^(\d+):([A-Za-z0-9+/]{43}=)$/.exec(part);
+          if (!m) {
+            ctx.addIssue({ code: "custom", message: "use version:base64 pairs separated by commas" });
+            return z.NEVER;
+          }
+          out.push({ version: Number(m[1]), key: new Uint8Array(Buffer.from(m[2] ?? "", "base64")) });
+        }
+        return out;
+      }),
+    description:
+      "Older master keys still needed to read rows not yet re-wrapped, as version:base64 pairs separated by commas. Empty unless a rotation is in progress.",
+    secret: true,
+  },
 });
 
 export const apiEnv = defineEnv({

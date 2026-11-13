@@ -63,6 +63,34 @@ describe("MASTER_KEY", () => {
   ])("rejects %s", (_name, value) => {
     fails(() => loadConfig(masterKeyEnv, { env: { MASTER_KEY: value } }), "MASTER_KEY");
   });
+  test("version defaults to 1 and there are no previous keys", () => {
+    const c = loadConfig(masterKeyEnv, { env: { MASTER_KEY: key32 } });
+    expect(c.masterKeyVersion).toBe(1);
+    expect(c.previousMasterKeys.reveal()).toEqual([]);
+  });
+  test("previous keys parse as version:base64 pairs", () => {
+    const old = Buffer.alloc(32, 7).toString("base64");
+    const c = loadConfig(masterKeyEnv, {
+      env: { MASTER_KEY: key32, MASTER_KEY_VERSION: "3", MASTER_KEYS_PREVIOUS: `2:${old}, 1:${key32}` },
+    });
+    expect(c.masterKeyVersion).toBe(3);
+    expect(c.previousMasterKeys.reveal().map((k) => [k.version, Buffer.from(k.key).toString("base64")])).toEqual([
+      [2, old],
+      [1, key32],
+    ]);
+  });
+  test.each(["2", `x:${Buffer.alloc(32).toString("base64")}`, `2:${Buffer.alloc(16).toString("base64")}`])(
+    "rejects previous keys %j without echoing them",
+    (value) => {
+      try {
+        loadConfig(masterKeyEnv, { env: { MASTER_KEY: key32, MASTER_KEYS_PREVIOUS: value } });
+        throw new Error("expected a ConfigError");
+      } catch (e) {
+        expect((e as Error).message).toContain("MASTER_KEYS_PREVIOUS is not valid");
+        if (value.length > 2) expect((e as Error).message).not.toContain(value.split(":")[1]);
+      }
+    },
+  );
   test("the error explains the format without showing the value", () => {
     try {
       loadConfig(masterKeyEnv, { env: { MASTER_KEY: "c2hvcnQ=" } });

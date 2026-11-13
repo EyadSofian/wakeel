@@ -3,5 +3,6 @@ export * from "./audit";
 export * from "./invitations";
 export * from "./memberships";
 export * from "./scope";
+export * from "./secret-values";
 export * from "./secrets";
 export * from "./workspaces";
