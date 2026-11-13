@@ -25,21 +25,27 @@ export function CommandPalette() {
   const { store } = useShell();
   const open = useShellState((s) => s.palette);
   const close = () => store.getState().set({ palette: false });
-  // An action that moved focus (a menu, a rename field) keeps it; otherwise Radix restores it.
-  const ran = useRef(false);
+  // The chosen row runs once the palette has gone, not while it fades out. Two Radix dialogs that
+  // overlap (this one leaving, the Issues panel or a workflow dialog arriving) can leave `Esc`
+  // with the leaving one, and the new one then never closes by keyboard. The row moves focus
+  // itself (a menu, a rename field, the node), so Radix does not restore it.
+  const pending = useRef<(() => void) | null>(null);
   return (
     <PaletteFrame
       open={open}
       onOpenChange={(next) => store.getState().set({ palette: next })}
       label="Command palette"
       onCloseAutoFocus={(e) => {
-        if (ran.current) e.preventDefault();
-        ran.current = false;
+        const run = pending.current;
+        pending.current = null;
+        if (!run) return;
+        e.preventDefault();
+        run();
       }}
     >
       <PaletteBody
-        onDone={() => {
-          ran.current = true;
+        onDone={(run) => {
+          pending.current = run;
           close();
         }}
       />
@@ -47,7 +53,7 @@ export function CommandPalette() {
   );
 }
 
-function PaletteBody({ onDone }: { onDone: () => void }) {
+function PaletteBody({ onDone }: { onDone: (run: () => void) => void }) {
   const sources = useShellState((s) => s.sources);
   const manifest = useCanvas((s) => s.manifest?.doc);
   const workflows = useCanvas((s) => s.workflows);
@@ -98,8 +104,7 @@ function PaletteBody({ onDone }: { onDone: () => void }) {
   const runRow = (row: Row, inspect: boolean) => {
     if (row.kind === "action") {
       if (row.unavailable !== undefined) return;
-      onDone();
-      row.action.run();
+      onDone(() => row.action.run());
       return;
     }
     if (inspect && row.item.target.type === "node") {
@@ -107,8 +112,7 @@ function PaletteBody({ onDone }: { onDone: () => void }) {
       go.target(row.item.target);
       return;
     }
-    onDone();
-    go.target(row.item.target);
+    onDone(() => go.target(row.item.target));
   };
 
   const move = (step: number) => {
