@@ -10,6 +10,7 @@ export * from "./bot-definition";
 export * from "./event";
 export * from "./runtime";
 export * from "./seed";
+export * from "./validate/index";
 export * from "./trace";
 export * from "./errors";
 export * from "./eval";

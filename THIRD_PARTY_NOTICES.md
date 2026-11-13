@@ -21,9 +21,9 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 
 <!-- BEGIN GENERATED: pnpm licences --write -->
 
-374 packages installed by `pnpm install` (runtime and development), not counting platform builds.
+375 packages installed by `pnpm install` (runtime and development), not counting platform builds.
 
-### MIT (291)
+### MIT (292)
 
 - @babel/helper-string-parser 7.29.14 — https://babel.dev/docs/en/next/babel-helper-string-parser
 - @babel/helper-validator-identifier 7.29.7
@@ -113,6 +113,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - @vitest/spy 5.1.0 — https://vitest.dev/api/mock
 - abort-controller 3.0.0 — https://github.com/mysticatea/abort-controller#readme
 - abstract-logging 2.0.1 — https://github.com/jsumners/abstract-logging#readme
+- acorn 8.19.0 — https://github.com/acornjs/acorn
 - ajv 8.20.0 — https://ajv.js.org
 - ajv-formats 3.0.1 — https://github.com/ajv-validator/ajv-formats#readme
 - ansi-regex 5.0.1
