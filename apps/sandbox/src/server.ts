@@ -79,9 +79,10 @@ async function exec(options: ServerOptions, req: IncomingMessage, res: ServerRes
     return;
   }
   if (first.value.kind === "too_large") {
-    // Keep reading, and throwing away, the rest of the body: a caller still sending it would see a
-    // broken pipe instead of the 413. The reader never holds more than one frame, and a body that has
-    // not ended within DRAIN_MS is cut off.
+    // Keep reading, and throwing away, the rest of the body, and keep the connection open meanwhile:
+    // closing it while the caller is still sending makes the caller see a reset instead of the 413.
+    // The reader never holds more than one frame, and a body that has not ended within DRAIN_MS is
+    // cut off.
     const cutOff = setTimeout(() => req.destroy(), DRAIN_MS);
     cutOff.unref();
     req.on("close", () => clearTimeout(cutOff));
@@ -90,7 +91,7 @@ async function exec(options: ServerOptions, req: IncomingMessage, res: ServerRes
         // Discarded.
       }
     })();
-    sendProblem(res, tooLarge(options.requestFrameBytes), requestId, { connection: "close" });
+    sendProblem(res, tooLarge(options.requestFrameBytes), requestId);
     return;
   }
 
