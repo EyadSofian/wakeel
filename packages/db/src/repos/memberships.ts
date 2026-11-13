@@ -80,8 +80,16 @@ export async function removeMember(tx: Tx, membershipId: string): Promise<void> 
   if (deleted.length === 0) throw new AppError("not_found");
 }
 
-/** Number of owners in the scoped workspace; the RBAC layer keeps it at one or more. */
+/**
+ * Number of owners in the scoped workspace, with their rows locked until the transaction ends, so
+ * two owners demoting each other at once cannot leave the workspace with none. The RBAC layer
+ * keeps the count at one or more.
+ */
 export async function countOwners(tx: Tx): Promise<number> {
-  const rows = await tx.select({ id: memberships.id }).from(memberships).where(eq(memberships.role, "owner"));
+  const rows = await tx
+    .select({ id: memberships.id })
+    .from(memberships)
+    .where(eq(memberships.role, "owner"))
+    .for("update");
   return rows.length;
 }

@@ -78,3 +78,67 @@ export const SessionResponse = z.object({
   csrfToken: z.string(),
 });
 export type SessionResponse = z.infer<typeof SessionResponse>;
+
+// Workspaces, members and invitations API (task 1.3). Lists use ADR-012's `{ data, nextCursor }`.
+
+const isoDate = z.iso.datetime({ offset: false });
+
+/** One entry of the workspace switcher. */
+export const WorkspaceSummary = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  role: WorkspaceRole,
+});
+export type WorkspaceSummary = z.infer<typeof WorkspaceSummary>;
+
+export const WorkspaceResponse = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  plan: z.string(),
+  region: z.string(),
+  settings: WorkspaceSettings,
+  createdAt: isoDate,
+  updatedAt: isoDate,
+  /** The caller's role and what it allows, so the Studio can hide what it cannot do. */
+  role: WorkspaceRole,
+  permissions: z.array(z.string()),
+});
+export type WorkspaceResponse = z.infer<typeof WorkspaceResponse>;
+
+export const CreateWorkspaceRequest = z.strictObject({ name: WorkspaceName, slug: WorkspaceSlug });
+export const UpdateWorkspaceRequest = z
+  .strictObject({ name: WorkspaceName.optional(), slug: WorkspaceSlug.optional() })
+  .refine((v) => v.name !== undefined || v.slug !== undefined, "Change at least one field");
+
+export const MemberResponse = z.object({
+  id: z.string(),
+  userId: z.string(),
+  email: z.string(),
+  name: z.string(),
+  role: WorkspaceRole,
+  createdAt: isoDate,
+});
+export type MemberResponse = z.infer<typeof MemberResponse>;
+
+export const UpdateMemberRequest = z.strictObject({ role: WorkspaceRole });
+
+export const InvitationResponse = z.object({
+  id: z.string(),
+  email: z.string(),
+  role: WorkspaceRole,
+  invitedBy: z.string().nullable(),
+  expiresAt: isoDate,
+  createdAt: isoDate,
+});
+export type InvitationResponse = z.infer<typeof InvitationResponse>;
+
+/** Returned once, when the invitation is created. No mail is sent yet; the inviter shares the link. */
+export const CreatedInvitationResponse = InvitationResponse.extend({ acceptUrl: z.url() });
+
+export const CreateInvitationRequest = z.strictObject({ email: EmailAddress, role: WorkspaceRole });
+export const AcceptInvitationRequest = z.strictObject({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/) });
+
+export const page = <T extends z.ZodType>(item: T) =>
+  z.object({ data: z.array(item), nextCursor: z.string().nullable() });

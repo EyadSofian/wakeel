@@ -34,7 +34,7 @@ if (config) {
   const app = buildApp({
     role: config.role,
     logger,
-    auth: { service: auth, studioOrigin: config.studioOrigin },
+    studio: { auth, studioOrigin: config.studioOrigin, db },
     readiness: {
       database: async () => void (await db.verify()),
       redis: async () => {
