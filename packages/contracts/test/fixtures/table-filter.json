@@ -1,0 +1,9 @@
+{
+  "and": [
+    { "status": { "eq": "shipped" } },
+    {
+      "or": [{ "city": { "in": ["القاهرة", "الإسكندرية", "Cairo"] } }, { "not": { "total": { "lt": 100 } } }]
+    },
+    { "notes": { "isNull": false } }
+  ]
+}
