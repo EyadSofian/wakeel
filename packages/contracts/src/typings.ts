@@ -14,7 +14,7 @@ import type { Workflow } from "./workflow";
  * code will see when it runs.
  *
  * The scope objects and their types come from the bot. The shape of the functions (`tables`,
- * `kb`, `ai`, `say`, `fetch`, `axios`) is ADR-020 (proposed), which 3.3 implements in the sandbox.
+ * `kb`, `ai`, `say`, `fetch`, `axios`) is ADR-022 (proposed), which 3.3 implements in the sandbox.
  * Pure and deterministic: the same input always gives the same text, so it can be snapshotted.
  */
 
