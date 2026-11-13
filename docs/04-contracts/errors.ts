@@ -9,6 +9,21 @@ export const ERRORS = {
   // Request and auth
   validation_failed: { status: 400, title: "Some fields are not valid", fix: "Correct the highlighted fields and try again." },
   unauthenticated: { status: 401, title: "You are not signed in", fix: "Sign in, or send a valid API key." },
+  invalid_credentials: {
+    status: 401,
+    title: "The email or password is not correct",
+    fix: "Check both and try again.",
+  },
+  email_taken: {
+    status: 409,
+    title: "An account with this email already exists",
+    fix: "Sign in instead, or use a different email.",
+  },
+  csrf_failed: {
+    status: 403,
+    title: "This request did not come from the Studio",
+    fix: "Reload the page and try again.",
+  },
   forbidden: { status: 403, title: "Your role does not allow this", fix: "Ask a workspace admin for access." },
   not_found: { status: 404, title: "We could not find that", fix: "Check the id, or it may have been deleted." },
   revision_conflict: { status: 409, title: "This was changed elsewhere", fix: "Reload to get the latest copy, then reapply your change." },

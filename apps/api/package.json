@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@wakeel/auth": "workspace:*",
     "@wakeel/config": "workspace:*",
     "@wakeel/contracts": "workspace:*",
     "@wakeel/db": "workspace:*",

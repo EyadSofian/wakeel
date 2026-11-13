@@ -21,15 +21,24 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 
 <!-- BEGIN GENERATED: pnpm licences --write -->
 
-329 packages installed by `pnpm install` (runtime and development), not counting platform builds.
+348 packages installed by `pnpm install` (runtime and development), not counting platform builds.
 
-### MIT (246)
+### MIT (265)
 
 - @babel/helper-string-parser 7.29.14 — https://babel.dev/docs/en/next/babel-helper-string-parser
 - @babel/helper-validator-identifier 7.29.7
 - @babel/parser 7.29.14 — https://babel.dev/docs/en/next/babel-parser
 - @babel/types 7.29.14 — https://babel.dev/docs/en/next/babel-types
 - @bcoe/v8-coverage 1.0.2
+- @better-auth/core 1.7.23 — https://www.better-auth.com
+- @better-auth/drizzle-adapter 1.7.23 — https://www.better-auth.com/docs/adapters/drizzle
+- @better-auth/kysely-adapter 1.7.23 — https://www.better-auth.com/docs/adapters/kysely
+- @better-auth/memory-adapter 1.7.23 — https://www.better-auth.com
+- @better-auth/mongo-adapter 1.7.23 — https://www.better-auth.com/docs/adapters/mongodb
+- @better-auth/prisma-adapter 1.7.23 — https://www.better-auth.com/docs/adapters/prisma
+- @better-auth/telemetry 1.7.23 — https://www.better-auth.com
+- @better-auth/utils 0.5.1
+- @better-fetch/fetch 1.3.3
 - @fastify/ajv-compiler 4.0.7 — https://github.com/fastify/ajv-compiler#readme
 - @fastify/deepmerge 3.2.4 — https://github.com/fastify/deepmerge#readme
 - @fastify/error 4.2.1 — https://github.com/fastify/fastify-error#readme
@@ -45,11 +54,14 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - @jridgewell/trace-mapping 0.3.31 — https://github.com/jridgewell/sourcemaps/tree/main/packages/trace-mapping
 - @js-sdsl/ordered-map 4.4.2 — https://js-sdsl.org
 - @kwsites/file-exists 1.1.1
+- @noble/ciphers 2.4.0 — https://paulmillr.com/noble/
+- @noble/hashes 2.4.0 — https://paulmillr.com/noble/
 - @oxc-project/types 0.156.0 — https://oxc.rs
 - @parcel/watcher 2.6.0
 - @pinojs/redact 0.4.0 — https://github.com/pinojs/redact#readme
 - @pkgjs/parseargs 0.11.0 — https://github.com/pkgjs/parseargs#readme
 - @rolldown/pluginutils 1.1.1 — https://github.com/rolldown/plugins/tree/main/packages/pluginutils#readme
+- @standard-schema/spec 1.1.0 — https://standardschema.dev
 - @tailwindcss/cli 4.3.5 — https://tailwindcss.com
 - @tailwindcss/node 4.3.5 — https://tailwindcss.com
 - @tailwindcss/oxide 4.3.5
@@ -100,6 +112,8 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - avvio 9.3.1 — https://github.com/fastify/avvio#readme
 - balanced-match 1.0.2 — https://github.com/juliangruber/balanced-match
 - base64-js 1.5.1 — https://github.com/beatgammit/base64-js
+- better-auth 1.7.23 — https://better-auth.com
+- better-call 1.4.5
 - bl 4.1.0 — https://github.com/rvagg/bl
 - brace-expansion 2.1.8 — https://github.com/juliangruber/brace-expansion
 - buffer 5.7.1 — https://github.com/feross/buffer
@@ -121,6 +135,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - cross-spawn 7.0.6 — https://github.com/moxystudio/node-cross-spawn
 - csstype 3.2.3
 - debug 4.4.3
+- defu 6.1.7
 - dequal 2.0.3
 - docker-compose 1.5.0 — https://pdmlab.github.io/docker-compose/
 - eastasianwidth 0.2.0
@@ -153,9 +168,11 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - is-stream 2.0.1
 - isarray 1.0.0 — https://github.com/juliangruber/isarray
 - jiti 2.7.0
+- jose 6.2.17 — https://github.com/panva/jose
 - js-tokens 10.0.0
 - json-schema-ref-resolver 3.0.1 — https://github.com/fastify/json-schema-ref-resolver#readme
 - json-schema-traverse 1.0.0 — https://github.com/epoberezkin/json-schema-traverse#readme
+- kysely 0.29.9 — https://kysely.dev
 - lazystream 1.0.1 — https://github.com/jpommerening/node-lazystream
 - lodash 4.18.1 — https://lodash.com/
 - lodash.camelcase 4.3.0 — https://lodash.com/
@@ -173,6 +190,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - msgpackr-extract 3.0.7
 - nan 2.30.0
 - nanoid 3.3.20
+- nanostores 1.5.5
 - node-abort-controller 3.1.1 — https://github.com/southpolesteve/node-abort-controller#readme
 - node-addon-api 7.1.1 — https://github.com/nodejs/node-addon-api
 - node-gyp-build-optional-packages 5.2.2 — https://github.com/prebuild/node-gyp-build
@@ -217,6 +235,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - reusify 1.1.0 — https://github.com/mcollina/reusify#readme
 - rfdc 1.4.1 — https://github.com/davidmarkclements/rfdc#readme
 - rolldown 1.2.19 — https://rolldown.rs/
+- rou3 0.9.2
 - safe-buffer 5.1.2 — https://github.com/feross/safe-buffer
 - safe-buffer 5.2.1 — https://github.com/feross/safe-buffer
 - safe-regex2 5.1.2 — https://github.com/fastify/safe-regex2
