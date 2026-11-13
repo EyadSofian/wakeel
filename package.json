@@ -13,9 +13,9 @@
     "format": "biome check --write .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "dev:infra": "docker compose up --detach --wait --wait-timeout 120",
-    "dev:infra:down": "docker compose down",
-    "dev:infra:reset": "docker compose down --volumes",
+    "dev:infra": "docker compose up --detach --wait --wait-timeout 120 && docker compose run --rm object-store-init",
+    "dev:infra:down": "docker compose --profile init down",
+    "dev:infra:reset": "docker compose --profile init down --volumes",
     "db:bootstrap": "tsx --env-file-if-exists=.env packages/db/src/cli/bootstrap.ts",
     "db:migrate": "tsx --env-file-if-exists=.env packages/db/src/cli/migrate.ts"
   },

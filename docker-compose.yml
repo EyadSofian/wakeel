@@ -5,8 +5,8 @@
 #   pnpm dev:infra:down    stop, keep data
 #   pnpm dev:infra:reset   stop and delete data volumes
 #
-# Images are pinned by tag and digest (threat T11). The object store is not here yet:
-# MinIO no longer publishes images; see docs/adr/013-local-object-store.md (proposed).
+# Images are pinned by tag and digest (threat T11). The object store is RustFS, because MinIO no
+# longer publishes images (docs/adr/013-local-object-store.md).
 name: wakeel
 
 services:
@@ -49,6 +49,39 @@ services:
       timeout: 3s
       retries: 30
 
+  object-store:
+    # S3-compatible store (ADR-013). API on 9000, web console on 9001; dev credentials only.
+    image: &rustfs rustfs/rustfs:1.0.5@sha256:b81d16a90ee25bd9511280127ca1471788c6e874cf0f0da759645f46b2dc1d74
+    environment:
+      RUSTFS_ACCESS_KEY: wakeel_dev
+      RUSTFS_SECRET_KEY: wakeel_dev_only_secret
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "127.0.0.1:${WAKEEL_S3_PORT:-9000}:9000"
+      - "127.0.0.1:${WAKEEL_S3_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - object-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # One-shot: creates the dev bucket and exits. Reuses the RustFS image for its curl.
+  # 200 means created, 409 means it already exists; anything else fails dev:infra.
+  # Not started by `up` (whose --wait treats any exited container as a failure); dev:infra runs it.
+  object-store-init:
+    profiles: ["init"]
+    image: *rustfs
+    depends_on:
+      object-store:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/init/create-bucket.sh"]
+    volumes:
+      - ./infra/object-store/create-bucket.sh:/init/create-bucket.sh:ro
+    restart: "no"
+
 volumes:
   pg-data:
   redis-data:
+  object-data:
