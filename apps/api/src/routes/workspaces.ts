@@ -9,9 +9,13 @@ import {
 import { createWorkspace, findMembershipByUser, getWorkspace, updateWorkspace, type Workspace } from "@wakeel/db";
 import type { FastifyInstance } from "fastify";
 import { requireSession } from "../session";
-import { requirePermission, type StudioDeps } from "../studio";
+import { type ActorContext, requireMember, requirePermission, type StudioDeps } from "../studio";
 
-const toResponse = (w: Workspace, role: WorkspaceRole): WorkspaceResponse => ({
+const roleOf = (ctx: ActorContext): WorkspaceRole | null => (ctx.type === "user" ? ctx.membership.role : null);
+const permissionsFor = (ctx: ActorContext) =>
+  ctx.type === "user" ? permissionsOf(ctx.membership.role) : ctx.key.scopes;
+
+const toResponse = (w: Workspace, role: WorkspaceRole | null, permissions: string[]): WorkspaceResponse => ({
   id: w.id,
   name: w.name,
   slug: w.slug,
@@ -21,7 +25,7 @@ const toResponse = (w: Workspace, role: WorkspaceRole): WorkspaceResponse => ({
   createdAt: w.createdAt.toISOString(),
   updatedAt: w.updatedAt.toISOString(),
   role,
-  permissions: permissionsOf(role),
+  permissions,
 });
 
 /** Workspace switcher, create, read and rename (task 1.3). */
@@ -49,19 +53,19 @@ export async function workspaceRoutes(app: FastifyInstance, deps: StudioDeps): P
     const session = await requireSession(deps.auth, deps.studioOrigin, request, reply);
     const body = CreateWorkspaceRequest.parse(request.body);
     const { workspace } = await createWorkspace(deps.db, { ...body, ownerUserId: session.user.id });
-    return reply.code(201).send(toResponse(workspace, "owner"));
+    return reply.code(201).send(toResponse(workspace, "owner", permissionsOf("owner")));
   });
 
   app.get("/v1/workspaces/:workspaceId", async (request, reply) => {
     const ctx = await requirePermission(deps, request, reply, "workspace.read");
     const w = await deps.db.withWorkspace(ctx.workspaceId, getWorkspace);
-    return toResponse(w, ctx.membership.role);
+    return toResponse(w, roleOf(ctx), permissionsFor(ctx));
   });
 
   app.patch("/v1/workspaces/:workspaceId", async (request, reply) => {
-    const ctx = await requirePermission(deps, request, reply, "workspace.update");
+    const ctx = await requireMember(deps, request, reply, "workspace.update");
     const body = UpdateWorkspaceRequest.parse(request.body);
     const w = await deps.db.withWorkspace(ctx.workspaceId, (tx) => updateWorkspace(tx, body));
-    return toResponse(w, ctx.membership.role);
+    return toResponse(w, ctx.membership.role, permissionsOf(ctx.membership.role));
   });
 }

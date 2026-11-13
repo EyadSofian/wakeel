@@ -3,6 +3,7 @@ import { newId } from "@wakeel/contracts";
 import { superuserQuery } from "@wakeel/db/testing";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { requirePermission } from "../src/studio";
+
 import { type Browser, STUDIO, type Stack, signUp, startStack } from "./stack";
 
 /**

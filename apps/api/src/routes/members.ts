@@ -11,7 +11,7 @@ import {
   type Tx,
 } from "@wakeel/db";
 import type { FastifyInstance } from "fastify";
-import { requirePermission, type StudioDeps } from "../studio";
+import { requireMember, type StudioDeps } from "../studio";
 
 export const toMemberResponse = (m: Member | (Omit<Member, "email" | "name"> & { email: string; name: string })) =>
   ({
@@ -40,14 +40,14 @@ export function denialError(denial: RoleChangeDenial): AppError {
 /** Members of a workspace: list, change role, remove (task 1.3). */
 export async function memberRoutes(app: FastifyInstance, deps: StudioDeps): Promise<void> {
   app.get("/v1/workspaces/:workspaceId/members", async (request, reply) => {
-    const ctx = await requirePermission(deps, request, reply, "member.read");
+    const ctx = await requireMember(deps, request, reply, "member.read");
     const members = await deps.db.withWorkspace(ctx.workspaceId, listMembers);
     // Workspaces have tens of members; one page, as the switcher.
     return { data: members.map(toMemberResponse), nextCursor: null };
   });
 
   app.patch("/v1/workspaces/:workspaceId/members/:memberId", async (request, reply) => {
-    const ctx = await requirePermission(deps, request, reply, "member.update_role");
+    const ctx = await requireMember(deps, request, reply, "member.update_role");
     const { memberId } = request.params as { memberId: string };
     const { role } = UpdateMemberRequest.parse(request.body);
     const updated = await deps.db.withWorkspace(ctx.workspaceId, async (tx) => {
@@ -64,7 +64,7 @@ export async function memberRoutes(app: FastifyInstance, deps: StudioDeps): Prom
   });
 
   app.delete("/v1/workspaces/:workspaceId/members/:memberId", async (request, reply) => {
-    const ctx = await requirePermission(deps, request, reply, "member.remove");
+    const ctx = await requireMember(deps, request, reply, "member.remove");
     const { memberId } = request.params as { memberId: string };
     await deps.db.withWorkspace(ctx.workspaceId, async (tx) => {
       const ownerCount = await countOwners(tx);
