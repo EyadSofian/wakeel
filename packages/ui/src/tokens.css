@@ -1,0 +1,162 @@
+/*
+ * Design tokens (docs/05-design-system.md §2). The only file allowed to contain raw colour, size
+ * and shadow values; everything else uses these through Tailwind utilities (theme.css) or var().
+ * The theme follows the system unless the app pins it with data-theme="light" | "dark" on <html>.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* §2.1 Colour, light */
+  --bg-canvas: oklch(0.975 0.002 265);
+  --bg-surface: oklch(1 0 0);
+  --bg-subtle: oklch(0.965 0.002 265);
+  --bg-muted: oklch(0.94 0.003 265);
+  --border-hairline: oklch(0.91 0.003 265);
+  --border-strong: oklch(0.84 0.004 265);
+  --text-primary: oklch(0.22 0.005 265);
+  --text-secondary: oklch(0.45 0.006 265);
+  --text-tertiary: oklch(0.58 0.006 265);
+  --text-on-accent: oklch(1 0 0);
+  --accent: oklch(0.52 0.19 268);
+  --accent-hover: oklch(0.47 0.19 268);
+  --accent-subtle: oklch(0.955 0.03 268);
+  --accent-border: oklch(0.78 0.09 268);
+  --error: oklch(0.55 0.2 27);
+  --error-subtle: oklch(0.96 0.025 27);
+  --warning: oklch(0.52 0.12 70);
+  --warning-subtle: oklch(0.965 0.035 85);
+  --success: oklch(0.5 0.13 152);
+  --success-subtle: oklch(0.96 0.03 152);
+  --scrim: oklch(0 0 0 / 0.32);
+
+  /* §2.2 Type */
+  --font-sans: "IBM Plex Sans", "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* §2.3 Space: 4 px grid */
+  --space-0: 0px;
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 20px;
+  --space-8: 24px;
+  --space-9: 32px;
+  --space-10: 40px;
+  --space-11: 48px;
+  --space-12: 64px;
+
+  /* §2.3 Sizes */
+  --size-control-sm: 24px;
+  --size-control: 28px;
+  --size-control-lg: 32px;
+  --size-icon-sm: 14px;
+  --size-icon: 16px;
+  --size-icon-lg: 20px;
+  --size-row: 28px;
+  --size-row-table: 32px;
+  --size-row-card: 36px;
+  --size-topbar: 44px;
+  --size-rail: 48px;
+  --size-resource-panel: 240px;
+  --size-node: 280px;
+  --size-inspector: 360px;
+  --size-inspector-min: 320px;
+  --size-inspector-max: 520px;
+  --size-emulator: 380px;
+  --size-emulator-min: 340px;
+  --size-emulator-max: 560px;
+  --size-sign-in: 360px;
+  --size-hairline: 1px;
+  --size-status-dot: 6px;
+  --size-focus-ring: 2px;
+
+  /* §2.4 Radius */
+  --radius-0: 0px;
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 999px;
+
+  /* §2.5 Elevation, light */
+  --shadow-pop: 0 4px 12px -2px oklch(0 0 0 / 0.08), 0 1px 2px oklch(0 0 0 / 0.04);
+  --shadow-drag: 0 10px 24px -6px oklch(0 0 0 / 0.14);
+  --shadow-modal: 0 20px 48px -12px oklch(0 0 0 / 0.2);
+  --elevation-border: var(--border-hairline);
+}
+
+/* §2.1 and §2.5, dark. Two selectors: the system preference, unless pinned light, and a pinned dark. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg-canvas: oklch(0.16 0.004 265);
+    --bg-surface: oklch(0.2 0.004 265);
+    --bg-subtle: oklch(0.235 0.005 265);
+    --bg-muted: oklch(0.27 0.006 265);
+    --border-hairline: oklch(0.29 0.006 265);
+    --border-strong: oklch(0.38 0.007 265);
+    --text-primary: oklch(0.94 0.003 265);
+    --text-secondary: oklch(0.72 0.006 265);
+    --text-tertiary: oklch(0.6 0.006 265);
+    --text-on-accent: oklch(0.16 0.004 265);
+    --accent: oklch(0.7 0.15 268);
+    --accent-hover: oklch(0.76 0.14 268);
+    --accent-subtle: oklch(0.28 0.06 268);
+    --accent-border: oklch(0.45 0.11 268);
+    --error: oklch(0.7 0.17 27);
+    --error-subtle: oklch(0.27 0.06 27);
+    --warning: oklch(0.8 0.13 80);
+    --warning-subtle: oklch(0.28 0.05 80);
+    --success: oklch(0.74 0.14 152);
+    --success-subtle: oklch(0.26 0.05 152);
+    --scrim: oklch(0 0 0 / 0.5);
+    --shadow-pop: 0 4px 12px -2px oklch(0 0 0 / 0.4), 0 1px 2px oklch(0 0 0 / 0.2);
+    --shadow-drag: 0 10px 24px -6px oklch(0 0 0 / 0.5);
+    --shadow-modal: 0 20px 48px -12px oklch(0 0 0 / 0.6);
+    --elevation-border: var(--border-strong);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-canvas: oklch(0.16 0.004 265);
+  --bg-surface: oklch(0.2 0.004 265);
+  --bg-subtle: oklch(0.235 0.005 265);
+  --bg-muted: oklch(0.27 0.006 265);
+  --border-hairline: oklch(0.29 0.006 265);
+  --border-strong: oklch(0.38 0.007 265);
+  --text-primary: oklch(0.94 0.003 265);
+  --text-secondary: oklch(0.72 0.006 265);
+  --text-tertiary: oklch(0.6 0.006 265);
+  --text-on-accent: oklch(0.16 0.004 265);
+  --accent: oklch(0.7 0.15 268);
+  --accent-hover: oklch(0.76 0.14 268);
+  --accent-subtle: oklch(0.28 0.06 268);
+  --accent-border: oklch(0.45 0.11 268);
+  --error: oklch(0.7 0.17 27);
+  --error-subtle: oklch(0.27 0.06 27);
+  --warning: oklch(0.8 0.13 80);
+  --warning-subtle: oklch(0.28 0.05 80);
+  --success: oklch(0.74 0.14 152);
+  --success-subtle: oklch(0.26 0.05 152);
+  --scrim: oklch(0 0 0 / 0.5);
+  --shadow-pop: 0 4px 12px -2px oklch(0 0 0 / 0.4), 0 1px 2px oklch(0 0 0 / 0.2);
+  --shadow-drag: 0 10px 24px -6px oklch(0 0 0 / 0.5);
+  --shadow-modal: 0 20px 48px -12px oklch(0 0 0 / 0.6);
+  --elevation-border: var(--border-strong);
+}
+
+/* §2.2: Arabic content gets more line height and no tracking; §2.7: one focus ring everywhere. */
+:where([dir="rtl"], :dir(rtl)) {
+  line-height: 1.75;
+  letter-spacing: 0;
+}
+
+:where(:focus-visible) {
+  outline: var(--size-focus-ring) solid var(--accent);
+  outline-offset: var(--size-focus-ring);
+}
