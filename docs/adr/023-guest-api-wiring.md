@@ -65,7 +65,7 @@ A variable whose JSON text changed is in `set` with its whole new value. A varia
 - A `tool_result` with `ok: false` carries `error: { code, message }`. The guest sees an `Error` with that `message` and a `code` property (ADR-022).
 - The frame's `toolManifest` (builder tools) is not exposed to `code` or `expressions`. It is for `autonomy_run` (Phase 6). This keeps "every tool the model can call is listed on the node" true there.
 - The frame gains `tables: string[]`, the names of the workspace tables this bot may use. `tables.<name>` exists only for those names, so `tables.missing` is `undefined`, not a proxy.
-- Limits per exec: 16 calls in flight at once and 500 in total. Past either limit the call rejects with `code_error`. Each `tool_result` frame fits the 4 MB frame limit (ADR-019 §5).
+- Limits per exec: 16 calls in flight at once and 500 in total. A call beyond the 16 in flight waits its turn, so `Promise.all` over many lookups works. A call past the 500th rejects with `code_error`. Each `tool_result` frame fits the 4 MB frame limit (ADR-019 §5).
 
 ## 4. `fetch` goes from the sandbox service to egress, identified by a capability token
 
@@ -86,7 +86,12 @@ The sandbox runs in a network where only egress is reachable (§5.3 layer 4).
   - The service lowers `timeoutMs` to the time left before the exec deadline. It never raises egress's limits (10 s, 5 MB, 5 redirects).
   - The response reaches the guest as `{ status, statusText, url, headers: [name, value][], body }`, with the body decoded as UTF-8. `text()` and `json()` read it, and `headers.get()` joins repeated values with `, `.
   - An egress refusal (`fetch_blocked`, `fetch_failed`, `rate_limited`, `validation_failed`, `payload_too_large`) rejects the guest promise with an `Error` that has that `code`. A 4xx or 5xx from the remote service is a normal response.
-- At most 4 fetches are in flight per exec, and they count toward the 500 calls.
+- At most 4 fetches are in flight per exec. Further fetches wait their turn, and every fetch counts toward the 500 calls.
+- `axios` follows axios: a status outside 2xx rejects with an `Error` whose `message` is "Request failed with status code N", `code` is `fetch_failed`, and `response` is the response. `data` is the parsed JSON when the body is JSON, and the text otherwise. `fetch` itself never rejects on a status.
+
+## 4a. Expression batches are parsed before they run
+
+ADR-018 §2 evaluates each source as `(<source>)`. On its own, that lets a source such as `1); doSomething(); (2` close the parentheses early and run statements. The pool therefore parses every source first, with the same acorn check that publish validation uses (`parseExpression`). A source that is not exactly one expression becomes a failed outcome ("not a single expression: …") and is never evaluated. A source that passes is evaluated as `(<source>)`, which is then the same single expression.
 
 ## 5. Frame additions
 
