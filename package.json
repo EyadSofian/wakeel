@@ -9,7 +9,7 @@
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || true",
     "check": "pnpm lint && pnpm licences && turbo run typecheck test",
-    "lint": "biome check . && node tools/lint-rules/tokens-only.ts",
+    "lint": "biome check . && node tools/lint-rules/tokens-only.ts && node tools/lint-rules/no-dynamic-code.ts",
     "format": "biome check --write .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",

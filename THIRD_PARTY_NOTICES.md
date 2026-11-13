@@ -21,9 +21,9 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 
 <!-- BEGIN GENERATED: pnpm licences --write -->
 
-395 packages installed by `pnpm install` (runtime and development), not counting platform builds.
+398 packages installed by `pnpm install` (runtime and development), not counting platform builds.
 
-### MIT (303)
+### MIT (306)
 
 - @babel/helper-string-parser 7.29.14 — https://babel.dev/docs/en/next/babel-helper-string-parser
 - @babel/helper-validator-identifier 7.29.7
@@ -47,6 +47,8 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - @fastify/merge-json-schemas 0.2.2 — https://github.com/fastify/merge-json-schemas#readme
 - @fastify/proxy-addr 5.1.2 — https://github.com/fastify/proxy-addr#readme
 - @ioredis/commands 2.0.0 — https://github.com/ioredis/commands
+- @jitl/quickjs-ffi-types 0.32.0
+- @jitl/quickjs-wasmfile-release-sync 0.32.0
 - @jridgewell/gen-mapping 0.3.13 — https://github.com/jridgewell/sourcemaps/tree/main/packages/gen-mapping
 - @jridgewell/remapping 2.3.5 — https://github.com/jridgewell/sourcemaps/tree/main/packages/remapping
 - @jridgewell/resolve-uri 3.1.3
@@ -252,6 +254,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - properties-reader 3.0.1
 - pump 3.0.4
 - quick-format-unescaped 4.0.4 — https://github.com/davidmarkclements/quick-format#readme
+- quickjs-emscripten-core 0.32.0
 - react 19.3.1 — https://react.dev/
 - react-dom 19.3.1 — https://react.dev/
 - react-remove-scroll 2.7.2
