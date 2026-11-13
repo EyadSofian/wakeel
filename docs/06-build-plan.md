@@ -53,7 +53,7 @@ Read before starting any task: `CLAUDE.md`, the sections of `03-architecture.md`
 
 | ID | Task | Files | Acceptance |
 |---|---|---|---|
-| 1.1 🔒 | Schema: `users, sessions, workspaces, memberships, invitations, api_keys, workspace_secrets, audit_log` with RLS and `security definer` lookup functions | `packages/db/migrations/0002_platform.sql`, repositories | Integration: two-tenant tests for every table; lookup functions return ids only |
+| 1.1 🔒 | Schema: `users, sessions, workspaces, memberships, invitations, api_keys, workspace_secrets, audit_log` with RLS and `security definer` lookup functions | `packages/db/migrations/0003_platform.sql`, repositories | Integration: two-tenant tests for every table; lookup functions return ids only |
 | 1.2 🔒 | Sessions and password auth via better-auth; cookie settings; CSRF on mutations; rate limit on sign-in | `packages/auth/**`, `apps/api/src/routes/auth/*` | Integration: sign up, sign in, sign out; cookie flags asserted; 6th failed sign-in in a minute is `rate_limited`; mutation without CSRF header is rejected |
 | 1.3 🔒 | RBAC: permission matrix (`owner, admin, builder, viewer`) as data; `requirePermission` guard; workspace switcher API | `packages/auth/src/rbac.ts`, guards | Unit: matrix table test for every permission × role; Integration: viewer cannot mutate a bot |
 | 1.4 🔒 | API keys: create (shown once), list, revoke; hash at rest; prefix lookup; scopes; last-used | `packages/auth/src/keys.ts`, routes | Integration: key works; revoked key is `unauthenticated`; only the hash is in the database; a key from workspace A cannot read workspace B |

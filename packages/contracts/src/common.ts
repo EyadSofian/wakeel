@@ -23,6 +23,16 @@ export const DocumentId = entityId("doc");
 export const ChunkId = entityId("chk");
 export const TableId = entityId("tbl");
 export const RowId = entityId("row");
+// Platform (architecture §2.3, ADR-015)
+export const UserId = entityId("usr");
+export const SessionId = entityId("ses");
+export const AccountId = entityId("acc");
+export const VerificationId = entityId("vrf");
+export const MembershipId = entityId("mem");
+export const InvitationId = entityId("inv");
+export const ApiKeyId = entityId("key");
+export const SecretId = entityId("sec");
+export const AuditEntryId = entityId("aud");
 
 export const WorkflowId = elementId("wf");
 export const NodeId = elementId("node");

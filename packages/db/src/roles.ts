@@ -11,13 +11,21 @@ export const ROLES = {
 } as const;
 export type RoleName = (typeof ROLES)[keyof typeof ROLES];
 
+/**
+ * Owns the pre-tenant `security definer` lookups and nothing else (ADR-015). It bypasses RLS so a
+ * lookup can find a row before the workspace is known; it cannot log in, and only app_migrator may
+ * assume it, so that a migration can hand it a function.
+ */
+export const LOOKUP_ROLE = "app_lookup";
+
 export type RolePasswords = Record<RoleName, string>;
 
 const ROLE_ATTRIBUTES = "login nosuperuser nocreatedb nocreaterole noreplication nobypassrls noinherit";
+const LOOKUP_ROLE_ATTRIBUTES = "nologin nosuperuser nocreatedb nocreaterole noreplication bypassrls noinherit";
 const MIN_PASSWORD_LENGTH = 16;
 
 /**
- * Creates or updates the three roles and grants them access to the database in `superuserUrl`.
+ * Creates or updates the three login roles and app_lookup, and grants them access to the database in `superuserUrl`.
  * Needs a superuser (or the managed provider's admin role); runs once per environment before the
  * first migration and again whenever passwords rotate. Safe to run repeatedly.
  *
@@ -48,6 +56,13 @@ export async function bootstrapDatabase(superuserUrl: string, passwords: RolePas
       );
     }
 
+    const lookupExists = await client.query("select 1 from pg_roles where rolname = $1", [LOOKUP_ROLE]);
+    await client.query(
+      `${lookupExists.rowCount === 0 ? "create" : "alter"} role ${LOOKUP_ROLE} with ${LOOKUP_ROLE_ATTRIBUTES}`,
+    );
+    // set true: app_migrator may make it a function owner; inherit false: it gets none of its rights.
+    await client.query(`grant ${LOOKUP_ROLE} to ${ROLES.migrator} with inherit false, set true`);
+
     const database = client.escapeIdentifier((await client.query("select current_database() as db")).rows[0].db);
     const { migrator, rw, adminRo } = ROLES;
     await client.query(`revoke all on database ${database} from public`);
@@ -56,7 +71,7 @@ export async function bootstrapDatabase(superuserUrl: string, passwords: RolePas
     await client.query(`grant create on database ${database} to ${migrator}`);
     await client.query("revoke create on schema public from public");
     await client.query(`grant usage, create on schema public to ${migrator}`);
-    await client.query(`grant usage on schema public to ${rw}, ${adminRo}`);
+    await client.query(`grant usage on schema public to ${rw}, ${adminRo}, ${LOOKUP_ROLE}`);
   } finally {
     await client.end();
   }

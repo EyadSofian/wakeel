@@ -29,7 +29,21 @@ export interface Database {
    * refuse to start if it throws.
    */
   verify(): Promise<{ role: string }>;
+  /**
+   * Pre-tenant lookups (ADR-004, ADR-015): `security definer` functions that return only ids. Use
+   * the ids to open `withWorkspace` and read the row there, under RLS.
+   */
+  lookup: Lookups;
   close(): Promise<void>;
+}
+
+export interface Lookups {
+  /** Workspaces the user belongs to, by id. */
+  userWorkspaceIds(userId: string): Promise<string[]>;
+  /** The key with this 8-character prefix, revoked or not. */
+  apiKeyByPrefix(prefix: string): Promise<{ keyId: string; workspaceId: string } | undefined>;
+  /** The invitation with this token hash, open or not. */
+  invitationByTokenHash(tokenHash: string): Promise<{ invitationId: string; workspaceId: string } | undefined>;
 }
 
 /** Opens a pool for the app_rw role. The pool itself is never exposed. */
@@ -68,6 +82,29 @@ export function createDatabase(options: DatabaseOptions): Database {
         );
       }
       return { role: row.role };
+    },
+
+    lookup: {
+      async userWorkspaceIds(userId) {
+        const { rows } = await pool.query<{ id: string }>("select id from lookup.user_workspace_ids($1) as id", [
+          userId,
+        ]);
+        return rows.map((r) => r.id);
+      },
+      async apiKeyByPrefix(prefix) {
+        const { rows } = await pool.query<{ keyId: string; workspaceId: string }>(
+          'select key_id as "keyId", workspace_id as "workspaceId" from lookup.api_key_by_prefix($1)',
+          [prefix],
+        );
+        return rows[0];
+      },
+      async invitationByTokenHash(tokenHash) {
+        const { rows } = await pool.query<{ invitationId: string; workspaceId: string }>(
+          'select invitation_id as "invitationId", workspace_id as "workspaceId" from lookup.invitation_by_token_hash($1)',
+          [tokenHash],
+        );
+        return rows[0];
+      },
     },
 
     async close() {

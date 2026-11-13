@@ -4,6 +4,7 @@ export * from "./message";
 export * from "./table";
 export * from "./card";
 export * from "./node";
+export * from "./platform";
 export * from "./workflow";
 export * from "./bot-definition";
 export * from "./event";

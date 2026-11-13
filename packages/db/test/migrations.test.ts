@@ -257,7 +257,7 @@ describe("0002 (ADR-014) on a database that already has tenant tables", () => {
     );
     expect((await policy()).using).not.toContain("NULLIF");
 
-    expect((await migrate(migratorUrl)).applied).toEqual(["0002_rls_empty_workspace"]);
+    expect((await migrate(migratorUrl)).applied[0]).toBe("0002_rls_empty_workspace");
     expect(await policy()).toEqual({ using: STANDARD_POLICY_EXPRESSION, check: STANDARD_POLICY_EXPRESSION });
     expect(await withClient(migratorUrl, findRlsProblems)).toEqual([]);
   });
