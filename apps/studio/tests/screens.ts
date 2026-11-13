@@ -17,7 +17,13 @@ export type ScreenState =
   | "node-menu"
   | "card-menu"
   | "shortcuts"
-  | "cursor";
+  | "cursor"
+  // Task 2.6: the inspector's card forms.
+  | "card-say"
+  | "card-ask"
+  | "card-condition"
+  | "card-invalid"
+  | "card-rtl";
 
 export interface Screen {
   id: string;
@@ -139,6 +145,11 @@ SCREENS.push({
     "card-menu",
     "shortcuts",
     "cursor",
+    "card-say",
+    "card-ask",
+    "card-condition",
+    "card-invalid",
+    "card-rtl",
   ],
   sizes: DESKTOP,
   mock: true,

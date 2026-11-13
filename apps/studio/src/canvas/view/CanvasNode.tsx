@@ -112,6 +112,7 @@ function CardRow({
   outputIndex,
   rowState,
   dragging,
+  onSelect,
 }: {
   card: Card;
   summary: SummaryContext;
@@ -121,6 +122,7 @@ function CardRow({
   outputIndex: (port: string) => number;
   rowState: ReturnType<typeof useRowState>;
   dragging: boolean;
+  onSelect: () => void;
 }) {
   const Icon = CARD_ICONS[card.type];
   const category = CARD_CATEGORY[card.type];
@@ -129,9 +131,13 @@ function CardRow({
   const current = rowState.cursorRow === cardIndex || rowState.selectedCard === card.id;
   return (
     <div data-card={card.id} className={card.disabled ? "opacity-50" : ""}>
+      {/* Clicking a card opens it in the inspector; the keyboard reaches cards with Enter (2.5). */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard path is Enter on the node, then the arrows. */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: see above. */}
       <div
+        onClick={onSelect}
         className={[
-          "group mx-4 flex h-row-card items-center gap-3 rounded-sm border px-3",
+          "group mx-4 flex h-row-card cursor-pointer items-center gap-3 rounded-sm border px-3",
           dragging ? "bg-surface shadow-drag" : "bg-subtle",
           severity === "error"
             ? "border-error"
@@ -227,6 +233,9 @@ function Cards({
               outputIndex={(port) => rowIndex((r) => r.kind === "output" && r.port === port)}
               rowState={rowState}
               dragging={dragging === id}
+              onSelect={() =>
+                store.getState().select({ nodeIds: [node.id], edgeIds: [], card: { nodeId: node.id, cardId: id } })
+              }
             />
           </Reorder.Item>
         );

@@ -45,10 +45,25 @@ export function PickerMenu({
   const root = useRef<HTMLDivElement>(null);
   const listId = useId();
 
+  // While searching, results are one list ranked by where the words match: the start of the name,
+  // then anywhere in the name, then the description or group. Typing "log" finds Log before Logic.
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q === "" ? items : items.filter((i) => `${i.label} ${i.description} ${i.group}`.toLowerCase().includes(q));
+    if (q === "") return items;
+    const score = (i: PickerItem) => {
+      const label = i.label.toLowerCase();
+      if (label.startsWith(q)) return 0;
+      if (label.includes(q)) return 1;
+      if (`${i.description} ${i.group}`.toLowerCase().includes(q)) return 2;
+      return 3;
+    };
+    return items
+      .map((item, index) => ({ item, index, score: score(item) }))
+      .filter((x) => x.score < 3)
+      .sort((a, b) => a.score - b.score || a.index - b.index)
+      .map((x) => x.item);
   }, [items, query]);
+  const searching = query.trim() !== "";
   const enabled = visible.filter((i) => !i.unavailable);
   const current = enabled[Math.min(active, enabled.length - 1)];
 
@@ -78,7 +93,7 @@ export function PickerMenu({
   // Keep the menu on screen: open below and to the end of the point, flip when there is no room.
   const left = Math.max(8, Math.min(at.x, window.innerWidth - WIDTH - 8));
   const top = at.y + MAX_HEIGHT > window.innerHeight - 8 ? Math.max(8, at.y - MAX_HEIGHT) : at.y;
-  const groups = [...new Set(visible.map((i) => i.group))];
+  const groups = searching ? ["Results"] : [...new Set(visible.map((i) => i.group))];
 
   return (
     <motion.div
@@ -125,7 +140,7 @@ export function PickerMenu({
             <div key={g} role="group" aria-label={g} className="flex flex-col gap-1">
               <p className="px-4 pb-1 pt-3 text-small font-medium text-tertiary">{g}</p>
               {visible
-                .filter((i) => i.group === g)
+                .filter((i) => searching || i.group === g)
                 .map((i) => {
                   const selected = i.id === current?.id;
                   return (

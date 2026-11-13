@@ -9,7 +9,6 @@ import { draftSaver, loadDraft } from "../../api/drafts";
 import { useWorkspace } from "../../api/queries";
 import { useAddNode } from "../../canvas/add-node";
 import { CanvasStoreContext, useCanvas } from "../../canvas/context";
-import { Inspector } from "../../canvas/inspector/Inspector";
 import { createUiStore, UiStoreContext } from "../../canvas/interaction/ui-store";
 import { groupIssues, useIssues } from "../../canvas/issues";
 import { NodeLibrary } from "../../canvas/library/NodeLibrary";
@@ -17,6 +16,7 @@ import { createSaver, type Saver } from "../../canvas/store/saver";
 import { type CanvasStore, createCanvasStore, isDirty } from "../../canvas/store/store";
 import { useSummaryContext } from "../../canvas/use-summary";
 import { Canvas } from "../../canvas/view/Canvas";
+import { Inspector } from "../../inspector/Inspector";
 import { AppShell } from "../../shell/AppShell";
 import { ProblemBanner } from "../../shell/ProblemBanner";
 
