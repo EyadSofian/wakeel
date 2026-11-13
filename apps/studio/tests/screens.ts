@@ -2,7 +2,17 @@
  * Every screen the review loop shoots (design system §8.1). Add a screen here when it exists; each
  * state is set up by `prepare` in shots.spec.ts. Every content surface includes the RTL fixtures.
  */
-export type ScreenState = "default" | "focus" | "empty" | "loading" | "error" | "rtl";
+export type ScreenState =
+  | "default"
+  | "focus"
+  | "empty"
+  | "loading"
+  | "error"
+  | "rtl"
+  // Canvas (task 2.4, design system §8.1): a 300-node flow, a multi-selection, validation issues.
+  | "dense-300"
+  | "selection"
+  | "issues";
 
 export interface Screen {
   id: string;
@@ -76,7 +86,7 @@ SCREENS.push(
   {
     id: "home",
     route: `/w/${WS}`,
-    states: ["default", "focus", "loading", "error", "rtl"],
+    states: ["default", "focus", "empty", "loading", "error", "rtl"],
     sizes: DESKTOP,
     mock: true,
     interactions: [],
@@ -106,6 +116,16 @@ SCREENS.push(
     interactions: [],
   },
 );
+
+// Phase 2: the bot canvas (task 2.4). "default" is the typical bot; "empty" is a lone Start node.
+SCREENS.push({
+  id: "canvas",
+  route: `/w/${WS}/b/bot_01m7a256m0a13warwhczsjhx9b`,
+  states: ["default", "empty", "dense-300", "selection", "issues", "loading", "error", "rtl"],
+  sizes: DESKTOP,
+  mock: true,
+  interactions: [],
+});
 
 export const THEMES = ["light", "dark"] as const;
 

@@ -24,7 +24,7 @@ export const WorkspaceSlug = z
   .string()
   .regex(/^[a-z0-9]([a-z0-9-]{0,46}[a-z0-9])?$/, "Use 1–48 lower-case letters, digits or dashes");
 
-export const WorkspaceName = z.string().trim().min(1).max(100);
+export const WorkspaceName = z.string().trim().min(1, "Enter a name").max(100, "Use 100 characters or fewer");
 
 /**
  * `workspaces.settings`. No settings are defined yet; the schema is closed so nothing unreviewed
@@ -45,11 +45,14 @@ export const SecretName = z.string().regex(/^[a-z0-9][a-z0-9_.-]{0,63}$/, "Use l
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;
 
-export const EmailAddress = z.email().max(320);
-export const Password = z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH);
+export const EmailAddress = z.email("Enter a valid email address").max(320, "Use 320 characters or fewer");
+export const Password = z
+  .string()
+  .min(PASSWORD_MIN_LENGTH, `Use at least ${PASSWORD_MIN_LENGTH} characters`)
+  .max(PASSWORD_MAX_LENGTH, `Use ${PASSWORD_MAX_LENGTH} characters or fewer`);
 
 export const SignUpRequest = z.strictObject({
-  name: z.string().trim().min(1).max(200),
+  name: z.string().trim().min(1, "Enter your name").max(200, "Use 200 characters or fewer"),
   email: EmailAddress,
   password: Password,
 });
@@ -218,8 +221,10 @@ export type DraftDocSummary = z.infer<typeof DraftDocSummary>;
 
 export const BotDetailResponse = BotResponse.extend({ docs: z.array(DraftDocSummary) });
 
+export const BotName = z.string().trim().min(1, "Enter a name").max(80, "Use 80 characters or fewer");
+
 export const CreateBotRequest = z.strictObject({
-  name: z.string().trim().min(1).max(80),
+  name: BotName,
   slug: BotSlug,
   defaultLocale: z
     .string()
@@ -227,7 +232,7 @@ export const CreateBotRequest = z.strictObject({
     .optional(),
 });
 export const UpdateBotRequest = z
-  .strictObject({ name: z.string().trim().min(1).max(80).optional(), slug: BotSlug.optional() })
+  .strictObject({ name: BotName.optional(), slug: BotSlug.optional() })
   .refine((v) => v.name !== undefined || v.slug !== undefined, "Change at least one field");
 
 /** GET and PUT of a draft document. The body of a PUT is `{ doc }`; the revision travels in If-Match. */

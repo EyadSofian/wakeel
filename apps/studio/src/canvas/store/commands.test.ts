@@ -93,6 +93,22 @@ describe("each command, done, undone and redone", () => {
       },
     ],
     [
+      "deleteSelection removes nodes and transitions in one step",
+      () => {
+        const f = fixture();
+        const edge = f.wf.edges.find((e) => e.from.nodeId !== f.ask.id && e.to.nodeId !== f.ask.id);
+        return {
+          wf: f.wf,
+          command: commands.deleteSelection([f.ask.id], edge ? [edge.id] : []),
+          check: (a) => {
+            expect(a.nodes.map((n) => n.id)).not.toContain(f.ask.id);
+            expect(a.edges.some((e) => e.from.nodeId === f.ask.id || e.to.nodeId === f.ask.id)).toBe(false);
+            if (edge) expect(a.edges.map((e) => e.id)).not.toContain(edge.id);
+          },
+        };
+      },
+    ],
+    [
       "moveNodes changes only the layout",
       () => {
         const f = fixture();

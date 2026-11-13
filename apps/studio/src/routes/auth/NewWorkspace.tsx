@@ -3,18 +3,9 @@ import { Button, Field, Input } from "@wakeel/ui";
 import { type FormEvent, useState } from "react";
 import { fieldErrors } from "../../api/client";
 import { useCreateWorkspace } from "../../api/queries";
+import { slugFrom } from "../../lib/slug";
 import { ProblemBanner } from "../../shell/ProblemBanner";
 import { AuthLayout } from "./AuthLayout";
-
-/** Lower-case letters, digits and dashes from a name; Arabic names leave it for the user to fill. */
-export function slugFrom(name: string): string {
-  return name
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
-}
 
 /** First run: a signed-in user with no workspace creates one and becomes its owner. */
 export function NewWorkspace() {

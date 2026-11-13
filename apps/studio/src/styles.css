@@ -1,6 +1,102 @@
 @import "tailwindcss";
 @import "@wakeel/ui/theme.css";
 @import "@wakeel/ui/fonts.css";
+/* xyflow's layout-only stylesheet; its colours are set below from tokens. */
+@import "@xyflow/react/dist/base.css";
 
 /* Tailwind scans these for class names; the shared UI package lives outside this folder. */
 @source "../../../packages/ui/src";
+
+/*
+ * The canvas (design system §5.1, §4 Canvas). xyflow's base stylesheet handles layout only; every
+ * colour and size here comes from a token. Dots: 16 px grid at 20% of --text-tertiary.
+ */
+
+.wk-canvas .react-flow {
+  --xy-background-color: var(--bg-canvas);
+  --xy-edge-stroke-default: var(--border-strong);
+  --xy-connectionline-stroke-default: var(--accent-border);
+  --xy-minimap-background-color-default: var(--bg-surface);
+  --xy-minimap-mask-background-color-default: var(--bg-muted);
+  --xy-minimap-node-background-color-default: var(--border-strong);
+  --xy-selection-background-color-default: var(--accent-subtle);
+  --xy-selection-border-default: 1px solid var(--accent-border);
+  background: var(--bg-canvas);
+}
+
+.wk-grid .react-flow__background-pattern circle,
+.wk-grid circle {
+  fill: var(--text-tertiary);
+  fill-opacity: 0.2;
+}
+
+.wk-edge {
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+  fill: none;
+}
+.wk-edge-selected {
+  stroke: var(--accent-border);
+}
+.wk-arrow-fill {
+  fill: var(--border-strong);
+}
+.wk-arrow-fill-selected {
+  fill: var(--accent-border);
+}
+
+/* OutputDot: an 8 px dot with a 16 px hit area; inputs are an invisible strip on the left edge. */
+.wk-canvas .react-flow__handle.wk-output {
+  width: var(--space-4);
+  height: var(--space-4);
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  background: var(--bg-surface);
+  right: calc(-1 * var(--space-2));
+}
+.wk-canvas .react-flow__handle.wk-output::before {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--space-2));
+}
+.wk-canvas .react-flow__handle.wk-output:hover,
+.wk-canvas .react-flow__handle.wk-output.connectingfrom {
+  border-color: var(--accent-border);
+}
+.wk-canvas .react-flow__handle.wk-input {
+  width: var(--space-4);
+  height: var(--space-8);
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  left: calc(-1 * var(--space-2));
+}
+.wk-canvas .react-flow__handle.wk-input.connectingto,
+.wk-canvas .react-flow__handle.wk-input.valid {
+  background: var(--accent-border);
+}
+
+.wk-canvas .react-flow__node:focus-visible,
+.wk-canvas .react-flow__edge:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-md);
+}
+
+.wk-minimap {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: var(--space-11);
+}
+
+.wk-canvas .react-flow__attribution {
+  background: transparent;
+  font-size: var(--text-micro);
+  color: var(--text-tertiary);
+}
+.wk-canvas .react-flow__attribution a {
+  color: inherit;
+}

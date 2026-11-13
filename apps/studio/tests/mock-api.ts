@@ -1,6 +1,7 @@
 import type { Page, Route } from "@playwright/test";
 import type {
   ApiKeyResponse,
+  BotResponse,
   InvitationResponse,
   MemberResponse,
   Problem,
@@ -9,6 +10,7 @@ import type {
   WorkspaceSummary,
 } from "@wakeel/contracts";
 import { SCREENSHOT_FIXTURES } from "@wakeel/testing/fixtures/rtl";
+import { BOT, type CanvasFixture, canvasDraft } from "./canvas-fixtures";
 
 /**
  * The mock API layer for the screenshot review (design system §8.1): every `/v1` call is answered
@@ -146,7 +148,21 @@ function data(state: MockState) {
       createdAt: "2026-10-20T09:00:00.000Z",
     },
   ];
-  return { session, workspace, workspaces, members, invitations, apiKeys };
+  const bot = (n: number, name: string, published: boolean, updatedAt: string): BotResponse => ({
+    id: n === 1 ? BOT : `bot_01m7a256m0a13warwhczsjhx0${n}`,
+    name,
+    slug: `bot-${n}`,
+    defaultLocale: rtl ? "ar" : "en",
+    publishedVersionId: published ? `ver_01m7a256m0a13warwhczsjhx0${n}` : null,
+    createdAt: T0,
+    updatedAt,
+  });
+  const bots: BotResponse[] = [
+    bot(1, rtl ? "مساعد متجر إنجوسوفت" : "Store assistant", true, "2026-11-13T08:40:00.000Z"),
+    bot(2, rtl ? "دعم العملاء — Arabic & English" : "Customer support", true, "2026-11-12T17:05:00.000Z"),
+    bot(3, rtl ? "حجز المواعيد" : "Appointment booking", false, "2026-11-10T11:20:00.000Z"),
+  ];
+  return { session, workspace, workspaces, members, invitations, apiKeys, bots };
 }
 
 const internal: Problem = {
@@ -165,9 +181,14 @@ const json = (route: Route, status: number, body: unknown) =>
     body: JSON.stringify(body),
   });
 
-/** Answers `/v1/*` for `state`. Session and the switcher always load, so the frame is real. */
-export async function mockApi(page: Page, state: MockState): Promise<void> {
+/**
+ * Answers `/v1/*` for `state`. Session and the switcher always load, so the frame is real. `canvas`
+ * picks the draft the bot canvas opens; autosave PUTs succeed with the next revision.
+ */
+export async function mockApi(page: Page, state: MockState, canvas: CanvasFixture = "typical"): Promise<void> {
   const d = data(state);
+  const draft = canvasDraft(state === "rtl" ? "rtl" : canvas);
+  let rev = 3;
   await page.route("**/v1/**", async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
@@ -199,6 +220,27 @@ export async function mockApi(page: Page, state: MockState): Promise<void> {
     if (path.endsWith("/members")) return json(route, 200, { data: d.members, nextCursor: null });
     if (path.endsWith("/invitations")) {
       return json(route, 200, { data: state === "empty" ? [] : d.invitations, nextCursor: null });
+    }
+    if (path.endsWith("/bots")) return json(route, 200, { data: state === "empty" ? [] : d.bots, nextCursor: null });
+    const botBase = `/v1/workspaces/${WS}/bots/${BOT}`;
+    if (path === botBase) {
+      return json(route, 200, {
+        ...d.bots[0],
+        name: draft.manifest.name,
+        docs: [
+          { kind: "manifest", docId: "manifest", rev, name: draft.manifest.name, updatedAt: T0 },
+          ...draft.workflows.map((w) => ({ kind: "workflow", docId: w.id, rev, name: w.name, updatedAt: T0 })),
+        ],
+      });
+    }
+    if (path.startsWith(`${botBase}/docs/`)) {
+      const [kind, docId] = path.slice(`${botBase}/docs/`.length).split("/");
+      if (route.request().method() === "PUT") {
+        rev += 1;
+        return json(route, 200, { kind, docId, rev, doc: JSON.parse(route.request().postData() ?? "{}").doc });
+      }
+      const doc = kind === "manifest" ? draft.manifest : draft.workflows.find((w) => w.id === docId);
+      return json(route, 200, { kind, docId, rev, doc });
     }
     if (path.endsWith("/api-keys"))
       return json(route, 200, { data: state === "empty" ? [] : d.apiKeys, nextCursor: null });

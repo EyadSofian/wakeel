@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
+import type { CanvasFixture } from "./canvas-fixtures";
 import { type MockState, mockApi } from "./mock-api";
 import { type Screen, type ScreenState, selectedScreens, THEMES } from "./screens";
 
@@ -13,8 +14,13 @@ const SHOTS_DIR = fileURLToPath(new URL("../.shots", import.meta.url));
 
 const mockStateFor = (screen: Screen, state: ScreenState): MockState => {
   if (screen.id === "sign-in") return "signed-out";
-  return state === "focus" ? "default" : state;
+  if (state === "focus" || state === "dense-300" || state === "selection" || state === "issues") return "default";
+  if (state === "empty" && screen.id === "canvas") return "default";
+  return state;
 };
+
+const canvasFor = (state: ScreenState): CanvasFixture =>
+  state === "dense-300" || state === "issues" || state === "empty" ? state : "typical";
 
 async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<void> {
   if (screen.id === "sign-in" && state === "error") {
@@ -32,6 +38,20 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
   if (state === "loading") {
     await expect(page.locator('[aria-hidden="true"].bg-muted, [aria-busy="true"]').first()).toBeVisible();
   }
+  if (screen.id === "canvas" && !["loading", "error"].includes(state)) {
+    await expect(page.locator(".react-flow__node").first()).toBeVisible();
+    // Validation runs in a worker; the issue count settles before the shot.
+    await expect(page.locator('[data-validated="true"]')).toBeVisible();
+  }
+  if (state === "selection") {
+    // Two nodes: one by click, one by Shift+click (design system §5.1 Selection).
+    await page.locator(".react-flow__node").nth(2).locator("header").click();
+    await page
+      .locator(".react-flow__node")
+      .nth(3)
+      .locator("header")
+      .click({ modifiers: ["Shift"] });
+  }
   if (state === "focus") {
     // Keyboard focus on the first control, to review the focus ring (checklist 18).
     await page.keyboard.press("Tab");
@@ -47,7 +67,7 @@ for (const screen of selectedScreens()) {
         test(`${screen.id} ${name}`, async ({ page }) => {
           await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
           await page.setViewportSize({ width, height });
-          if (screen.mock) await mockApi(page, mockStateFor(screen, state));
+          if (screen.mock) await mockApi(page, mockStateFor(screen, state), canvasFor(state));
           await page.goto(screen.route);
           if (screen.mock && state !== "loading") await page.waitForLoadState("networkidle");
           await page.evaluate(() => document.fonts.ready);
