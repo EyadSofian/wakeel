@@ -15,12 +15,15 @@
     "test": "turbo run test",
     "dev:infra": "docker compose up --detach --wait --wait-timeout 120",
     "dev:infra:down": "docker compose down",
-    "dev:infra:reset": "docker compose down --volumes"
+    "dev:infra:reset": "docker compose down --volumes",
+    "db:bootstrap": "tsx --env-file-if-exists=.env packages/db/src/cli/bootstrap.ts",
+    "db:migrate": "tsx --env-file-if-exists=.env packages/db/src/cli/migrate.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.7",
     "@types/node": "22.20.5",
     "@vitest/coverage-v8": "5.1.0",
+    "tsx": "4.23.15",
     "turbo": "2.11.11",
     "typescript": "5.9.3",
     "vitest": "5.1.0"

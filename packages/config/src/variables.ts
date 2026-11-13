@@ -29,6 +29,49 @@ export const databaseEnv = defineEnv({
   },
 });
 
+/** `pnpm db:migrate`: migrations run as app_migrator, which owns every object (ADR-004). */
+export const migratorDatabaseEnv = defineEnv({
+  migratorDatabaseUrl: {
+    env: "MIGRATOR_DATABASE_URL",
+    schema: z.url({ protocol: /^postgres(ql)?$/ }),
+    description: "Postgres connection string for the app_migrator role. Used only to apply migrations.",
+    secret: true,
+  },
+});
+
+const rolePassword = z.string().min(16);
+
+/**
+ * `pnpm db:bootstrap`: creates the three roles. Needs a superuser (or the managed provider's admin
+ * role) once per environment, and again when passwords rotate.
+ */
+export const bootstrapDatabaseEnv = defineEnv({
+  superuserDatabaseUrl: {
+    env: "SUPERUSER_DATABASE_URL",
+    schema: z.url({ protocol: /^postgres(ql)?$/ }),
+    description: "Postgres connection string for a superuser on the target database. Used only by db:bootstrap.",
+    secret: true,
+  },
+  migratorPassword: {
+    env: "APP_MIGRATOR_PASSWORD",
+    schema: rolePassword,
+    description: "Password to set for app_migrator; at least 16 characters.",
+    secret: true,
+  },
+  rwPassword: {
+    env: "APP_RW_PASSWORD",
+    schema: rolePassword,
+    description: "Password to set for app_rw; at least 16 characters.",
+    secret: true,
+  },
+  adminRoPassword: {
+    env: "APP_ADMIN_RO_PASSWORD",
+    schema: rolePassword,
+    description: "Password to set for app_admin_ro; at least 16 characters.",
+    secret: true,
+  },
+});
+
 export const redisEnv = defineEnv({
   redisUrl: {
     env: "REDIS_URL",
