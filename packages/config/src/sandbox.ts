@@ -35,6 +35,16 @@ export const sandboxEnv = defineEnv({
     // given EGRESS_TOKEN (ADR-023 §4).
     description: "Base URL of the egress service the guest fetch goes through, for example http://egress:4400.",
   },
+  sandboxRuntimeVerified: {
+    env: "SANDBOX_RUNTIME_VERIFIED",
+    // Architecture §5.3, layer 3: production boot refuses to start without it.
+    schema: z
+      .enum(["0", "1"])
+      .default("0")
+      .transform((v) => v === "1"),
+    description:
+      "1 once the deploy pipeline has checked that this container runs under gVisor (runsc). Required when NODE_ENV=production; leave unset elsewhere.",
+  },
 });
 
 /**
