@@ -169,3 +169,21 @@ export const CreateApiKeyRequest = z.strictObject({
   scopes: z.array(z.string()).min(1).max(64),
   expiresAt: isoDate.optional(),
 });
+
+// Audit log API (task 1.6). Newest first, cursor-paginated (ADR-012).
+
+export const AuditEntryResponse = z.object({
+  id: z.string(),
+  at: isoDate,
+  actor: z.object({ type: AuditActorType, id: z.string().nullable() }),
+  action: z.string(),
+  target: z.object({ type: z.string(), id: z.string() }).nullable(),
+  meta: AuditMeta,
+  ip: z.string().nullable(),
+});
+export type AuditEntryResponse = z.infer<typeof AuditEntryResponse>;
+
+export const ListQuery = z.strictObject({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  cursor: z.string().max(200).optional(),
+});

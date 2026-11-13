@@ -10,8 +10,9 @@ import {
   removeMember,
   type Tx,
 } from "@wakeel/db";
+import { audit } from "@wakeel/telemetry";
 import type { FastifyInstance } from "fastify";
-import { requireMember, type StudioDeps } from "../studio";
+import { auditActor, requireMember, type StudioDeps } from "../studio";
 
 export const toMemberResponse = (m: Member | (Omit<Member, "email" | "name"> & { email: string; name: string })) =>
   ({
@@ -57,6 +58,11 @@ export async function memberRoutes(app: FastifyInstance, deps: StudioDeps): Prom
       const denial = checkRoleChange({ actorRole, from: target.role, to: role, ownerCount });
       if (denial) throw denialError(denial);
       await changeRole(tx, memberId, role);
+      await audit(tx, auditActor(ctx, request), {
+        action: "member.role_changed",
+        target: { type: "membership", id: memberId },
+        meta: { userId: target.userId, from: target.role, to: role },
+      });
       return (await listMembers(tx)).find((m) => m.id === memberId);
     });
     if (!updated) throw new AppError("not_found");
@@ -73,6 +79,11 @@ export async function memberRoutes(app: FastifyInstance, deps: StudioDeps): Prom
       const denial = checkRemoval({ actorRole, targetRole: target.role, ownerCount });
       if (denial) throw denialError(denial);
       await removeMember(tx, memberId);
+      await audit(tx, auditActor(ctx, request), {
+        action: "member.removed",
+        target: { type: "membership", id: memberId },
+        meta: { userId: target.userId, role: target.role },
+      });
     });
     return reply.code(204).send();
   });

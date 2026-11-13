@@ -11,6 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@wakeel/contracts": "workspace:*",
+    "@wakeel/db": "workspace:*",
     "pino": "10.4.0"
   }
 }

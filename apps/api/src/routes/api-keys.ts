@@ -1,8 +1,9 @@
 import { can, generateKey, KEY_SCOPES, type Permission } from "@wakeel/auth";
 import { type ApiKeyResponse, AppError, CreateApiKeyRequest } from "@wakeel/contracts";
 import { type ApiKeyRecord, insertApiKey, listApiKeys, revokeApiKey } from "@wakeel/db";
+import { audit } from "@wakeel/telemetry";
 import type { FastifyInstance } from "fastify";
-import { requireMember, type StudioDeps } from "../studio";
+import { auditActor, requireMember, type StudioDeps } from "../studio";
 
 export const toApiKeyResponse = (k: ApiKeyRecord): ApiKeyResponse => ({
   id: k.id,
@@ -54,8 +55,8 @@ export async function apiKeyRoutes(app: FastifyInstance, deps: StudioDeps): Prom
       );
     }
     const { key, prefix, secretHash } = generateKey("workspace");
-    const record = await deps.db.withWorkspace(ctx.workspaceId, (tx) =>
-      insertApiKey(tx, {
+    const record = await deps.db.withWorkspace(ctx.workspaceId, async (tx) => {
+      const created = await insertApiKey(tx, {
         kind: "workspace",
         name: body.name,
         prefix,
@@ -63,8 +64,15 @@ export async function apiKeyRoutes(app: FastifyInstance, deps: StudioDeps): Prom
         scopes,
         createdBy: ctx.session.user.id,
         ...(expiresAt === undefined ? {} : { expiresAt }),
-      }),
-    );
+      });
+      // The prefix identifies the key in the log; the secret never goes anywhere near it.
+      await audit(tx, auditActor(ctx, request), {
+        action: "api_key.created",
+        target: { type: "api_key", id: created.id },
+        meta: { name: created.name, prefix: `wk_live_${created.prefix}`, scopes: created.scopes },
+      });
+      return created;
+    });
     // The only response that ever contains the key.
     return reply
       .code(201)
@@ -75,7 +83,14 @@ export async function apiKeyRoutes(app: FastifyInstance, deps: StudioDeps): Prom
   app.delete("/v1/workspaces/:workspaceId/api-keys/:keyId", async (request, reply) => {
     const ctx = await requireMember(deps, request, reply, "api_key.revoke");
     const { keyId } = request.params as { keyId: string };
-    await deps.db.withWorkspace(ctx.workspaceId, (tx) => revokeApiKey(tx, keyId, deps.now()));
+    await deps.db.withWorkspace(ctx.workspaceId, async (tx) => {
+      const revoked = await revokeApiKey(tx, keyId, deps.now());
+      await audit(tx, auditActor(ctx, request), {
+        action: "api_key.revoked",
+        target: { type: "api_key", id: revoked.id },
+        meta: { name: revoked.name, prefix: `wk_live_${revoked.prefix}` },
+      });
+    });
     return reply.code(204).send();
   });
 }

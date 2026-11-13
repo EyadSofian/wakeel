@@ -70,4 +70,6 @@ Status: ✅ done and tested · ⏳ later task · ⚠️ known gap (accepted or o
 | T7b | Rotation re-wraps the data key; the encrypted value and plaintext are unchanged | ✅ | `rewrap`, `rewrapWorkspaceSecrets`; `MASTER_KEY_VERSION`, `MASTER_KEYS_PREVIOUS` | "rotation re-wraps every secret in place" |
 | T7c | Decrypted values print as `[redacted]` | ✅ | `readSecretValue` returns `Secret` | "store and read round-trip" |
 | T7d | The platform-wide rotation job and runbook | ⏳ | 15.4 runbooks | — |
-| T8 | Every mutation writes an audit entry | ⏳ | 1.6 | — |
+| T8 | Every workspace mutation writes one audit entry in the same transaction | ✅ | `audit()` in `packages/telemetry/src/audit.ts`; closed list of actions | `apps/api/test/audit.test.ts` "each route … adds exactly its own action", "a mutation that fails writes nothing" |
+| T8a | Audit entries never hold keys, tokens or secrets | ✅ | Keys are named by prefix; invitation tokens are not logged | same test: key secret and invitation token are not in the entries |
+| T8b | Sign-up, sign-in and sign-out are not in the audit log (no workspace) | ⚠️ accepted | They appear in the request log with the request id. A per-user security log is a later task | — |

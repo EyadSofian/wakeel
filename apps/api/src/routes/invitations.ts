@@ -18,9 +18,10 @@ import {
   markInvitationAccepted,
   revokeInvitation,
 } from "@wakeel/db";
+import { audit } from "@wakeel/telemetry";
 import type { FastifyInstance } from "fastify";
 import { requireSession } from "../session";
-import { requireMember, type StudioDeps } from "../studio";
+import { auditActor, requireMember, type StudioDeps } from "../studio";
 import { denialError } from "./members";
 
 const INVITATION_DAYS = 7;
@@ -59,13 +60,19 @@ export async function invitationRoutes(app: FastifyInstance, deps: StudioDeps): 
       if (members.some((m) => m.email.toLowerCase() === body.email.toLowerCase())) {
         throw new AppError("unique_violation", { column: "email" });
       }
-      return createInvitation(tx, {
+      const created = await createInvitation(tx, {
         email: body.email,
         role: body.role,
         tokenHash: sha256(token),
         invitedBy: ctx.session.user.id,
         expiresAt: new Date(now.getTime() + INVITATION_DAYS * 86_400_000),
       });
+      await audit(tx, auditActor(ctx, request), {
+        action: "invitation.created",
+        target: { type: "invitation", id: created.id },
+        meta: { email: created.email, role: created.role },
+      });
+      return created;
     });
     const acceptUrl = `${deps.studioOrigin}/invite/${token}`;
     return reply
@@ -77,7 +84,14 @@ export async function invitationRoutes(app: FastifyInstance, deps: StudioDeps): 
   app.delete("/v1/workspaces/:workspaceId/invitations/:invitationId", async (request, reply) => {
     const ctx = await requireMember(deps, request, reply, "member.invite");
     const { invitationId } = request.params as { invitationId: string };
-    await deps.db.withWorkspace(ctx.workspaceId, (tx) => revokeInvitation(tx, invitationId, deps.now()));
+    await deps.db.withWorkspace(ctx.workspaceId, async (tx) => {
+      const revoked = await revokeInvitation(tx, invitationId, deps.now());
+      await audit(tx, auditActor(ctx, request), {
+        action: "invitation.revoked",
+        target: { type: "invitation", id: revoked.id },
+        meta: { email: revoked.email },
+      });
+    });
     return reply.code(204).send();
   });
 
@@ -91,7 +105,16 @@ export async function invitationRoutes(app: FastifyInstance, deps: StudioDeps): 
       const invitation = await getInvitation(tx, found.invitationId);
       if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) throw new AppError("not_found");
       await markInvitationAccepted(tx, invitation.id, session.user.id, deps.now());
-      await addMember(tx, { userId: session.user.id, role: invitation.role });
+      const membership = await addMember(tx, { userId: session.user.id, role: invitation.role });
+      await audit(
+        tx,
+        { type: "user", id: session.user.id, ip: request.ip },
+        {
+          action: "member.joined",
+          target: { type: "membership", id: membership.id },
+          meta: { invitationId: invitation.id, role: invitation.role },
+        },
+      );
       const w = await getWorkspace(tx);
       return { id: w.id, name: w.name, slug: w.slug, role: invitation.role };
     });
