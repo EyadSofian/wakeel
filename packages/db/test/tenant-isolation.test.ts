@@ -102,6 +102,48 @@ describe.each(tenantPairs())("owner $owner, other $other", ({ owner, other }) =>
   });
 });
 
+describe("a reused connection after its workspace transaction ended (ADR-014)", () => {
+  // A pooled connection that has run withWorkspace once reports app.workspace_id as '' (not NULL)
+  // afterwards. The policy must treat that as unset: nothing visible, nothing writable.
+  let reused: pg.Client;
+
+  beforeAll(async () => {
+    reused = new pg.Client({ connectionString: urls.rw });
+    await reused.connect();
+    const [{ owner }] = tenantPairs();
+    await reused.query("begin");
+    await reused.query("select set_config('app.workspace_id', $1, true)", [owner]);
+    await reused.query("commit");
+  });
+
+  afterAll(async () => {
+    await reused?.end();
+  });
+
+  test("the setting really is empty, not NULL", async () => {
+    const { rows } = await reused.query("select current_setting('app.workspace_id', true) as v");
+    expect(rows[0].v).toBe("");
+  });
+
+  test("it cannot write a row with an empty workspace_id", async () => {
+    await expectRlsViolation(reused.query(`insert into ${table} values ('empty-ws', '', 'x')`));
+  });
+
+  test("it sees no rows, including any with an empty workspace_id", async () => {
+    const m = new pg.Client({ connectionString: urls.superuser });
+    await m.connect();
+    try {
+      // Plant a row with workspace_id '' as the superuser, which bypasses RLS.
+      await m.query(`insert into ${table} values ('planted-empty', '', 'x')`);
+      const { rows } = await reused.query(`select count(*)::int as n from ${table}`);
+      expect(rows[0].n).toBe(0);
+    } finally {
+      await m.query(`delete from ${table} where id = 'planted-empty'`);
+      await m.end();
+    }
+  });
+});
+
 describe("withWorkspace", () => {
   const [{ owner: a, other: b }] = tenantPairs();
 
