@@ -5,5 +5,5 @@
     // Runner files are loaded by Node's own type stripping, which needs real file extensions.
     "allowImportingTsExtensions": true
   },
-  "include": ["src", "test", "vitest.config.ts"]
+  "include": ["src", "test", "tests", "vitest.config.ts"]
 }
