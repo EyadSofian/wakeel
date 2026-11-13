@@ -5,6 +5,7 @@ import { useId } from "react";
 import { useCanvasStore } from "../../canvas/context";
 import { useUiStore } from "../../canvas/interaction/ui-store";
 import { commands } from "../../canvas/store/commands";
+import { codeFontFamily } from "../../code/code-font";
 import { FieldShell, StringField, useIssueAt, useVariables } from "../fields";
 import { ListEditor, MessageEditor } from "../message/MessageEditor";
 
@@ -392,7 +393,6 @@ export function CodeForm({ card, node, commit }: CardFormProps<"code">) {
   const ui = useUiStore();
   const timeoutId = useId();
   const lines = card.source.split("\n");
-  const preview = lines.slice(0, CODE_PREVIEW_LINES).join("\n");
   const seconds = card.timeoutMs / 1000;
   const options = CODE_TIMEOUTS.includes(seconds) ? CODE_TIMEOUTS : [...CODE_TIMEOUTS, seconds].sort((a, b) => a - b);
   const open = () => ui.getState().set({ code: { nodeId: node.id, cardId: card.id } });
@@ -405,13 +405,23 @@ export function CodeForm({ card, node, commit }: CardFormProps<"code">) {
             No code yet. It runs in the sandbox with this bot's variables.
           </p>
         ) : (
-          <pre
+          <div
             dir="ltr"
-            className="max-h-picker-height overflow-hidden rounded-md border border-hairline bg-subtle px-5 py-4 font-mono text-code-small text-primary"
+            style={{ fontFamily: codeFontFamily() }}
+            className="flex flex-col rounded-md border border-hairline bg-subtle px-5 py-4 text-code-small text-primary"
+            data-code-preview
           >
-            {preview}
-            {lines.length > CODE_PREVIEW_LINES ? `\n… ${lines.length - CODE_PREVIEW_LINES} more lines` : ""}
-          </pre>
+            {/* One block per line, cut at the line's end with an ellipsis, never inside a word mid-line. */}
+            {lines.slice(0, CODE_PREVIEW_LINES).map((line, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: lines are positional; the same text may repeat.
+              <span key={i} className="truncate whitespace-pre">
+                {line || " "}
+              </span>
+            ))}
+            {lines.length > CODE_PREVIEW_LINES ? (
+              <span className="text-tertiary">… {lines.length - CODE_PREVIEW_LINES} more lines</span>
+            ) : null}
+          </div>
         )}
         <Button
           icon={<SquareCode className="size-icon" strokeWidth={1.75} aria-hidden="true" />}

@@ -1,6 +1,7 @@
 import { CODE_BODY_IGNORED_DIAGNOSTICS, TYPINGS_FILE_NAME } from "@wakeel/contracts";
 import type { editor, IDisposable } from "monaco-editor";
 import { useEffect, useRef } from "react";
+import { codeFontFamily } from "./code-font";
 import type { Monaco } from "./monaco-loader";
 import { isDark, readThemeTokens, THEME_NAME, themeData } from "./monaco-theme";
 
@@ -65,13 +66,19 @@ export function CodeEditor({
       // in our end-to-end run, and the textarea path is the one IME input (Arabic) is proven on.
       editContext: false,
       minimap: { enabled: false },
+      // §2.1: no colour as decoration. Brackets match by a muted box (theme), not by hue.
+      bracketPairColorization: { enabled: false },
+      guides: { bracketPairs: false, indentation: true },
       scrollBeyondLastLine: false,
-      fontFamily: css.getPropertyValue("--font-mono").trim(),
+      fontFamily: codeFontFamily(),
       // §2.2 code-body: 13 / 20.
       ...(px("--text-code-body") ? { fontSize: px("--text-code-body") } : {}),
       ...(px("--text-code-body--line-height") ? { lineHeight: px("--text-code-body--line-height") } : {}),
       tabSize: 2,
       renderLineHighlight: "line",
+      renderLineHighlightOnlyWhenFocus: true,
+      // The empty state (§3.3): one sentence on what goes here.
+      placeholder: "Type workflow. to see its variables.",
       overviewRulerLanes: 0,
       hideCursorInOverviewRuler: true,
       fixedOverflowWidgets: true,

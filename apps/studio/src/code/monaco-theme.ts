@@ -74,6 +74,9 @@ export function themeData(t: ThemeTokens, dark: boolean): editor.IStandaloneThem
       "editor.inactiveSelectionBackground": t.muted,
       "editor.selectionHighlightBackground": t.muted,
       "editor.wordHighlightBackground": t.muted,
+      // Bracket pair colours stay off; if Monaco draws pair colours anyway, they are all one grey.
+      ...Object.fromEntries([1, 2, 3, 4, 5, 6].map((n) => [`editorBracketHighlight.foreground${n}`, t.secondary])),
+      "editorBracketHighlight.unexpectedBracket.foreground": t.error,
       "editorBracketMatch.background": t.muted,
       "editorBracketMatch.border": t.strong,
       "editorIndentGuide.background1": t.hairline,
