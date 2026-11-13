@@ -4,12 +4,17 @@
  */
 import { commonEnv, loadConfigOrExit, SANDBOX_LIMITS, sandboxEnv } from "@wakeel/config";
 import { createLogger } from "@wakeel/telemetry";
+import { runtimeProblem } from "./boot.ts";
 import { SandboxPool } from "./pool.ts";
 import { createSandboxServer } from "./server.ts";
 
 const config = loadConfigOrExit({ ...commonEnv, ...sandboxEnv });
-if (config) {
-  const logger = createLogger({ service: "sandbox", level: config.logLevel });
+const logger = config ? createLogger({ service: "sandbox", level: config.logLevel }) : undefined;
+const refused = config ? runtimeProblem(config) : undefined;
+if (refused) {
+  logger?.fatal({ code: "sandbox_runtime_unverified" }, refused);
+  process.exitCode = 1;
+} else if (config && logger) {
   const pool = new SandboxPool({
     size: config.sandboxPoolSize,
     egressUrl: config.sandboxEgressUrl,

@@ -32,7 +32,19 @@ export interface BatchExpression {
 }
 
 /** What the pool hands a runner. */
-export interface ExecJob extends Omit<ExecJobInput, "capabilityToken"> {
+export interface ExecJob extends Omit<ExecJobInput, "capabilityToken" | "scopes" | "secretKeys"> {
+  /**
+   * The scopes as JSON text, made on the pool's thread. A value that cannot become JSON there (too
+   * deeply nested, a cycle) is refused before any runner is involved.
+   */
+  scopesText: string;
+  /** Values to redact, longest first: the secret `env` values and their JSON-escaped forms. */
+  secrets: string[];
+  /**
+   * Bytes of the module's WASM memory held back for this exec, so a caller's lower `memoryMb` is as
+   * real as the maximum: the ceiling is fixed per module (docs/security/sandbox-review.md §2).
+   */
+  reserveBytes: number;
   /** Epoch milliseconds; the interpreter is interrupted from this moment on. */
   deadline: number;
   stackBytes: number;
@@ -43,8 +55,8 @@ export interface ExecJob extends Omit<ExecJobInput, "capabilityToken"> {
 export interface RunnerData {
   /** One Int32 the pool sets to 1 to cancel the running exec; the interrupt handler reads it. */
   cancel: SharedArrayBuffer;
-  /** WASM memory above this, after an exec, retires the runner. */
-  wasmMemoryMaxBytes: number;
+  /** The QuickJS module's WASM memory: it starts at `initialBytes` and can never pass `maximumBytes`. */
+  wasmMemory: { initialBytes: number; maximumBytes: number };
 }
 
 export type MainToWorker =

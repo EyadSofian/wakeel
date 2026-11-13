@@ -19,18 +19,26 @@ describe("sandbox env", () => {
       sandboxPort: 4300,
       sandboxPoolSize: availableParallelism() * 2,
       sandboxEgressUrl: "http://127.0.0.1:4400",
+      sandboxRuntimeVerified: false,
     });
   });
 
   test("reads every variable", () => {
     const config = loadConfig(sandboxEnv, {
-      env: { SANDBOX_HOST: "0.0.0.0", SANDBOX_PORT: "4301", SANDBOX_POOL_SIZE: "3", EGRESS_URL: "http://egress:4400" },
+      env: {
+        SANDBOX_HOST: "0.0.0.0",
+        SANDBOX_PORT: "4301",
+        SANDBOX_POOL_SIZE: "3",
+        EGRESS_URL: "http://egress:4400",
+        SANDBOX_RUNTIME_VERIFIED: "1",
+      },
     });
     expect(config).toEqual({
       sandboxHost: "0.0.0.0",
       sandboxPort: 4301,
       sandboxPoolSize: 3,
       sandboxEgressUrl: "http://egress:4400",
+      sandboxRuntimeVerified: true,
     });
   });
 
@@ -46,6 +54,9 @@ describe("sandbox env", () => {
     ["SANDBOX_POOL_SIZE", "0"],
     ["SANDBOX_POOL_SIZE", "two"],
     ["EGRESS_URL", "ftp://egress"],
+    // Only the deploy pipeline sets it, and only to 1; anything else is a typo, not a yes.
+    ["SANDBOX_RUNTIME_VERIFIED", "true"],
+    ["SANDBOX_RUNTIME_VERIFIED", "yes"],
   ])("rejects %s=%s", (variable, value) => {
     expect(() => loadConfig(sandboxEnv, { env: { [variable]: value } })).toThrow(ConfigError);
     expect(problemsFor({ [variable]: value })).toEqual([variable]);

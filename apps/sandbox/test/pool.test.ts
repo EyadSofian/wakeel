@@ -199,7 +199,9 @@ describe("stack", () => {
 
   test.each([
     ["JSON.parse of deeply nested arrays", "return JSON.parse('['.repeat(2000000));"],
-    ["JSON.stringify of deeply nested arrays", "let a = []; for (let i = 0; i < 1000000; i++) a = [a]; return a;"],
+    // 200,000 levels: far past the interpreter's ~2,300 frames, and within the 64 MB heap. A million
+    // levels (about 100 MB) only fit while the memory limit was not enforced (sandbox-review §2).
+    ["JSON.stringify of deeply nested arrays", "let a = []; for (let i = 0; i < 200000; i++) a = [a]; return a;"],
   ])(
     "%s overflows inside the interpreter, not the host thread",
     async (_name, source) => {

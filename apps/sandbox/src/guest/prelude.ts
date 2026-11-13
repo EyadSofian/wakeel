@@ -29,6 +29,7 @@ export const PRELUDE = `(function install(call, emit, configText) {
   const reject = (e) => PromiseC.reject(e);
   const ErrorC = Error;
   const TypeErrorC = TypeError;
+  const InternalErrorC = G.InternalError;
   const StringC = String;
   const encode = encodeURIComponent;
 
@@ -76,9 +77,20 @@ export const PRELUDE = `(function install(call, emit, configText) {
   };
   for (let i = 0; i < MUTABLE.length; i++) constant(G, MUTABLE[i], mutable[MUTABLE[i]]);
 
+  // Names that would set a prototype, not a variable, wherever the patch is applied with plain
+  // property writes. A patch never carries them; one that arrived in the scopes may stay unchanged.
+  const RESERVED = ["__proto__", "constructor", "prototype"];
+  function patchable(scope, name) {
+    if (RESERVED.indexOf(name) >= 0) {
+      throw new TypeErrorC(scope + "." + name + " cannot be saved: " + name + " is not a variable name");
+    }
+    return name;
+  }
+
   // One JSON text per top-level variable, to diff against after the run.
   function texts(scope) {
-    const out = {};
+    // No prototype, so a variable named __proto__ is an own key here like any other.
+    const out = O.create(null);
     const obj = mutable[scope];
     const names = keys(obj);
     for (let i = 0; i < names.length; i++) {
@@ -87,6 +99,8 @@ export const PRELUDE = `(function install(call, emit, configText) {
       try {
         text = stringify(obj[name]);
       } catch (e) {
+        // Running out of memory or time is the run's failure, not this variable's.
+        if (e === null || e === undefined || (typeof InternalErrorC === "function" && e instanceof InternalErrorC)) throw e;
         throw new TypeErrorC(scope + "." + name + " cannot be saved: " + (e && e.message));
       }
       if (text !== undefined) out[name] = text;
@@ -108,14 +122,14 @@ export const PRELUDE = `(function install(call, emit, configText) {
       const names = keys(after);
       for (let j = 0; j < names.length; j++) {
         if (before[names[j]] !== after[names[j]]) {
-          set[names[j]] = parse(after[names[j]]);
+          set[patchable(scope, names[j])] = parse(after[names[j]]);
           changed = true;
         }
       }
       const old = keys(before);
       for (let j = 0; j < old.length; j++) {
         if (!hasOwn(after, old[j])) {
-          unset.push(old[j]);
+          unset.push(patchable(scope, old[j]));
           changed = true;
         }
       }
