@@ -27,6 +27,18 @@ async function run(page: Page, label: string) {
   await expect(palette(page)).toHaveCount(0);
 }
 
+/** Goes to a place by typing its name and choosing the "Go to" row of that kind. */
+async function goTo(page: Page, name: string, kind: string) {
+  await openPalette(page);
+  await page.keyboard.type(name);
+  await palette(page)
+    .getByRole("group", { name: "Go to" })
+    .getByRole("option", { name: new RegExp(`^${name}.*${kind}$`) })
+    .first()
+    .click();
+  await expect(palette(page)).toHaveCount(0);
+}
+
 /** Every action id the palette lists right now, available or not. */
 async function registered(page: Page): Promise<string[]> {
   await openPalette(page);
@@ -157,13 +169,21 @@ test("the palette runs every registered action", async ({ page }) => {
   await expect(inspector(page)).toBeVisible();
   expect(first).toMatch(/^Inspector: /);
 
+  // Go to: a page, a node in another workflow (it opens in the inspector), then a workflow.
+  await goTo(page, "Variables", "Page");
+  await expect(page).toHaveURL(/\/variables$/);
+  await goTo(page, "Workflows", "Page");
+  await expect(nodes(page).first()).toBeVisible();
+  await goTo(page, "Entry", "Node");
+  await expect(crumb(page)).toHaveText("Refunds");
+  await expect(inspector(page)).toHaveAccessibleName("Inspector: Entry");
+  await goTo(page, "Main", "Workflow");
+  await expect(crumb(page)).toHaveText("Main");
+  await goTo(page, "Refunds", "Workflow");
+  await expect(crumb(page)).toHaveText("Refunds");
+
   // Workflow actions on Refunds: rename, duplicate (opens the copy), delete the copy.
   await page.getByRole("tab", { name: "Workflows" }).click();
-  await page
-    .getByRole("list", { name: "Workflows" })
-    .getByRole("button", { name: /^Refunds/ })
-    .click();
-  await expect(crumb(page)).toHaveText("Refunds");
   await run(page, "Rename workflow");
   const rename = page.getByRole("dialog", { name: "Rename workflow" });
   await rename.getByLabel("Name").fill("طلبات الاسترجاع");
