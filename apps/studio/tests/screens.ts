@@ -2,13 +2,15 @@
  * Every screen the review loop shoots (design system §8.1). Add a screen here when it exists; each
  * state is set up by `prepare` in shots.spec.ts. Every content surface includes the RTL fixtures.
  */
-export type ScreenState = "default" | "focus";
+export type ScreenState = "default" | "focus" | "empty" | "loading" | "error" | "rtl";
 
 export interface Screen {
   id: string;
   route: string;
   states: ScreenState[];
   sizes: [width: number, height: number][];
+  /** Screens that load data get it from the mock API layer (tests/mock-api.ts). */
+  mock?: boolean;
   /** Scripted interactions for `studio:motion`. */
   interactions: { id: string; trigger: string; target: string; durationMs: number }[];
 }
@@ -54,6 +56,56 @@ export const SCREENS: Screen[] = [
     interactions: [],
   },
 ];
+
+const DESKTOP: [number, number][] = [
+  [1440, 900],
+  [1280, 720],
+];
+
+// Phase 1 screens (task 1.7). Each has its empty, loading, error and RTL states (CLAUDE.md §9).
+const WS = "ws_01m7a256m0a13warwhczsjhx9g";
+SCREENS.push(
+  {
+    id: "sign-in",
+    route: "/sign-in",
+    states: ["default", "focus", "error"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "home",
+    route: `/w/${WS}`,
+    states: ["default", "focus", "loading", "error", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "settings-general",
+    route: `/w/${WS}/settings/general`,
+    states: ["default", "focus", "loading", "error", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "settings-members",
+    route: `/w/${WS}/settings/members`,
+    states: ["default", "focus", "empty", "loading", "error", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "settings-api-keys",
+    route: `/w/${WS}/settings/api-keys`,
+    states: ["default", "focus", "empty", "loading", "error", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+);
 
 export const THEMES = ["light", "dark"] as const;
 

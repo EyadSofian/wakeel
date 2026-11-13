@@ -1,6 +1,16 @@
-import { createRootRoute, createRoute, createRouter, Outlet, redirect } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, Navigate, Outlet, redirect } from "@tanstack/react-router";
+import { z } from "zod";
+import { useSession, useWorkspaces } from "./api/queries";
+import { AcceptInvite } from "./routes/auth/AcceptInvite";
+import { NewWorkspace } from "./routes/auth/NewWorkspace";
+import { SignIn, SignUp } from "./routes/auth/SignIn";
 import { Gallery } from "./routes/Gallery";
+import { ApiKeys } from "./routes/workspace/ApiKeys";
+import { General } from "./routes/workspace/General";
+import { Home } from "./routes/workspace/Home";
+import { Members } from "./routes/workspace/Members";
 import { AppShell } from "./shell/AppShell";
+import { RequireSession } from "./shell/RequireSession";
 import { ErrorState, NotFoundState } from "./shell/States";
 
 const rootRoute = createRootRoute({
@@ -9,12 +19,102 @@ const rootRoute = createRootRoute({
   errorComponent: () => <ErrorState />,
 });
 
-/** Until the workspace home exists (task 1.7), the root opens the gallery. */
-const indexRoute = createRoute({
+/** `/`: signed out → sign in; no workspace yet → create one; otherwise the first workspace. */
+function Landing() {
+  const session = useSession();
+  const workspaces = useWorkspaces(session.data != null);
+  if (session.isPending) return null;
+  if (session.isError) return <ErrorState />;
+  if (session.data === null) return <Navigate to="/sign-in" replace />;
+  if (workspaces.isPending) return null;
+  if (workspaces.isError) return <ErrorState />;
+  const first = workspaces.data[0];
+  if (!first) return <Navigate to="/new" replace />;
+  return <Navigate to="/w/$workspaceId" params={{ workspaceId: first.id }} replace />;
+}
+
+const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: Landing });
+
+const redirectSearch = z.object({ redirect: z.string().max(2000).optional() });
+
+const signInRoute = createRoute({
   getParentRoute: () => rootRoute,
+  path: "/sign-in",
+  validateSearch: redirectSearch,
+  component: function SignInRoute() {
+    const { redirect: to } = signInRoute.useSearch();
+    return <SignIn {...(to === undefined ? {} : { redirect: to })} />;
+  },
+});
+
+const signUpRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/sign-up",
+  validateSearch: redirectSearch,
+  component: function SignUpRoute() {
+    const { redirect: to } = signUpRoute.useSearch();
+    return <SignUp {...(to === undefined ? {} : { redirect: to })} />;
+  },
+});
+
+const newWorkspaceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/new",
+  component: () => <RequireSession>{() => <NewWorkspace />}</RequireSession>,
+});
+
+const inviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/invite/$token",
+  component: function InviteRoute() {
+    const { token } = inviteRoute.useParams();
+    return <RequireSession>{() => <AcceptInvite token={token} />}</RequireSession>;
+  },
+});
+
+const workspaceRoute = createRoute({ getParentRoute: () => rootRoute, path: "/w/$workspaceId" });
+
+const homeRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
   path: "/",
-  beforeLoad: () => {
-    throw redirect({ to: "/__gallery" });
+  component: function HomeRoute() {
+    const { workspaceId } = workspaceRoute.useParams();
+    return <RequireSession>{() => <Home workspaceId={workspaceId} />}</RequireSession>;
+  },
+});
+
+const settingsIndexRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: "/settings",
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: "/w/$workspaceId/settings/general", params });
+  },
+});
+
+const generalRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: "/settings/general",
+  component: function GeneralRoute() {
+    const { workspaceId } = workspaceRoute.useParams();
+    return <RequireSession>{() => <General workspaceId={workspaceId} />}</RequireSession>;
+  },
+});
+
+const membersRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: "/settings/members",
+  component: function MembersRoute() {
+    const { workspaceId } = workspaceRoute.useParams();
+    return <RequireSession>{() => <Members workspaceId={workspaceId} />}</RequireSession>;
+  },
+});
+
+const apiKeysRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: "/settings/api-keys",
+  component: function ApiKeysRoute() {
+    const { workspaceId } = workspaceRoute.useParams();
+    return <RequireSession>{() => <ApiKeys workspaceId={workspaceId} />}</RequireSession>;
   },
 });
 
@@ -38,7 +138,16 @@ const errorPreviewRoute = createRoute({
 });
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, galleryRoute, errorPreviewRoute]),
+  routeTree: rootRoute.addChildren([
+    indexRoute,
+    signInRoute,
+    signUpRoute,
+    newWorkspaceRoute,
+    inviteRoute,
+    workspaceRoute.addChildren([homeRoute, settingsIndexRoute, generalRoute, membersRoute, apiKeysRoute]),
+    galleryRoute,
+    errorPreviewRoute,
+  ]),
   defaultNotFoundComponent: NotFoundState,
   defaultErrorComponent: () => <ErrorState />,
 });

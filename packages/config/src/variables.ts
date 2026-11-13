@@ -161,7 +161,7 @@ export const authEnv = defineEnv({
     schema: z
       .url({ protocol: /^https?$/ })
       .transform((u) => new URL(u).origin)
-      .default("http://localhost:5173"),
+      .default("http://127.0.0.1:5173"),
     description: "Origin the Studio is served from, for example https://studio.example.com. Only it may sign in.",
   },
   apiPublicUrl: {

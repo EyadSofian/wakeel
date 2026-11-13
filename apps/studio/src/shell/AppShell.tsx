@@ -10,17 +10,20 @@ export function AppShell({
   title,
   actions,
   active,
+  workspaceId,
   children,
 }: {
   title: ReactNode;
   actions?: ReactNode;
   /** Left rail destination this screen belongs to. */
   active?: string;
+  /** The workspace the screen is in, for the rail's links. */
+  workspaceId?: string;
   children: ReactNode;
 }) {
   return (
     <div className="flex h-dvh bg-canvas text-primary">
-      <LeftRail {...(active === undefined ? {} : { active })} />
+      <LeftRail {...(active === undefined ? {} : { active })} {...(workspaceId === undefined ? {} : { workspaceId })} />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar title={title} actions={actions} />
         <main className="min-h-0 flex-1 overflow-auto">{children}</main>

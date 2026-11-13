@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import {
   BookOpen,
   Braces,
@@ -28,18 +29,24 @@ function RailButton({ label, icon: Icon, active = false }: { label: string; icon
       aria-label={label}
       title={label}
       aria-current={active ? "page" : undefined}
-      className={[
-        "flex size-control-lg items-center justify-center rounded-sm transition-colors",
-        active ? "bg-accent-subtle text-accent" : "text-secondary hover:bg-subtle hover:text-primary",
-      ].join(" ")}
+      className={railClasses(active)}
     >
       <Icon className="size-icon-lg" strokeWidth={1.5} aria-hidden="true" />
     </button>
   );
 }
 
-/** `active` is the destination the current screen belongs to; screens outside them (the gallery) pass none. */
-export function LeftRail({ active }: { active?: string }) {
+const railClasses = (active: boolean) =>
+  [
+    "flex size-control-lg items-center justify-center rounded-sm transition-colors",
+    active ? "bg-accent-subtle text-accent" : "text-secondary hover:bg-subtle hover:text-primary",
+  ].join(" ");
+
+/**
+ * `active` is the destination the current screen belongs to; screens outside them (the gallery) pass
+ * none. With a workspace, Settings links to its settings; the bot destinations arrive with bots (2.x).
+ */
+export function LeftRail({ active, workspaceId }: { active?: string; workspaceId?: string }) {
   return (
     <nav
       aria-label="Studio"
@@ -49,7 +56,20 @@ export function LeftRail({ active }: { active?: string }) {
         <RailButton key={d.label} label={d.label} icon={d.icon} active={d.label === active} />
       ))}
       <div className="mt-auto">
-        <RailButton label="Settings" icon={Settings} active={active === "Settings"} />
+        {workspaceId === undefined ? (
+          <RailButton label="Settings" icon={Settings} active={active === "Settings"} />
+        ) : (
+          <Link
+            to="/w/$workspaceId/settings/general"
+            params={{ workspaceId }}
+            aria-label="Settings"
+            title="Settings"
+            aria-current={active === "Settings" ? "page" : undefined}
+            className={railClasses(active === "Settings")}
+          >
+            <Settings className="size-icon-lg" strokeWidth={1.5} aria-hidden="true" />
+          </Link>
+        )}
       </div>
     </nav>
   );
