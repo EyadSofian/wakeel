@@ -28,7 +28,15 @@ export type ScreenState =
   | "usages"
   | "edit"
   | "delete-blocked"
-  | "picker";
+  | "picker"
+  // Task 2.8: the command palette, the Issues panel and the Workflows panel with its menu and dialog.
+  | "palette"
+  | "palette-search"
+  | "issues-panel"
+  | "workflows"
+  | "workflow-menu"
+  | "workflow-delete"
+  | "workflows-rtl";
 
 export interface Screen {
   id: string;
@@ -156,6 +164,13 @@ SCREENS.push({
     "card-invalid",
     "card-rtl",
     "picker",
+    "palette",
+    "palette-search",
+    "issues-panel",
+    "workflows",
+    "workflow-menu",
+    "workflow-delete",
+    "workflows-rtl",
   ],
   sizes: DESKTOP,
   mock: true,

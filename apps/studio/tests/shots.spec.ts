@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { CanvasFixture } from "./canvas-fixtures";
 import { type MockState, mockApi } from "./mock-api";
 import { type Screen, type ScreenState, selectedScreens, THEMES } from "./screens";
@@ -18,16 +18,20 @@ const MOCK_STATES: readonly MockState[] = ["default", "empty", "loading", "error
 const mockStateFor = (screen: Screen, state: ScreenState): MockState => {
   if (screen.id === "sign-in") return "signed-out";
   if (state === "empty" && screen.id === "canvas") return "default";
-  if (state === "card-rtl") return "rtl";
+  if (state === "card-rtl" || state === "palette-search" || state === "workflows-rtl") return "rtl";
   return MOCK_STATES.find((m) => m === state) ?? "default";
 };
 
-const canvasFor = (screen: Screen, state: ScreenState): CanvasFixture | "variables" =>
+const canvasFor = (screen: Screen, state: ScreenState): CanvasFixture | "variables" | "workflows" =>
   screen.id === "variables"
     ? "variables"
     : state === "dense-300" || state === "issues" || state === "empty"
       ? state
-      : "typical";
+      : state === "issues-panel"
+        ? "issues"
+        : state.startsWith("workflow")
+          ? "workflows"
+          : "typical";
 
 /** Which card row of the first standard node each inspector state opens. */
 const CARD_ROW: Partial<Record<ScreenState, number>> = {
@@ -38,6 +42,12 @@ const CARD_ROW: Partial<Record<ScreenState, number>> = {
   "card-rtl": 0,
   picker: 1,
 };
+
+/** Overlays fade in with Motion (JavaScript, not CSS), so the shot waits until they are opaque. */
+async function settled(locator: Locator): Promise<void> {
+  await expect(locator).toBeVisible();
+  await expect(locator).toHaveCSS("opacity", "1");
+}
 
 async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<void> {
   if (screen.id === "sign-in" && state === "error") {
@@ -123,6 +133,28 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
   if (state === "delete-blocked") {
     await page.getByRole("button", { name: "Delete conversation.topic" }).click();
     await expect(page.getByRole("dialog", { name: "conversation.topic is in use" })).toBeVisible();
+  }
+  if (state === "palette" || state === "palette-search") {
+    await page.keyboard.press("ControlOrMeta+k");
+    await expect(page.getByRole("combobox", { name: "Search commands and places" })).toBeFocused();
+    if (state === "palette-search") await page.keyboard.type("الطلبات");
+    await settled(page.getByRole("dialog", { name: "Command palette" }));
+  }
+  if (state === "issues-panel") {
+    await page.getByRole("button", { name: /Show issues$/ }).click();
+    await settled(page.getByRole("dialog", { name: "Issues" }));
+  }
+  if (state.startsWith("workflow")) {
+    await page.getByRole("tab", { name: "Workflows" }).click();
+    await expect(page.getByRole("list", { name: "Workflows" })).toBeVisible();
+  }
+  if (state === "workflow-menu" || state === "workflow-delete") {
+    await page.getByRole("button", { name: "More for Track order" }).click();
+    await settled(page.getByRole("menu"));
+  }
+  if (state === "workflow-delete") {
+    await page.getByRole("menuitem", { name: "Delete workflow" }).click();
+    await settled(page.getByRole("dialog", { name: 'Delete workflow "Track order"?' }));
   }
   if (state === "selection") {
     // Two nodes: one by click, one by Shift+click (design system §5.1 Selection).

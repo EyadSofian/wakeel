@@ -1,7 +1,13 @@
 import { BotDefinition, validateDefinition } from "@wakeel/contracts";
 import { describe, expect, it } from "vitest";
 import { usageCounts } from "../src/routes/variables/model";
-import { type CanvasFixture, canvasDraft, DRAFT_SCHEMA_VERSION, variablesDraft } from "./canvas-fixtures";
+import {
+  type CanvasFixture,
+  canvasDraft,
+  DRAFT_SCHEMA_VERSION,
+  variablesDraft,
+  workflowsDraft,
+} from "./canvas-fixtures";
 
 const definition = (kind: CanvasFixture) => {
   const d = canvasDraft(kind);
@@ -34,6 +40,11 @@ describe("canvas review fixtures", () => {
   it.each(["default", "rtl", "empty"] as const)("variables %s parses and validates clean", (kind) => {
     const d = variablesDraft(kind);
     const def = BotDefinition.parse({ schemaVersion: DRAFT_SCHEMA_VERSION, ...d });
+    expect(validateDefinition(def)).toEqual([]);
+  });
+
+  it.each([false, true])("workflows (rtl %s) parses and validates clean", (rtl) => {
+    const def = BotDefinition.parse({ schemaVersion: DRAFT_SCHEMA_VERSION, ...workflowsDraft(rtl) });
     expect(validateDefinition(def)).toEqual([]);
   });
 
