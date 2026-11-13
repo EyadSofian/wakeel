@@ -142,6 +142,13 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
     if (state === "palette-search") await page.keyboard.type("الطلبات");
     await settled(page.getByRole("dialog", { name: "Command palette" }));
   }
+  if (state === "issues-panel-empty") {
+    // A clean bot has no issue count in the top bar; the palette still opens the panel.
+    await page.keyboard.press("ControlOrMeta+k");
+    await page.keyboard.type("Show issues");
+    await page.keyboard.press("Enter");
+    await settled(page.getByRole("dialog", { name: "Issues" }));
+  }
   if (state === "issues-panel" || state === "issues-panel-rtl") {
     await page.getByRole("button", { name: /Show issues$/ }).click();
     await settled(page.getByRole("dialog", { name: "Issues" }));

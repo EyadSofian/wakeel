@@ -34,6 +34,7 @@ export type ScreenState =
   | "palette-search"
   | "issues-panel"
   | "issues-panel-rtl"
+  | "issues-panel-empty"
   | "workflows"
   | "workflow-menu"
   | "workflow-delete"
@@ -170,6 +171,7 @@ SCREENS.push({
     "palette-search",
     "issues-panel",
     "issues-panel-rtl",
+    "issues-panel-empty",
     "workflows",
     "workflow-menu",
     "workflow-delete",
