@@ -4,6 +4,14 @@ import { type ExecOutcome, SandboxPool } from "../src/pool";
 import type { ExecJobInput } from "../src/runner/messages";
 
 /**
+ * Tests that must reach a memory or stack limit get the longest deadline a caller may ask for, so
+ * the limit, not the clock, ends them even on a slow, shared CI runner. JSON.stringify's cycle check
+ * is quadratic in depth: reaching the stack limit that way takes about 3 s on a fast laptop.
+ */
+const UNTIL_LIMIT = { timeoutMs: SANDBOX_LIMITS.maxTimeoutMs };
+const UNTIL_LIMIT_TEST_MS = SANDBOX_LIMITS.maxTimeoutMs + 30_000;
+
+/**
  * Integration: real worker threads running real QuickJS-WASM (build plan 3.2). Deadlines here are
  * real time because the code under test is a separate thread; nothing sleeps, every wait is for an
  * event from the pool. Limits are small so the suite stays fast.
@@ -159,11 +167,15 @@ describe("memory", () => {
     // 10^9 characters: QuickJS refuses 2^30 and more as an invalid length before allocating.
     ["a 1 GB string", "const s = 'x'.repeat(1000 * 1000 * 1000); return s.length;"],
     ["an array that grows without end", "const a = []; for (;;) a.push({ n: a.length, s: 'payload' });"],
-  ])("%s fails with code_memory_exceeded", async (_name, source) => {
-    const e = errorOf(await run(source, { timeoutMs: 5_000 }));
-    expect(e.code).toBe("code_memory_exceeded");
-    expect(e.message).toContain(`${SANDBOX_LIMITS.maxMemoryMb} MB`);
-  });
+  ])(
+    "%s fails with code_memory_exceeded",
+    async (_name, source) => {
+      const e = errorOf(await run(source, UNTIL_LIMIT));
+      expect(e.code).toBe("code_memory_exceeded");
+      expect(e.message).toContain(`${SANDBOX_LIMITS.maxMemoryMb} MB`);
+    },
+    UNTIL_LIMIT_TEST_MS,
+  );
 
   test("a lower memory limit from the caller applies", async () => {
     const e = errorOf(await run("const a = new ArrayBuffer(8 * 1024 * 1024); return 1;", { memoryMb: 4 }));
@@ -187,13 +199,17 @@ describe("stack", () => {
   test.each([
     ["JSON.parse of deeply nested arrays", "return JSON.parse('['.repeat(2000000));"],
     ["JSON.stringify of deeply nested arrays", "let a = []; for (let i = 0; i < 1000000; i++) a = [a]; return a;"],
-  ])("%s overflows inside the interpreter, not the host thread", async (_name, source) => {
-    const kills = pool.health().kills;
-    const e = errorOf(await run(source, { timeoutMs: 5_000 }));
-    expect(e.code).toBe("code_error");
-    expect(e.message).toMatch(/stack overflow/);
-    expect(pool.health().kills).toBe(kills);
-  });
+  ])(
+    "%s overflows inside the interpreter, not the host thread",
+    async (_name, source) => {
+      const kills = pool.health().kills;
+      const e = errorOf(await run(source, UNTIL_LIMIT));
+      expect(e.code).toBe("code_error");
+      expect(e.message).toMatch(/stack overflow/);
+      expect(pool.health().kills).toBe(kills);
+    },
+    UNTIL_LIMIT_TEST_MS,
+  );
 });
 
 describe("promise floods", () => {
@@ -206,11 +222,15 @@ describe("promise floods", () => {
     expect(Date.now() - started).toBeLessThan(200 + SANDBOX_LIMITS.killGraceMs);
   });
 
-  test("an endless fan-out of promises terminates", async () => {
-    // The job queue fills the heap so fast that QuickJS cannot even build its "out of memory" error.
-    const e = errorOf(await run("for (;;) { Promise.resolve(1).then(() => {}); }", { timeoutMs: 5_000 }));
-    expect(e.code).toBe("code_memory_exceeded");
-  });
+  test(
+    "an endless fan-out of promises terminates",
+    async () => {
+      // The job queue fills the heap so fast that QuickJS cannot even build its "out of memory" error.
+      const e = errorOf(await run("for (;;) { Promise.resolve(1).then(() => {}); }", UNTIL_LIMIT));
+      expect(e.code).toBe("code_memory_exceeded");
+    },
+    UNTIL_LIMIT_TEST_MS,
+  );
 
   test("throwing null on a small heap is still code_error", async () => {
     expect(errorOf(await run("throw null;"))).toMatchObject({ code: "code_error", message: "null" });
