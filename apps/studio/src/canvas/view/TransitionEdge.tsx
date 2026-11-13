@@ -1,22 +1,20 @@
-import { BaseEdge, type Edge, type EdgeProps, getSmoothStepPath } from "@xyflow/react";
+import { BaseEdge, type Edge, type EdgeProps, getBezierPath } from "@xyflow/react";
 import { memo } from "react";
 
 /**
- * A transition (design system §4 TransitionPath): smooth-step, 1.5 px, with an arrowhead. Selected
- * transitions use `--accent-border`, the selection colour; nothing else is coloured.
+ * A transition (design system §4 TransitionPath, ADR-017): a bezier curve, 1.5 px, with an arrowhead. Selected
+ * transitions use the accent, the selection colour; nothing else is coloured.
  */
 export type TransitionRFEdge = Edge<Record<string, never>, "transition">;
 
 function TransitionEdgeView(props: EdgeProps<TransitionRFEdge>) {
-  const [path] = getSmoothStepPath({
+  const [path] = getBezierPath({
     sourceX: props.sourceX,
     sourceY: props.sourceY,
     sourcePosition: props.sourcePosition,
     targetX: props.targetX,
     targetY: props.targetY,
     targetPosition: props.targetPosition,
-    borderRadius: 8,
-    offset: 16,
   });
   return (
     <BaseEdge

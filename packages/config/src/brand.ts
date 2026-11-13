@@ -1,12 +1,14 @@
 /**
- * The only place the product's user-facing name is defined (architecture, opening section). The name
- * is undecided (docs/00-open-questions.md #1), so it stays a placeholder that is easy to search for.
+ * The only place the product's user-facing name is defined (architecture, opening section). Eyad
+ * chose "Botbress" on 2026-11-13 (ADR-017). It is one letter from a competitor's trademark, so it may
+ * still change before launch; keep every use reading from here. Headers and key prefixes still use
+ * the code name until docs/00-open-questions.md #1 is closed.
  *
  * Browser-safe: no Node imports.
  */
 export const BRAND = {
   /** Shown to users: sign-in page, page titles, emails. */
-  name: "{{PLATFORM_NAME}}",
+  name: "Botbress",
   /** Package scope, CLI name and the prefix of public contract names (headers, key prefixes). */
   codeName: "wakeel",
   /** Public documentation; problem documents link to `${docsUrl}/errors/<code>` (ADR-012). */

@@ -6,7 +6,7 @@ import { useSignIn, useSignUp } from "../../api/queries";
 import { ProblemBanner } from "../../shell/ProblemBanner";
 import { AuthLayout } from "./AuthLayout";
 
-const linkClass = "text-body font-medium text-accent hover:underline";
+const linkClass = "text-body font-medium text-accent-text hover:underline";
 
 /** After signing in, go back to where the user was sent from (an invitation link), else home. */
 function useAfterAuth() {

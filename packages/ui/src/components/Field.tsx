@@ -1,3 +1,4 @@
+import { ChevronDown } from "lucide-react";
 import { type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, useId } from "react";
 
 /**
@@ -36,7 +37,7 @@ export function Field({ label, help, error, children }: FieldProps) {
 }
 
 const control =
-  "h-control w-full rounded-sm border border-strong bg-surface px-4 text-body text-primary placeholder:text-tertiary transition-colors aria-invalid:border-error disabled:cursor-not-allowed disabled:opacity-50";
+  "h-control w-full rounded-sm border border-hairline bg-surface px-5 text-body text-primary placeholder:text-tertiary transition-colors hover:border-strong focus-visible:border-accent aria-invalid:border-error disabled:cursor-not-allowed disabled:opacity-50";
 
 export function Input({
   className,
@@ -51,10 +52,18 @@ export function Input({
   );
 }
 
+/** A native select (keyboard and screen readers for free) drawn with the Studio's own chevron. */
 export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select className={[control, "pe-6", className].filter(Boolean).join(" ")} {...rest}>
-      {children}
-    </select>
+    <span className={["relative inline-flex", className].filter(Boolean).join(" ")}>
+      <select className={[control, "appearance-none pe-9"].join(" ")} {...rest}>
+        {children}
+      </select>
+      <ChevronDown
+        className="pointer-events-none absolute end-4 top-1/2 size-icon -translate-y-1/2 text-tertiary"
+        strokeWidth={1.75}
+        aria-hidden="true"
+      />
+    </span>
   );
 }

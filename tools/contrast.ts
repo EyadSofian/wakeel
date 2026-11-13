@@ -23,6 +23,24 @@ export const REQUIREMENTS: { text: string; min: number }[] = [
 ];
 export const BACKGROUNDS = ["--bg-canvas", "--bg-surface", "--bg-subtle", "--bg-muted"];
 
+const CATEGORIES = ["trigger", "logic", "ai", "tool", "human", "flow"];
+
+/**
+ * Fixed pairs (ADR-017): text on the accent fill, accent used as link text, and each node category's
+ * icon on its tile and on a node surface (non-text graphics, WCAG 1.4.11, 3:1).
+ */
+export const PAIRS: { text: string; background: string; min: number }[] = [
+  { text: "--text-on-accent", background: "--accent", min: 4.5 },
+  { text: "--text-on-accent", background: "--accent-hover", min: 4.5 },
+  { text: "--accent-text", background: "--bg-surface", min: 4.5 },
+  { text: "--accent-text", background: "--bg-canvas", min: 4.5 },
+  { text: "--accent-text", background: "--accent-subtle", min: 4.5 },
+  ...CATEGORIES.flatMap((c) => [
+    { text: `--cat-${c}`, background: `--cat-${c}-subtle`, min: 3 },
+    { text: `--cat-${c}`, background: "--bg-surface", min: 3 },
+  ]),
+];
+
 /** Reads the custom properties of the light block, the pinned dark block and the system dark block. */
 export function parseTokens(css: string): { light: TokenMap; dark: TokenMap; systemDark: TokenMap } {
   const block = (selector: RegExp): TokenMap => {
@@ -97,6 +115,13 @@ export function checkContrast(tokens: { light: TokenMap; dark: TokenMap }): Pair
         results.push({ theme, text, background, ratio, min, pass: ratio >= min });
       }
     }
+    for (const { text, background, min } of PAIRS) {
+      const fg = t[text];
+      const bg = t[background];
+      if (!fg || !bg) throw new Error(`tokens.css (${theme}): ${!fg ? text : background} is missing`);
+      const ratio = contrast(fg, bg);
+      results.push({ theme, text, background, ratio, min, pass: ratio >= min });
+    }
   }
   return results;
 }
@@ -113,7 +138,7 @@ function main(): void {
   for (const r of results) {
     const mark = r.pass ? "pass" : "FAIL";
     process.stdout.write(
-      `${mark}  ${r.theme.padEnd(5)}  ${r.text.padEnd(16)} on ${r.background.padEnd(12)}  ${r.ratio.toFixed(2)}:1  (min ${r.min})\n`,
+      `${mark}  ${r.theme.padEnd(5)}  ${r.text.padEnd(20)} on ${r.background.padEnd(20)}  ${r.ratio.toFixed(2)}:1  (min ${r.min})\n`,
     );
   }
   const failed = results.filter((r) => !r.pass);

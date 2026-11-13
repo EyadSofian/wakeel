@@ -6,7 +6,7 @@ Botpress Studio is the functional reference. Its branding, colours, icons and la
 
 ## 1. Principles
 
-1. **Grey does the work.** Hierarchy comes from weight, size and spacing. Colour is reserved for: what is selected, what has focus, the one primary action, and status.
+1. **Quiet chrome, coloured nodes.** Hierarchy in the chrome comes from weight, size and spacing on neutral surfaces. The accent is reserved for what is selected, what has focus, the one primary action, and links. Nodes carry their category colour (ADR-017); nothing else does.
 2. **Lines before shadows.** Surfaces are separated by 1 px hairlines. A shadow means "this floats above the page" and nothing else.
 3. **Dense, not cramped.** 13 px base text, 28 px controls, 4 px grid. Every pixel of padding is a token.
 4. **Motion answers a question.** "Where did that go?", "what changed?", "is it working?". If an animation answers none of these, remove it.
@@ -14,7 +14,7 @@ Botpress Studio is the functional reference. Its branding, colours, icons and la
 6. **Content is bilingual.** Chrome is English and left-to-right. Anything written by a builder, a user or a model renders with `dir="auto"` and must look right in Arabic, English and both mixed.
 7. **Words are plain.** Names say what a thing does. Errors say what happened and what to do.
 
-Never: gradients, glows, blurred glass, decorative colour, emoji as icons, ALL-CAPS labels, letter-spaced eyebrow text, pulsing dots, identical rounded-card grids, a second accent colour, drop shadows on things that do not float.
+Never: gradients, glows, blurred glass, decorative colour, emoji as icons, ALL-CAPS labels, letter-spaced eyebrow text, pulsing dots, identical rounded-card grids, a second accent colour, category colours outside nodes and the node library, drop shadows on things that do not float.
 
 ## 2. Tokens
 
@@ -22,33 +22,45 @@ Tokens are CSS custom properties in `packages/ui/src/tokens.css`, exposed to Tai
 
 ### 2.1 Colour
 
-Neutrals carry a trace of the accent hue (chroma ≤ 0.007) so greys and accent sit together. Values are OKLCH.
+Cool blue-grey neutrals (hue 270–275, chroma ≤ 0.02) with an indigo accent; the dark theme is blue-black (ADR-017). Values are OKLCH; `packages/ui/src/tokens.css` is the source of truth.
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
-| `--bg-canvas` | `oklch(0.975 0.002 265)` | `oklch(0.160 0.004 265)` | Canvas, app background |
-| `--bg-surface` | `oklch(1 0 0)` | `oklch(0.200 0.004 265)` | Panels, nodes, inputs |
-| `--bg-subtle` | `oklch(0.965 0.002 265)` | `oklch(0.235 0.005 265)` | Hover, inset areas, table header |
-| `--bg-muted` | `oklch(0.940 0.003 265)` | `oklch(0.270 0.006 265)` | Pressed, neutral selection, code blocks |
-| `--border-hairline` | `oklch(0.910 0.003 265)` | `oklch(0.290 0.006 265)` | Default 1 px lines |
-| `--border-strong` | `oklch(0.840 0.004 265)` | `oklch(0.380 0.007 265)` | Input borders, hovered node border |
-| `--text-primary` | `oklch(0.220 0.005 265)` | `oklch(0.940 0.003 265)` | Main text |
-| `--text-secondary` | `oklch(0.450 0.006 265)` | `oklch(0.720 0.006 265)` | Labels, secondary text |
-| `--text-tertiary` | `oklch(0.580 0.006 265)` | `oklch(0.600 0.006 265)` | Placeholders, metadata, disabled icons |
-| `--text-on-accent` | `oklch(1 0 0)` | `oklch(0.160 0.004 265)` | Text on accent fill |
-| `--accent` | `oklch(0.520 0.190 268)` | `oklch(0.700 0.150 268)` | Selection, focus ring, primary button |
-| `--accent-hover` | `oklch(0.470 0.190 268)` | `oklch(0.760 0.140 268)` | Primary button hover |
-| `--accent-subtle` | `oklch(0.955 0.030 268)` | `oklch(0.280 0.060 268)` | Selected row, selected node header tint |
-| `--accent-border` | `oklch(0.780 0.090 268)` | `oklch(0.450 0.110 268)` | Selected node border, active edge |
-| `--error` / `--error-subtle` | `oklch(0.550 0.200 27)` / `oklch(0.960 0.025 27)` | `oklch(0.700 0.170 27)` / `oklch(0.270 0.060 27)` | Errors only |
-| `--warning` / `--warning-subtle` | `oklch(0.520 0.120 70)` / `oklch(0.965 0.035 85)` | `oklch(0.800 0.130 80)` / `oklch(0.280 0.050 80)` | Warnings only |
-| `--success` / `--success-subtle` | `oklch(0.500 0.130 152)` / `oklch(0.960 0.030 152)` | `oklch(0.740 0.140 152)` / `oklch(0.260 0.050 152)` | Success only |
+| `--bg-canvas` | `oklch(0.982 0.003 270)` | `oklch(0.155 0.012 275)` | Canvas, app background |
+| `--bg-surface` | `oklch(1 0 0)` | `oklch(0.195 0.014 275)` | Panels, nodes, inputs, tables |
+| `--bg-subtle` | `oklch(0.97 0.004 270)` | `oklch(0.225 0.016 275)` | Hover, card rows inside nodes, table header |
+| `--bg-muted` | `oklch(0.945 0.006 270)` | `oklch(0.26 0.018 275)` | Pressed, counts, skeletons |
+| `--border-hairline` | `oklch(0.92 0.006 270)` | `oklch(0.29 0.018 275)` | Default 1 px lines, control borders |
+| `--border-strong` | `oklch(0.86 0.008 270)` | `oklch(0.37 0.02 275)` | Hovered controls and nodes |
+| `--text-primary` | `oklch(0.21 0.02 275)` | `oklch(0.95 0.005 275)` | Main text |
+| `--text-secondary` | `oklch(0.46 0.018 275)` | `oklch(0.75 0.014 275)` | Labels, secondary text |
+| `--text-tertiary` | `oklch(0.58 0.014 275)` | `oklch(0.62 0.014 275)` | Placeholders, metadata, transitions |
+| `--text-on-accent` | `oklch(1 0 0)` | `oklch(1 0 0)` | Text on the accent fill |
+| `--accent` | `oklch(0.53 0.22 277)` | `oklch(0.55 0.2 277)` | Selection, focus ring, primary button, active rail item |
+| `--accent-hover` | `oklch(0.48 0.22 277)` | `oklch(0.5 0.2 277)` | Primary button hover |
+| `--accent-subtle` | `oklch(0.955 0.03 277)` | `oklch(0.28 0.07 277)` | Selected row, pressed tool button |
+| `--accent-border` | `oklch(0.72 0.14 277)` | `oklch(0.6 0.17 277)` | Connection line while dragging |
+| `--accent-text` | `oklch(0.5 0.22 277)` | `oklch(0.76 0.13 277)` | The accent used as text: links, pressed tool buttons |
+| `--error` / `--error-subtle` | `oklch(0.55 0.2 27)` / `oklch(0.96 0.025 27)` | `oklch(0.7 0.17 27)` / `oklch(0.27 0.06 27)` | Errors only |
+| `--warning` / `--warning-subtle` | `oklch(0.52 0.12 70)` / `oklch(0.965 0.035 85)` | `oklch(0.8 0.13 80)` / `oklch(0.28 0.05 80)` | Warnings only |
+| `--success` / `--success-subtle` | `oklch(0.52 0.13 152)` / `oklch(0.96 0.03 152)` | `oklch(0.74 0.14 152)` / `oklch(0.26 0.05 152)` | Success only |
+
+**Node categories** (ADR-017). Each category has `--cat-<c>` (icon, port, minimap), `--cat-<c>-subtle` (icon tile) and `--cat-<c>-border` (node border), light and dark.
+
+| Category | Hue | Nodes and cards |
+|---|---|---|
+| `trigger` | teal 185 | Start, Entry, Trigger |
+| `logic` | blue 250 | Standard node; Say, Ask, Condition, Set variable, Set timeout, Log cards |
+| `ai` | violet 295 | Autonomous node; AI condition, Generate text, Extract data cards |
+| `tool` | amber 60–75 | Run code, Search knowledge, Table, Call workflow cards; Note |
+| `human` | rose 15 | Handoff card; Error handler |
+| `flow` | slate 270 | End, Exit; End card |
 
 Rules:
 - One accent. It appears on: the selected node or edge, the focus ring, the single primary button of a view, the active tab indicator, links. Nowhere else.
-- Node types are **not** colour-coded. They are told apart by icon and header label.
+- Node types are colour-coded by **category** (table above): the header icon tile, the node border, the ports and the minimap block. Category colours appear nowhere else, and never mean selection: selection is always the accent.
 - Status colours appear as a 6 px dot, an icon, or text; never as a filled panel. `*-subtle` backgrounds are only for inline banners and badges.
-- Contrast: `--text-primary` and `--text-secondary` on any `--bg-*` ≥ 4.5:1; `--text-tertiary` ≥ 3:1 and never used for information a user must read to proceed. `pnpm ui:contrast` checks every pair and fails CI below these.
+- Contrast: `--text-primary` and `--text-secondary` on any `--bg-*` ≥ 4.5:1; `--text-tertiary` ≥ 3:1 and never used for information a user must read to proceed; `--text-on-accent` on the accent and `--accent-text` on surfaces ≥ 4.5:1; each `--cat-<c>` on its tile and on `--bg-surface` ≥ 3:1. `pnpm ui:contrast` checks every pair and fails CI below these.
 - Theme follows the system by default; the user can pin light or dark. Both are first-class and both are in every screenshot review.
 
 ### 2.2 Type
@@ -87,14 +99,16 @@ Rules:
 
 | Thing | Value |
 |---|---|
-| Control heights | 24 (compact, canvas toolbars), **28 (default)**, 32 (dialog primary actions, sign-in) |
-| Icon size | 16 in controls, 14 inside card rows, 20 in the left rail |
-| Icon set | Lucide, stroke 1.5, never filled, never mixed with another set |
-| Row height | 28 (lists, menus), 32 (tables), 36 (card rows on canvas) |
+| Control heights | 28 (compact, canvas toolbars, chips), **32 (default)**, 40 (sign-in, large actions) |
+| Icon size | 16 in controls, 14 inside card rows, 20 in the left rail; icon tiles 24 / 32 / 40 |
+| Icon set | Lucide, stroke 1.75, never filled, never mixed with another set |
+| Row height | 32 (lists, menus, node outputs), 52 (tables), 36 (card rows on canvas) |
 | Panel padding | 12 horizontal, 12 vertical; sections separated by a hairline, not by gaps |
-| Left rail | 48 wide; resource panel 240; inspector 360 (resizable 320–520); emulator 380 (resizable 340–560) |
-| Top bar | 44 high |
-| Canvas node width | 280 fixed; grows in height with cards |
+| Left rail | 60 wide; resource panel 272; inspector 360 (resizable 320–520); emulator 380 (resizable 340–560) |
+| Top bar | 52 high, full width, brand at the start |
+| Content column | 1200 max, centred, 32 side padding (lists and settings) |
+| Canvas node width | 288 fixed; grows in height with cards |
+| Ports | 10 px dot with a 2 px surface ring, 26 px hit area |
 | Canvas grid | 16 px dots at 20% of `--text-tertiary`; snap to 8 |
 | Hit target | ≥ 24 × 24 for anything clickable |
 
@@ -104,11 +118,12 @@ A hierarchy, so shapes signal what a thing is.
 
 | Token | px | Applies to |
 |---|---|---|
-| `--radius-xs` | 3 | Badges, tags, card rows inside a node, keyboard hints |
-| `--radius-sm` | 5 | Buttons, inputs, selects, menu items |
-| `--radius-md` | 8 | Canvas nodes, popovers, menus, toasts |
-| `--radius-lg` | 12 | Dialogs, command palette |
-| `--radius-full` | 999 | Avatars, switch tracks, status dots. Nothing else. |
+| `--radius-xs` | 4 | Keycaps, counts |
+| `--radius-sm` | 8 | Buttons, inputs, selects, card rows inside a node, icon tiles (32) |
+| `--radius-md` | 10 | Toolbars, rail items, banners, popovers, menus |
+| `--radius-lg` | 14 | Canvas nodes, tables, panels, the minimap |
+| `--radius-xl` | 18 | Dialogs, command palette |
+| `--radius-full` | 999 | Avatars, switch tracks, status dots, badges, filter chips. Nothing else. |
 
 Panels docked to the window edge have radius 0.
 
@@ -116,7 +131,8 @@ Panels docked to the window edge have radius 0.
 
 | Level | Token | Value (light) | Used by |
 |---|---|---|---|
-| 0 | — | hairline border only | Everything docked: panels, nodes at rest, inputs |
+| 0 | — | hairline border only | Everything docked: panels, inputs, tables |
+| 0.5 | `--shadow-node` | `0 1px 2px …/0.05, 0 2px 8px -2px …/0.06` (light); none (dark) | Canvas nodes: objects that can be picked up |
 | 1 | `--shadow-pop` | `0 4px 12px -2px oklch(0 0 0 / 0.08), 0 1px 2px oklch(0 0 0 / 0.04)` + hairline | Menus, popovers, tooltips, toasts |
 | 2 | `--shadow-drag` | `0 10px 24px -6px oklch(0 0 0 / 0.14)` | A node or card while it is being dragged |
 | 3 | `--shadow-modal` | `0 20px 48px -12px oklch(0 0 0 / 0.20)` + hairline | Dialogs, command palette |
@@ -209,33 +225,32 @@ Wireframes show structure and density, not final pixels. `│` and `─` are hai
 ### 5.1 Studio canvas (the main screen)
 
 ```
-┌──┬──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│  │ Engosoft / Majed / Main workflow                    Saved   ⚠ 2   Draft ▾   [ Emulator ] [Publish]  │ 44
-├──┼───────────────┬──────────────────────────────────────────────────────────┬───────────────────────┤
-│▣ │ Workflows   + │  · · · · · · · · · · · · · · · · · · · · · · · · · · · ·  │ Inspector │ Emulator  │
-│◫ │ ▸ Main        │  ┌ ▷ Start ────────┐      ┌ ▤ Greet ──────────── ⋯ ┐     │───────────────────────│
-│▤ │   Refunds     │  │                 ○──────▶ ✉ أهلاً {{user.name}}   │     │ Ask                   │
-│{}│   Book lesson │  └─────────────────┘      │ ? Choose language     ○─┐   │                       │
-│⟲ │   Error       │                           │ ⑂ VIP customer        ○─┼─▶ │ Question              │
-│✓ │               │                           │                  next ○─┘   │ ┌───────────────────┐ │
-│≡ │ Triggers      │                           └────────────────────────┘     │ │ Choose language   │ │
-│  │   order_shipp…│        ┌ ✦ Assistant ─────────────── ⋯ ┐                 │ └───────────────────┘ │
-│  │               │        │ Help the customer with orders… │                 │ Type      [Choice ▾]  │
-│  │               │        │ Tools  searchDocs · orders     │                 │ Options               │
-│  │               │        │ ───────────────────────────────│                 │  العربية      ar   ⋮  │
-│  │               │        │ resolved                     ○─┼──▶ End          │  English      en   ⋮  │
-│  │               │        │ needs_refund                 ○─┼──▶ Refunds      │  + Add option         │
-│⚙ │               │        └────────────────────────────────┘                 │ Save answer to        │
-│  │               │                                    [−] 100% [+] ⤢ ↶ ↷   │  conversation.language│
-└──┴───────────────┴──────────────────────────────────────────────────────────┴───────────────────────┘
- 48      240                              fluid                                        360
+┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ ▣ Botbress │ Engosoft / Store assistant / Main [Draft]        ✓ Saved  ⓘ2 ⚠1 │ [▷ Test] [Publish] │ 52
+├────┬─────────────────┬──────────────────────────────────────────────────────┬───────────────────────┤
+│ ⌂  │ Nodes  Workflows│            [ ↖ ✋ │ ↶ ↷ │ ⤢ ▦ ]                       │ ✦ Order assistant   × │
+│ ── │ ┌ Search nodes ┐│  · · · · · · · · · · · · · · · · · · · · · · · · · ·   │   Autonomous · 2 exits│
+│ ▣  │ (All)(Triggers) │  ┌[▷] Start ─────────┐    ┌[▤] Greeting ──────────┐     │ Configure  Issues     │
+│ ◫  │ (Logic)(AI)     │  │ The conversation… │    │   Standard · 3 cards  │     │ Name                  │
+│ ▤  │ ▾ Triggers   1  │  │             next ●──────▶ ✉ Welcome to …       │     │ [Order assistant    ] │
+│ {} │  [⚡] Trigger    │  └───────────────────┘    │ ⑂ Order · Shipping     │     │ Instructions          │
+│ ⟲  │ ▾ Logic      1  │                           │            Order ●─────┼──▶  │ [Help the customer…  ]│
+│ ✓  │  [▤] Standard   │                           └────────────────────────┘     │ Temperature ──●── 0.3 │
+│ ≡  │ ▾ AI         1  │                                                          │ Steps per turn [6]    │
+│    │  [✦] Autonomous │  [− 68% +]                                    ┌minimap┐  │ Talks with the user ◉ │
+│ ⚙  │ ▾ Flow       2  │                                               └───────┘  │                       │
+└────┴─────────────────┴──────────────────────────────────────────────────────────┴───────────────────────┘
+  60        272                               fluid                                         360
 ```
 
-- Left rail (icons with tooltips): Workflows, Knowledge, Tables, Variables, Versions, Evals, Conversations; Settings at the bottom.
-- The right panel has two tabs: Inspector (for the selection) and Emulator. `E` toggles the emulator; with a wide window (≥ 1680 px) they can sit side by side.
-- A node header shows icon, name and a menu. Standard nodes list their cards; each card is one row with a one-line summary generated from its config. Autonomous nodes show the first line of instructions, the tool names, then one row per exit.
-- Outputs are dots on the right edge, aligned with the row they belong to. Transitions enter nodes on the left edge.
-- Issues: a small marker on the card or node and a count in the top bar that opens the Issues panel.
+- **Top bar** (full width): brand mark and name; breadcrumb (workspace / bot / workflow) with a Draft badge; save state with its icon; the issue count; Test (secondary) and Publish (the view's one primary button).
+- **Rail**: Home, a hairline, then Workflows, Knowledge, Tables, Variables, Versions, Evals, Conversations; Settings at the bottom. The active item is a filled accent tile; the rest are quiet icons with tooltips.
+- **Node library** (resource panel): tabs Nodes and Workflows. Nodes has a search field, filter chips (All, Triggers, Logic, AI, Flow) and collapsible groups with counts; each entry is a category icon tile, the node's name and one line on what it does. Click adds the node at the canvas centre; dragging drops it where it lands; either way the new node is selected. Entries only valid in some workflow kinds (Exit, Error handler) appear only there.
+- **Nodes**: a header with the category icon tile, the name (bold, kept next to the icon whatever its direction) and a one-line subtitle (type and the count that matters: cards, or exits and tools); a hairline; card rows as inset pills on `--bg-subtle` with a category-coloured icon; outputs as right-aligned labels with a category-coloured port on the node's end edge. Transitions enter at a port on the header's start edge. The border is the category border colour; a node with an error has an error border; the selected node has an accent border and a 2 px accent outline.
+- **Transitions**: bezier curves, 1.5 px `--text-tertiary` with an arrowhead; selected: 2 px accent.
+- **Toolbars** float: tools (Select `V`, Pan `H`), undo, redo, fit and minimap at the top centre; zoom at the bottom start. The minimap sits at the bottom end, its blocks in category colours.
+- **Inspector**: docked on the end side while exactly one node is selected (`Esc` closes it). Header with a 40 px icon tile, name and subtitle; tabs Configure and Issues. Edits commit on blur, so one edit is one undo step.
+- Issues: a marker on the card or node, an error border, and a count in the top bar that opens the Issues panel.
 
 **Interaction**
 
@@ -449,7 +464,7 @@ Tabs: General, Members (table; invite; role select), API keys, Models (provider 
 
 ### 5.14 Sign in
 
-Centred 360 px column on `--bg-canvas`: product name in `text-title`, "Sign in" in `text-display`, email, password, primary button, provider buttons. Nothing else on the page.
+Two halves (ADR-017). Start: the brand at the top, then a 380 px column centred in the remaining height with "Sign in" in `text-display`, one line on what the product does, email, password, the large primary button and provider buttons. End: on `--bg-canvas`, a static still of what the Studio builds, a Start node joined to an Autonomous node with Arabic content, and a short Arabic test conversation. The still is markup, hidden from assistive technology, never a screenshot.
 
 ### 5.15 Command palette
 
@@ -509,7 +524,7 @@ Mandatory for every task that changes anything visible. A task is not done until
 ### 8.2 Checklist (answer each with pass or fail and one sentence of evidence)
 
 Colour
-1. Is the accent used only for selection, focus, the single primary action, active tab or links?
+1. Is the accent used only for selection, focus, the single primary action, active tab, active rail item or links? Are category colours used only on nodes, ports, the minimap and the node library?
 2. Is there any gradient, glow, blur, or colour used as decoration?
 3. Do status colours appear only where there is a status?
 4. Does the dark theme have the same hierarchy as the light one (not just inverted)?
@@ -520,7 +535,7 @@ Type
 7. Is anything truncated mid-word, clipped, or overlapping?
 
 Shape and space
-8. Do radii follow the hierarchy (controls 5, nodes and popovers 8, dialogs 12)?
+8. Do radii follow the hierarchy (controls 8, toolbars and popovers 10, nodes and tables 14, dialogs 18)?
 9. Is any shadow on something that does not float?
 10. Is all spacing on the 4 px grid, and are similar things spaced identically?
 11. Is anything laid out as a grid of identical rounded cards where a table or list would be denser?

@@ -1,6 +1,6 @@
 import { SCREENSHOT_FIXTURES } from "@wakeel/testing/fixtures/rtl";
-import { Button, enterTransition, exitTransition, useMotionTokens } from "@wakeel/ui";
-import { Plus } from "lucide-react";
+import { Button, type Category, enterTransition, exitTransition, IconTile, useMotionTokens } from "@wakeel/ui";
+import { CircleStop, Code, LayoutList, type LucideIcon, Plus, Sparkles, UserRound, Zap } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { type ReactNode, useState } from "react";
 
@@ -14,9 +14,16 @@ export function Gallery() {
       <Section
         id="colour"
         title="Colour"
-        note="Grey does the work; the accent marks selection, focus and the one primary action."
+        note="Neutral surfaces; the indigo accent marks selection, focus and the one primary action."
       >
         <ColourSection />
+      </Section>
+      <Section
+        id="categories"
+        title="Node categories"
+        note="ADR-017. Only nodes, their ports and the node library use these colours."
+      >
+        <CategorySection />
       </Section>
       <Section id="type" title="Type" note="IBM Plex. Three weights; sentence case.">
         <TypeSection />
@@ -69,7 +76,7 @@ const TEXTS = [
   { token: "--text-primary", className: "text-primary", sample: "Main text" },
   { token: "--text-secondary", className: "text-secondary", sample: "Labels and secondary text" },
   { token: "--text-tertiary", className: "text-tertiary", sample: "Placeholders and metadata" },
-  { token: "--accent", className: "text-accent", sample: "Links" },
+  { token: "--accent-text", className: "text-accent-text", sample: "Links" },
 ];
 
 const STATUSES = [
@@ -150,10 +157,11 @@ const SPACES = [
 ];
 
 const RADII = [
-  { name: "xs · 3", className: "rounded-xs", use: "Badges" },
-  { name: "sm · 5", className: "rounded-sm", use: "Controls" },
-  { name: "md · 8", className: "rounded-md", use: "Nodes, popovers" },
-  { name: "lg · 12", className: "rounded-lg", use: "Dialogs" },
+  { name: "xs · 4", className: "rounded-xs", use: "Keycaps, counts" },
+  { name: "sm · 8", className: "rounded-sm", use: "Controls, card rows" },
+  { name: "md · 10", className: "rounded-md", use: "Toolbars, rail, banners" },
+  { name: "lg · 14", className: "rounded-lg", use: "Nodes, tables, panels" },
+  { name: "xl · 18", className: "rounded-xl", use: "Dialogs" },
 ];
 
 const SHADOWS = [
@@ -194,6 +202,36 @@ function ShapeSection() {
   );
 }
 
+const CATEGORIES: { category: Category; label: string; icon: LucideIcon; nodes: string }[] = [
+  { category: "trigger", label: "Trigger", icon: Zap, nodes: "Start, Entry, Trigger" },
+  {
+    category: "logic",
+    label: "Logic",
+    icon: LayoutList,
+    nodes: "Standard node; message, question and condition cards",
+  },
+  { category: "ai", label: "AI", icon: Sparkles, nodes: "Autonomous node; AI cards" },
+  { category: "tool", label: "Tool", icon: Code, nodes: "Code, knowledge, table and workflow cards; notes" },
+  { category: "human", label: "Human", icon: UserRound, nodes: "Handoff; error handler" },
+  { category: "flow", label: "Flow", icon: CircleStop, nodes: "End, Exit" },
+];
+
+function CategorySection() {
+  return (
+    <div className="grid grid-cols-3 gap-5">
+      {CATEGORIES.map((c) => (
+        <div key={c.category} className="flex items-center gap-5 rounded-lg border border-hairline bg-surface p-5">
+          <IconTile category={c.category} icon={c.icon} size="lg" />
+          <div className="flex min-w-0 flex-col">
+            <span className="text-body font-semibold text-primary">{c.label}</span>
+            <span className="text-small text-secondary">{c.nodes}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ButtonSection() {
   return (
     <div className="flex flex-col gap-5">
@@ -209,9 +247,9 @@ function ButtonSection() {
         </Button>
       </div>
       <div className="flex flex-wrap items-center gap-4">
-        <Button size="compact">Compact · 24</Button>
-        <Button>Default · 28</Button>
-        <Button size="large">Large · 32</Button>
+        <Button size="compact">Compact · 28</Button>
+        <Button>Default · 32</Button>
+        <Button size="large">Large · 40</Button>
       </div>
     </div>
   );

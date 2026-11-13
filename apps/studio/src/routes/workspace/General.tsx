@@ -33,7 +33,7 @@ export function General({ workspaceId }: { workspaceId: string }) {
 
   return (
     <SettingsLayout workspaceId={workspaceId} tab="general">
-      <div className="flex max-w-inspector-max flex-col gap-6 px-5 py-8">
+      <div className="flex max-w-inspector-max flex-col gap-6 rounded-lg border border-hairline bg-surface p-8">
         {workspace.isError ? <ProblemBanner error={workspace.error} /> : null}
         {workspace.isPending ? (
           <div className="flex flex-col gap-6" aria-busy="true">

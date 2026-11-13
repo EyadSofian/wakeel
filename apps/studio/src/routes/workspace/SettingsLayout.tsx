@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { tabClasses } from "@wakeel/ui";
 import type { ReactNode } from "react";
 import { AppShell } from "../../shell/AppShell";
+import { Page, PageHeader } from "../../shell/PageHeader";
 import { WorkspaceSwitcher } from "../../shell/WorkspaceSwitcher";
 
 export type SettingsTab = "general" | "members" | "api-keys";
@@ -28,16 +29,15 @@ export function SettingsLayout({
   children: ReactNode;
 }) {
   return (
-    <AppShell
-      title={<WorkspaceSwitcher workspaceId={workspaceId} />}
-      active="Settings"
-      workspaceId={workspaceId}
-      actions={actions}
-    >
-      <div className="flex flex-col">
-        <div className="flex flex-col gap-2 border-b border-hairline px-5 pt-6">
-          <h1 className="text-heading text-primary">Settings</h1>
-          <nav aria-label="Settings" className="flex gap-6">
+    <AppShell title={<WorkspaceSwitcher workspaceId={workspaceId} />} active="Settings" workspaceId={workspaceId}>
+      <Page>
+        <div className="flex flex-col gap-6">
+          <PageHeader
+            title="Settings"
+            description="The workspace's name, who can work in it, and the keys that call its API."
+            actions={actions}
+          />
+          <nav aria-label="Settings" className="flex gap-7 border-b border-hairline">
             {TABS.map((t) => (
               <Link
                 key={t.id}
@@ -52,7 +52,7 @@ export function SettingsLayout({
           </nav>
         </div>
         {children}
-      </div>
+      </Page>
     </AppShell>
   );
 }

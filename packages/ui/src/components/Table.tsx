@@ -1,14 +1,17 @@
 import type { HTMLAttributes, ReactNode, TdHTMLAttributes, ThHTMLAttributes } from "react";
 
 /**
- * Table (design system §4 DataTable, §2.3): sticky header on `--bg-subtle`, 32 px rows, hairlines
- * between rows, numbers in tabular figures. Plain table markup, so screen readers get headers.
+ * Table (design system §4 DataTable, ADR-017): a bordered, rounded block with a quiet header, 52 px
+ * rows, hairlines between rows, numbers in tabular figures. Plain table markup, so screen readers get
+ * headers.
  */
 export function Table({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <table aria-label={label} className="w-full border-collapse text-start text-body">
-      {children}
-    </table>
+    <div className="overflow-hidden rounded-lg border border-hairline bg-surface">
+      <table aria-label={label} className="w-full border-collapse text-start text-body">
+        {children}
+      </table>
+    </div>
   );
 }
 
@@ -21,7 +24,7 @@ export function Th({ className, children, ...rest }: ThHTMLAttributes<HTMLTableC
     <th
       scope="col"
       className={[
-        "h-row-table whitespace-nowrap border-b border-hairline px-5 text-start text-small font-medium text-secondary",
+        "h-control-lg whitespace-nowrap border-b border-hairline px-7 text-start text-small font-medium text-secondary",
         className,
       ]
         .filter(Boolean)
@@ -35,7 +38,12 @@ export function Th({ className, children, ...rest }: ThHTMLAttributes<HTMLTableC
 
 export function Tr({ className, children, ...rest }: HTMLAttributes<HTMLTableRowElement>) {
   return (
-    <tr className={["border-b border-hairline", className].filter(Boolean).join(" ")} {...rest}>
+    <tr
+      className={["border-b border-hairline transition-colors last:border-b-0 hover:bg-subtle", className]
+        .filter(Boolean)
+        .join(" ")}
+      {...rest}
+    >
       {children}
     </tr>
   );
@@ -44,7 +52,7 @@ export function Tr({ className, children, ...rest }: HTMLAttributes<HTMLTableRow
 export function Td({ className, children, ...rest }: TdHTMLAttributes<HTMLTableCellElement>) {
   return (
     <td
-      className={["h-row-table whitespace-nowrap px-5 align-middle tabular-nums", className].filter(Boolean).join(" ")}
+      className={["h-row-table whitespace-nowrap px-7 align-middle tabular-nums", className].filter(Boolean).join(" ")}
       {...rest}
     >
       {children}
