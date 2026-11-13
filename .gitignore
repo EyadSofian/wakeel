@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+.turbo/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.DS_Store
+apps/studio/.shots/
+apps/studio/.motion/
+playwright-report/
+test-results/
+.claude/.cc-writes/
+.claude/settings.local.json

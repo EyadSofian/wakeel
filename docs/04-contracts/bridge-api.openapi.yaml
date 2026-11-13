@@ -1,0 +1,1000 @@
+openapi: 3.1.0
+info:
+  title: Bridge API
+  version: "2026-11-01"
+  summary: Connect any inbox or channel system to a bot.
+  description: |
+    The Bridge API is the only way messages reach a bot and replies leave it.
+
+    **Inbound.** Your system sends user messages and events for a conversation that *you* identify
+    with your own id. The conversation and the user are created the first time you mention them.
+
+    **Outbound.** Bot output is delivered as signed webhook events, ordered per conversation.
+    For simple callers the same output can be returned in the HTTP response (`wait`) or streamed (SSE).
+
+    **Ids.** Path parameters named `external…` are *your* ids. Ids in response bodies that start with a
+    prefix (`conv_`, `msg_`, `evt_`, `turn_`) are ours.
+
+    **Errors.** Every failure is an RFC 9457 problem document with a stable `code` and a `fix` sentence.
+
+    **Verifying a webhook.**
+    1. Read `X-Wakeel-Signature: t=<unix>,v1=<hex>[,v1=<hex>]`.
+    2. Reject if `t` is more than 300 seconds from your clock.
+    3. Compute `HMAC-SHA256(secret, t + "." + rawBody)` as lowercase hex over the exact bytes received.
+    4. Accept if it equals any `v1` value (constant-time compare). Two values appear while a secret is rotated.
+    5. Treat a repeated `X-Wakeel-Event-Id` as already processed and return 200.
+
+    Test vector: secret `whsec_test_0123456789abcdef`, `t=1794567890`, body `{"hello":"world"}`
+    → `v1=48e110524bac0ba8d47a2b9def6a2478ca69a3ac494385caa3c7f8616dfc623a`
+    (computed with Node `crypto.createHmac`; the signing implementation must reproduce it in a unit test).
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: https://api.example.com/v1/bridge
+    description: Replace with the deployment's API host.
+security:
+  - bridgeKey: []
+tags:
+  - name: Messages
+    description: Send user input to the bot.
+  - name: Conversations
+    description: Inspect and control a conversation.
+  - name: Users
+    description: Keep user data in sync.
+  - name: Delivery
+    description: Inspect and replay webhook deliveries.
+  - name: Connection
+    description: The connection this key belongs to.
+
+paths:
+  /conversations/{externalConversationId}/messages:
+    parameters:
+      - $ref: "#/components/parameters/ExternalConversationId"
+    post:
+      tags: [Messages]
+      operationId: sendMessage
+      summary: Send a user message
+      description: |
+        Records the message and starts a turn. Returns immediately with `202` unless `wait` is set
+        or the request accepts `text/event-stream`.
+
+        If the conversation is handed off, the message is stored and the bot does not reply
+        (`status: "handed_off"`).
+      parameters:
+        - $ref: "#/components/parameters/Wait"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+            examples:
+              text:
+                summary: Text with user data
+                value:
+                  userId: "cw_contact_812"
+                  user: { name: "Eyad Sofian", locale: "ar-EG", attributes: { plan: "pro", odooPartnerId: 4411 } }
+                  message: { type: "text", text: "عايز أعرف حالة الطلب رقم 5678" }
+                  externalMessageId: "cw_msg_99120"
+              postback:
+                summary: The user picked an option
+                value:
+                  message: { type: "postback", value: "track", label: "Track it" }
+      responses:
+        "200":
+          description: The turn finished within the wait time. Also the SSE response.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TurnResult"
+            text/event-stream:
+              schema:
+                type: string
+                description: |
+                  Server-sent events. Each event has `event: <type>` and `data: <BridgeEvent JSON>`.
+                  The stream ends after `turn.completed`.
+        "202":
+          description: Accepted. Output will arrive by webhook, or poll the turn.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Accepted"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+
+    get:
+      tags: [Conversations]
+      operationId: listMessages
+      summary: List the transcript
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Messages in ascending order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Message" }
+                  nextCursor: { type: [string, "null"] }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /conversations/{externalConversationId}/events:
+    parameters:
+      - $ref: "#/components/parameters/ExternalConversationId"
+    post:
+      tags: [Messages]
+      operationId: sendEvent
+      summary: Send a custom event
+      description: Starts the Trigger node whose event name matches. Ignored (and recorded) if none matches.
+      parameters:
+        - $ref: "#/components/parameters/Wait"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SendEventRequest" }
+            example:
+              userId: "cw_contact_812"
+              name: "order_shipped"
+              payload: { orderNumber: "5678", carrier: "Aramex" }
+      responses:
+        "200":
+          description: The turn finished within the wait time.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TurnResult" }
+        "202":
+          description: Accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Accepted" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+    get:
+      tags: [Delivery]
+      operationId: listConversationEvents
+      summary: Poll outbound events for a conversation
+      description: For bridges without a webhook. Returns ordered, non-ephemeral events with `seq` greater than `after`.
+      parameters:
+        - name: after
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Events in ascending `seq`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/BridgeEvent" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /conversations/{externalConversationId}:
+    parameters:
+      - $ref: "#/components/parameters/ExternalConversationId"
+    get:
+      tags: [Conversations]
+      operationId: getConversation
+      summary: Get a conversation
+      responses:
+        "200":
+          description: The conversation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Conversation" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /conversations/{externalConversationId}/handoff/release:
+    parameters:
+      - $ref: "#/components/parameters/ExternalConversationId"
+    post:
+      tags: [Conversations]
+      operationId: releaseHandoff
+      summary: Give the conversation back to the bot
+      description: |
+        Call this when the human agent is done. The bot resumes on the next user message
+        (or immediately runs a `handoff_released` trigger if the bot has one).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  maxLength: 2000
+                  description: What the agent did; available to the bot as `event.payload.note`.
+      responses:
+        "200":
+          description: Released.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Conversation" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /conversations/{externalConversationId}/end:
+    parameters:
+      - $ref: "#/components/parameters/ExternalConversationId"
+    post:
+      tags: [Conversations]
+      operationId: endConversation
+      summary: End a conversation
+      description: Clears conversation state. User variables are kept. The next message starts a new session under the same id.
+      responses:
+        "200":
+          description: Ended.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Conversation" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /conversations/{externalConversationId}/tool-results:
+    parameters:
+      - $ref: "#/components/parameters/ExternalConversationId"
+    post:
+      tags: [Conversations]
+      operationId: submitToolResult
+      summary: Resume a suspended tool
+      description: Supplies the result of a tool that paused the conversation (status `waiting_external`).
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toolCallId]
+              properties:
+                toolCallId: { type: string }
+                result: {}
+                error:
+                  type: object
+                  required: [message]
+                  properties:
+                    message: { type: string }
+      responses:
+        "202":
+          description: Accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Accepted" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /users/{externalUserId}:
+    parameters:
+      - name: externalUserId
+        in: path
+        required: true
+        schema: { type: string, minLength: 1, maxLength: 255 }
+    put:
+      tags: [Users]
+      operationId: updateUser
+      summary: Create or update a user
+      description: Merges the given data into the stored user without starting a turn. `attributes` keys set to `null` are removed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserData" }
+      responses:
+        "200":
+          description: The stored user.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/Problem" }
+
+  /turns/{turnId}:
+    get:
+      tags: [Conversations]
+      operationId: getTurn
+      summary: Get a turn's result
+      parameters:
+        - name: turnId
+          in: path
+          required: true
+          schema: { type: string, pattern: "^turn_[0-9a-z]{26}$" }
+      responses:
+        "200":
+          description: The turn; `status` is `running` until it finishes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TurnResult" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /deliveries:
+    get:
+      tags: [Delivery]
+      operationId: listDeliveries
+      summary: List webhook deliveries
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, delivered, failed, dead] }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Deliveries, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Delivery" }
+                  nextCursor: { type: [string, "null"] }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /deliveries/{eventId}/replay:
+    post:
+      tags: [Delivery]
+      operationId: replayDelivery
+      summary: Send an event again
+      description: Re-queues a dead or failed event. It is sent out of order with its original `seq` and `id`.
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string, pattern: "^evt_[0-9a-z]{26}$" }
+      responses:
+        "202":
+          description: Queued.
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /connection:
+    get:
+      tags: [Connection]
+      operationId: getConnection
+      summary: Get this connection
+      responses:
+        "200":
+          description: The connection the key belongs to.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Connection" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /connection/test:
+    post:
+      tags: [Connection]
+      operationId: testWebhook
+      summary: Send a test event to the webhook
+      description: Sends a signed `turn.completed` event flagged `ephemeral` to the configured URL and reports the result.
+      responses:
+        "200":
+          description: Result of the attempt.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [delivered]
+                properties:
+                  delivered: { type: boolean }
+                  statusCode: { type: integer }
+                  durationMs: { type: integer }
+                  error: { type: string }
+        "401": { $ref: "#/components/responses/Problem" }
+
+webhooks:
+  bridgeEvent:
+    post:
+      operationId: receiveBridgeEvent
+      summary: An event from the bot
+      description: |
+        Sent to the connection's webhook URL. Respond with any 2xx within 10 seconds.
+        Any other response, or a timeout, is retried after 5 s, 30 s, 2 min, 10 min, 30 min, 2 h, 6 h and 12 h,
+        then the event is dead-lettered. Events for one conversation are delivered in `seq` order;
+        the next is not sent until the current one succeeds or is dead-lettered.
+      parameters:
+        - name: X-Wakeel-Signature
+          in: header
+          required: true
+          schema: { type: string }
+          example: "t=1794567890,v1=48e110524bac0ba8d47a2b9def6a2478ca69a3ac494385caa3c7f8616dfc623a"
+        - name: X-Wakeel-Event-Id
+          in: header
+          required: true
+          schema: { type: string }
+        - name: X-Wakeel-Delivery-Attempt
+          in: header
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BridgeEvent" }
+            examples:
+              message:
+                summary: A bot message
+                value:
+                  id: "evt_01jcqz3m5t8k2v9w4x6y7z0abc"
+                  apiVersion: "2026-11-01"
+                  type: "message.created"
+                  createdAt: "2026-11-13T10:15:02.412Z"
+                  connectionId: "conn_01jcqz1a2b3c4d5e6f7g8h9jkm"
+                  botId: "bot_01jcqy9z8x7w6v5t4s3r2q1pnm"
+                  conversation: { id: "conv_01jcqz2n4p6r8t0v2x4z6b8d0f", externalId: "cw_conv_3391" }
+                  user: { id: "eu_01jcqz2m3n4p5q6r7s8t9v0wxy", externalId: "cw_contact_812" }
+                  turnId: "turn_01jcqz3k7m9p1r3t5v7x9z1b3d"
+                  seq: 14
+                  ephemeral: false
+                  data:
+                    message:
+                      id: "msg_01jcqz3m4n5p6q7r8s9t0v1w2x"
+                      conversationId: "conv_01jcqz2n4p6r8t0v2x4z6b8d0f"
+                      seq: 27
+                      direction: "out"
+                      payload: { type: "text", text: "طلبك رقم 5678 اتشحن امبارح وهيوصلك يوم الخميس.", format: "markdown" }
+                      citations: []
+                      createdAt: "2026-11-13T10:15:02.401Z"
+              handoff:
+                summary: The bot asks for a human
+                value:
+                  id: "evt_01jcqz4a5b6c7d8e9f0g1h2jkm"
+                  apiVersion: "2026-11-01"
+                  type: "handoff.requested"
+                  createdAt: "2026-11-13T10:16:40.007Z"
+                  connectionId: "conn_01jcqz1a2b3c4d5e6f7g8h9jkm"
+                  botId: "bot_01jcqy9z8x7w6v5t4s3r2q1pnm"
+                  conversation: { id: "conv_01jcqz2n4p6r8t0v2x4z6b8d0f", externalId: "cw_conv_3391" }
+                  user: { id: "eu_01jcqz2m3n4p5q6r7s8t9v0wxy", externalId: "cw_contact_812" }
+                  seq: 16
+                  ephemeral: false
+                  data:
+                    reason: "Refund request above the bot's limit"
+                    summary: "العميل طلب استرجاع مبلغ الطلب 5678 بسبب تأخر الشحن."
+                    variables: { orderNumber: "5678", category: "operation" }
+      responses:
+        "2XX":
+          description: Received.
+
+components:
+  securitySchemes:
+    bridgeKey:
+      type: http
+      scheme: bearer
+      description: A bridge key (`wk_bridge_…`) created on the connection page. It identifies one connection and therefore one bot.
+
+  parameters:
+    ExternalConversationId:
+      name: externalConversationId
+      in: path
+      required: true
+      description: Your id for the conversation. Any URL-safe string up to 255 characters.
+      schema: { type: string, minLength: 1, maxLength: 255, pattern: "^[A-Za-z0-9._~:-]+$" }
+    Wait:
+      name: wait
+      in: query
+      description: Seconds to hold the request until the turn finishes. Omit for an immediate `202`.
+      schema: { type: integer, minimum: 1, maximum: 55 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      description: A unique value per logical request. The same key with the same body returns the first response for 24 hours.
+      schema: { type: string, minLength: 1, maxLength: 255 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+
+  responses:
+    Problem:
+      description: The request failed.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: "https://docs.example.com/errors/validation_failed"
+            title: "Some fields are not valid"
+            status: 400
+            code: "validation_failed"
+            fix: "Correct the highlighted fields and try again."
+            requestId: "req_01jcqz5p6q7r8s9t0v1w2x3y4z"
+            errors:
+              - { path: "message.text", code: "too_small", message: "Text cannot be empty" }
+
+  schemas:
+    Json:
+      description: Any JSON value.
+
+    UserData:
+      type: object
+      description: Merged into the stored user on every call.
+      properties:
+        name: { type: string, maxLength: 200 }
+        email: { type: string, format: email }
+        phone: { type: string, maxLength: 40 }
+        locale:
+          type: string
+          description: BCP 47 tag such as `ar-EG`.
+        attributes:
+          type: object
+          description: Free-form data readable by the bot as `user.attributes.*`. At most 16 KB.
+          additionalProperties: true
+
+    User:
+      type: object
+      required: [id, externalId, attributes, createdAt]
+      properties:
+        id: { type: string, pattern: "^eu_[0-9a-z]{26}$" }
+        externalId: { type: string }
+        name: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        locale: { type: string }
+        attributes: { type: object, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+
+    SendMessageRequest:
+      type: object
+      required: [message]
+      properties:
+        userId:
+          type: string
+          maxLength: 255
+          description: Your id for the end user. Required on the first message of a conversation.
+        user: { $ref: "#/components/schemas/UserData" }
+        message: { $ref: "#/components/schemas/UserMessage" }
+        externalMessageId:
+          type: string
+          maxLength: 255
+          description: Your id for this message. Used for de-duplication when no `Idempotency-Key` is sent.
+        metadata:
+          type: object
+          description: Opaque data available to the bot as `event.metadata`. At most 8 KB.
+          additionalProperties: true
+
+    SendEventRequest:
+      type: object
+      required: [name]
+      properties:
+        userId: { type: string, maxLength: 255 }
+        user: { $ref: "#/components/schemas/UserData" }
+        name: { type: string, minLength: 1, maxLength: 64 }
+        payload: { type: object, additionalProperties: true }
+
+    Accepted:
+      type: object
+      required: [conversationId, turnId, status]
+      properties:
+        conversationId: { type: string }
+        userId: { type: string }
+        messageId: { type: string, description: Present when a message was stored. }
+        turnId: { type: string }
+        status:
+          type: string
+          enum: [queued, handed_off]
+          description: "`handed_off`: stored, but the bot will not reply until the handoff is released."
+
+    TurnResult:
+      type: object
+      required: [turnId, conversationId, status, messages, events]
+      properties:
+        turnId: { type: string }
+        conversationId: { type: string }
+        status:
+          type: string
+          enum: [running, completed, waiting, handed_off, ended, failed]
+        messages:
+          type: array
+          description: Bot messages produced in this turn, in order.
+          items: { $ref: "#/components/schemas/Message" }
+        events:
+          type: array
+          description: Every non-ephemeral event of this turn, including the `message.created` events for the messages above.
+          items: { $ref: "#/components/schemas/BridgeEvent" }
+
+    Conversation:
+      type: object
+      required: [id, externalId, status, createdAt, lastActivityAt]
+      properties:
+        id: { type: string, pattern: "^conv_[0-9a-z]{26}$" }
+        externalId: { type: string }
+        user: { $ref: "#/components/schemas/User" }
+        status:
+          type: string
+          enum: [idle, waiting_input, waiting_external, handed_off, ended]
+        handoff:
+          type: [object, "null"]
+          properties:
+            requestedAt: { type: string, format: date-time }
+            reason: { type: string }
+            summary: { type: string }
+        createdAt: { type: string, format: date-time }
+        lastActivityAt: { type: string, format: date-time }
+        expiresAt: { type: [string, "null"], format: date-time }
+        endedAt: { type: [string, "null"], format: date-time }
+        endedReason: { type: [string, "null"] }
+
+    Option:
+      type: object
+      required: [label, value]
+      properties:
+        label: { type: string, minLength: 1, maxLength: 80 }
+        value: { type: string, minLength: 1, maxLength: 500 }
+
+    CardAction:
+      type: object
+      required: [type, label, value]
+      properties:
+        type:
+          type: string
+          enum: [postback, url, say]
+          description: "postback: `value` comes back as a postback · url: open `value` · say: send `value` as the user's text."
+        label: { type: string, minLength: 1, maxLength: 80 }
+        value: { type: string, minLength: 1, maxLength: 2000 }
+
+    CardBody:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120 }
+        subtitle: { type: string, maxLength: 300 }
+        imageUrl: { type: string, format: uri }
+        actions:
+          type: array
+          maxItems: 5
+          items: { $ref: "#/components/schemas/CardAction" }
+
+    TextMessage:
+      type: object
+      required: [type, text]
+      properties:
+        type: { const: text }
+        text: { type: string, minLength: 1, maxLength: 16000 }
+        format: { type: string, enum: [markdown, plain], default: markdown }
+    ImageMessage:
+      type: object
+      required: [type, url]
+      properties:
+        type: { const: image }
+        url: { type: string, format: uri }
+        alt: { type: string, maxLength: 300 }
+        caption: { type: string, maxLength: 8000 }
+    FileMessage:
+      type: object
+      required: [type, url, name]
+      properties:
+        type: { const: file }
+        url: { type: string, format: uri }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        mime: { type: string }
+        sizeBytes: { type: integer, minimum: 0 }
+    LocationMessage:
+      type: object
+      required: [type, latitude, longitude]
+      properties:
+        type: { const: location }
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+        title: { type: string, maxLength: 120 }
+        address: { type: string, maxLength: 300 }
+    ChoiceMessage:
+      type: object
+      description: Buttons. If your channel cannot show buttons, render a numbered list and map the reply to a postback.
+      required: [type, text, options]
+      properties:
+        type: { const: choice }
+        text: { type: string, minLength: 1, maxLength: 8000 }
+        options:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: { $ref: "#/components/schemas/Option" }
+    DropdownMessage:
+      type: object
+      required: [type, text, options]
+      properties:
+        type: { const: dropdown }
+        text: { type: string, minLength: 1, maxLength: 8000 }
+        placeholder: { type: string, maxLength: 80 }
+        options:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/Option" }
+    CardMessage:
+      allOf:
+        - $ref: "#/components/schemas/CardBody"
+        - type: object
+          required: [type]
+          properties:
+            type: { const: card }
+    CarouselMessage:
+      type: object
+      required: [type, items]
+      properties:
+        type: { const: carousel }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items: { $ref: "#/components/schemas/CardBody" }
+    CustomMessage:
+      type: object
+      description: Bridge-specific content. `name` tells you how to read `data`.
+      required: [type, name, data]
+      properties:
+        type: { const: custom }
+        name: { type: string, minLength: 1, maxLength: 64 }
+        data: { $ref: "#/components/schemas/Json" }
+    PostbackMessage:
+      type: object
+      description: The user picked a button, dropdown item or card action.
+      required: [type, value]
+      properties:
+        type: { const: postback }
+        value: { type: string, minLength: 1, maxLength: 500 }
+        label: { type: string, maxLength: 80 }
+
+    UserMessage:
+      oneOf:
+        - $ref: "#/components/schemas/TextMessage"
+        - $ref: "#/components/schemas/ImageMessage"
+        - $ref: "#/components/schemas/FileMessage"
+        - $ref: "#/components/schemas/LocationMessage"
+        - $ref: "#/components/schemas/PostbackMessage"
+        - $ref: "#/components/schemas/CustomMessage"
+      discriminator:
+        propertyName: type
+        mapping:
+          text: "#/components/schemas/TextMessage"
+          image: "#/components/schemas/ImageMessage"
+          file: "#/components/schemas/FileMessage"
+          location: "#/components/schemas/LocationMessage"
+          postback: "#/components/schemas/PostbackMessage"
+          custom: "#/components/schemas/CustomMessage"
+
+    BotMessage:
+      oneOf:
+        - $ref: "#/components/schemas/TextMessage"
+        - $ref: "#/components/schemas/ImageMessage"
+        - $ref: "#/components/schemas/FileMessage"
+        - $ref: "#/components/schemas/LocationMessage"
+        - $ref: "#/components/schemas/ChoiceMessage"
+        - $ref: "#/components/schemas/DropdownMessage"
+        - $ref: "#/components/schemas/CardMessage"
+        - $ref: "#/components/schemas/CarouselMessage"
+        - $ref: "#/components/schemas/CustomMessage"
+      discriminator:
+        propertyName: type
+        mapping:
+          text: "#/components/schemas/TextMessage"
+          image: "#/components/schemas/ImageMessage"
+          file: "#/components/schemas/FileMessage"
+          location: "#/components/schemas/LocationMessage"
+          choice: "#/components/schemas/ChoiceMessage"
+          dropdown: "#/components/schemas/DropdownMessage"
+          card: "#/components/schemas/CardMessage"
+          carousel: "#/components/schemas/CarouselMessage"
+          custom: "#/components/schemas/CustomMessage"
+
+    Citation:
+      type: object
+      required: [index, documentId, chunkId, title]
+      properties:
+        index: { type: integer, minimum: 1 }
+        documentId: { type: string }
+        chunkId: { type: string }
+        title: { type: string }
+        uri: { type: string }
+        snippet: { type: string, maxLength: 500 }
+
+    Message:
+      type: object
+      required: [id, conversationId, seq, direction, payload, createdAt]
+      properties:
+        id: { type: string, pattern: "^msg_[0-9a-z]{26}$" }
+        conversationId: { type: string }
+        seq: { type: integer, minimum: 0, description: Position in the transcript. }
+        direction: { type: string, enum: [in, out] }
+        payload:
+          oneOf:
+            - $ref: "#/components/schemas/BotMessage"
+            - $ref: "#/components/schemas/PostbackMessage"
+        citations:
+          type: array
+          items: { $ref: "#/components/schemas/Citation" }
+        turnId: { type: string }
+        externalId: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    EventEnvelope:
+      type: object
+      required: [id, apiVersion, type, createdAt, connectionId, botId, conversation, user, data]
+      properties:
+        id:
+          type: string
+          pattern: "^evt_[0-9a-z]{26}$"
+          description: Unique per event. Treat repeats as already processed.
+        apiVersion: { const: "2026-11-01" }
+        type: { type: string }
+        createdAt: { type: string, format: date-time }
+        connectionId: { type: string }
+        botId: { type: string }
+        conversation:
+          type: object
+          required: [id, externalId]
+          properties:
+            id: { type: string }
+            externalId: { type: string }
+        user:
+          type: object
+          required: [id, externalId]
+          properties:
+            id: { type: string }
+            externalId: { type: string }
+        turnId: { type: string }
+        seq:
+          type: integer
+          minimum: 1
+          description: Position in this conversation's ordered stream. Absent on ephemeral events. A gap means an earlier event was dead-lettered.
+        ephemeral:
+          type: boolean
+          default: false
+          description: Best-effort, unordered, never retried.
+
+    MessageCreatedEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          properties:
+            type: { const: message.created }
+            data:
+              type: object
+              required: [message]
+              properties:
+                message: { $ref: "#/components/schemas/Message" }
+    TypingEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          properties:
+            type: { const: typing }
+            data:
+              type: object
+              required: [state]
+              properties:
+                state: { type: string, enum: ["on", "off"] }
+    HandoffRequestedEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          properties:
+            type: { const: handoff.requested }
+            data:
+              type: object
+              required: [reason, summary]
+              properties:
+                reason: { type: string }
+                summary: { type: string, description: Short account of the conversation in its own language. Empty if disabled on the card. }
+                variables: { type: object, additionalProperties: true }
+    ConversationEndedEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          properties:
+            type: { const: conversation.ended }
+            data:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, enum: [completed, inactivity, manual, error] }
+                detail: { type: string }
+    TurnCompletedEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          properties:
+            type: { const: turn.completed }
+            data:
+              type: object
+              required: [status, messageCount, durationMs]
+              properties:
+                status: { type: string, enum: [completed, waiting, handed_off, ended, failed] }
+                messageCount: { type: integer, minimum: 0 }
+                durationMs: { type: integer, minimum: 0 }
+    ErrorEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          properties:
+            type: { const: error }
+            data:
+              type: object
+              required: [code, message, retryable]
+              properties:
+                code: { type: string }
+                message: { type: string, description: Safe to log. Not written for end users. }
+                retryable: { type: boolean }
+
+    BridgeEvent:
+      oneOf:
+        - $ref: "#/components/schemas/MessageCreatedEvent"
+        - $ref: "#/components/schemas/TypingEvent"
+        - $ref: "#/components/schemas/HandoffRequestedEvent"
+        - $ref: "#/components/schemas/ConversationEndedEvent"
+        - $ref: "#/components/schemas/TurnCompletedEvent"
+        - $ref: "#/components/schemas/ErrorEvent"
+
+    Delivery:
+      type: object
+      required: [eventId, eventType, status, attempt]
+      properties:
+        eventId: { type: string }
+        eventType: { type: string }
+        conversationId: { type: string }
+        seq: { type: integer }
+        status: { type: string, enum: [pending, delivered, failed, dead] }
+        attempt: { type: integer, minimum: 0 }
+        nextAttemptAt: { type: [string, "null"], format: date-time }
+        responseStatus: { type: [integer, "null"] }
+        error: { type: [string, "null"] }
+
+    Connection:
+      type: object
+      required: [id, botId, name, target, status, subscribedEvents]
+      properties:
+        id: { type: string }
+        botId: { type: string }
+        name: { type: string }
+        target:
+          type: string
+          enum: [production, draft]
+          description: Which bot definition this connection runs.
+        status: { type: string, enum: [active, paused, disabled] }
+        webhookUrl: { type: [string, "null"], format: uri }
+        subscribedEvents:
+          type: array
+          items:
+            type: string
+            enum: [message.created, typing, handoff.requested, conversation.ended, turn.completed, error]
+
+    Problem:
+      type: object
+      required: [type, title, status, code, fix, requestId]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        fix: { type: string }
+        requestId: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [path, code, message]
+            properties:
+              path: { type: string }
+              code: { type: string }
+              message: { type: string }
