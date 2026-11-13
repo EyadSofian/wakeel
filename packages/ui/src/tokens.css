@@ -251,3 +251,12 @@
   outline: var(--size-focus-ring) solid var(--accent);
   outline-offset: var(--size-focus-ring);
 }
+
+/*
+ * The search field at the top of a menu or the command palette shows focus as an accent rule
+ * under it (its label: `focus-within:border-accent`). The ring above would sit outside the field
+ * and be clipped by the rounded, overflow-hidden frame, leaving a second, partial line.
+ */
+.wk-focus-underline:focus-visible {
+  outline: none;
+}

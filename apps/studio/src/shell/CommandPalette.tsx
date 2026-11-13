@@ -163,7 +163,7 @@ function PaletteBody({ onDone }: { onDone: (run: () => void) => void }) {
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: keys typed in the search field move the list.
     <div className="flex min-h-0 flex-1 flex-col" onKeyDown={onKeyDown}>
-      <label className="relative block shrink-0 border-b border-hairline">
+      <label className="relative block shrink-0 border-b border-hairline transition-colors focus-within:border-accent">
         <span className="sr-only">Search commands and places</span>
         <Search
           className="pointer-events-none absolute start-6 top-1/2 size-icon -translate-y-1/2 text-tertiary"
@@ -186,7 +186,7 @@ function PaletteBody({ onDone }: { onDone: (run: () => void) => void }) {
           placeholder="Type a command or search…"
           dir="auto"
           spellCheck={false}
-          className="h-control-lg w-full bg-transparent pe-6 ps-11 text-body text-primary outline-hidden placeholder:text-tertiary"
+          className="wk-focus-underline h-control-lg w-full bg-transparent pe-6 ps-11 text-body text-primary outline-hidden placeholder:text-tertiary"
         />
       </label>
       <div
