@@ -5,7 +5,9 @@ import { AcceptInvite } from "./routes/auth/AcceptInvite";
 import { NewWorkspace } from "./routes/auth/NewWorkspace";
 import { SignIn, SignUp } from "./routes/auth/SignIn";
 import { BotCanvas } from "./routes/bot/BotCanvas";
+import { BotLayout } from "./routes/bot/BotLayout";
 import { Gallery } from "./routes/Gallery";
+import { VariablesScreen } from "./routes/variables/VariablesScreen";
 import { ApiKeys } from "./routes/workspace/ApiKeys";
 import { General } from "./routes/workspace/General";
 import { Home } from "./routes/workspace/Home";
@@ -84,13 +86,34 @@ const homeRoute = createRoute({
   },
 });
 
+/** One bot: loads its draft once for the canvas and the Variables screen (BotLayout). */
 const botRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: "/b/$botId",
   component: function BotRoute() {
     const { workspaceId } = workspaceRoute.useParams();
     const { botId } = botRoute.useParams();
-    return <RequireSession>{() => <BotCanvas key={botId} workspaceId={workspaceId} botId={botId} />}</RequireSession>;
+    return <RequireSession>{() => <BotLayout key={botId} workspaceId={workspaceId} botId={botId} />}</RequireSession>;
+  },
+});
+
+const botCanvasRoute = createRoute({
+  getParentRoute: () => botRoute,
+  path: "/",
+  component: function BotCanvasRoute() {
+    const { workspaceId } = workspaceRoute.useParams();
+    const { botId } = botRoute.useParams();
+    return <BotCanvas workspaceId={workspaceId} botId={botId} />;
+  },
+});
+
+const botVariablesRoute = createRoute({
+  getParentRoute: () => botRoute,
+  path: "/variables",
+  component: function BotVariablesRoute() {
+    const { workspaceId } = workspaceRoute.useParams();
+    const { botId } = botRoute.useParams();
+    return <VariablesScreen workspaceId={workspaceId} botId={botId} />;
   },
 });
 
@@ -155,7 +178,14 @@ export const router = createRouter({
     signUpRoute,
     newWorkspaceRoute,
     inviteRoute,
-    workspaceRoute.addChildren([homeRoute, botRoute, settingsIndexRoute, generalRoute, membersRoute, apiKeysRoute]),
+    workspaceRoute.addChildren([
+      homeRoute,
+      botRoute.addChildren([botCanvasRoute, botVariablesRoute]),
+      settingsIndexRoute,
+      generalRoute,
+      membersRoute,
+      apiKeysRoute,
+    ]),
     galleryRoute,
     errorPreviewRoute,
   ]),

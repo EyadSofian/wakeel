@@ -1,4 +1,4 @@
-import type { BotManifest, Workflow } from "@wakeel/contracts";
+import type { BotManifest, Refactor, Workflow } from "@wakeel/contracts";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { type Command, CommandRejected } from "./commands";
 import { emptyHistory, type History, record, redo, undo } from "./history";
@@ -54,6 +54,11 @@ export interface CanvasState {
   select(selection: Partial<Selection>): void;
   clearSelection(): void;
   updateManifest(update: (m: BotManifest) => BotManifest): void;
+  /**
+   * Applies a rename across the manifest, every workflow and every workflow's undo history (task
+   * 2.7). Renames are refactors, not undo steps: undo never brings back a name that is gone.
+   */
+  refactor(r: Refactor): void;
 
   // Used by the saver.
   docs(): { key: DocKey; state: DocState<BotManifest | Workflow> }[];
@@ -199,6 +204,29 @@ export function createCanvasStore(): CanvasStore {
       updateManifest(update) {
         const m = get().manifest;
         if (m) set({ manifest: { ...m, doc: update(m.doc) } });
+      },
+
+      refactor(r) {
+        const s = get();
+        const mapEntry = (e: History["past"][number]) => ({
+          ...e,
+          before: r.workflow(e.before),
+          after: r.workflow(e.after),
+        });
+        const workflows = Object.fromEntries(
+          Object.entries(s.workflows).map(([id, d]) => {
+            const doc = r.workflow(d.doc);
+            return [id, doc === d.doc ? d : { ...d, doc }];
+          }),
+        );
+        const history = Object.fromEntries(
+          Object.entries(s.history).map(([id, h]) => [
+            id,
+            { past: h.past.map(mapEntry), future: h.future.map(mapEntry) },
+          ]),
+        );
+        const manifest = s.manifest ? { ...s.manifest, doc: r.manifest(s.manifest.doc) } : s.manifest;
+        set({ workflows, history, ...(manifest ? { manifest } : {}) });
       },
 
       docs() {

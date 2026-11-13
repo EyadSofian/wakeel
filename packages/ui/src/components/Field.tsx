@@ -1,5 +1,11 @@
 import { ChevronDown } from "lucide-react";
-import { type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, useId } from "react";
+import {
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
+  useId,
+} from "react";
 
 /**
  * Field, Input and Select (design system §4). A field is a label, the control, and one line below
@@ -65,5 +71,21 @@ export function Select({ className, children, ...rest }: SelectHTMLAttributes<HT
         aria-hidden="true"
       />
     </span>
+  );
+}
+
+/** Textarea (design system §4): grows with its content from `rows` lines. */
+export function Textarea({ className, rows = 3, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      rows={rows}
+      className={[
+        "w-full rounded-sm border border-hairline bg-surface px-5 py-3 text-body text-primary placeholder:text-tertiary transition-colors field-sizing-content hover:border-strong focus-visible:border-accent aria-invalid:border-error",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      {...rest}
+    />
   );
 }

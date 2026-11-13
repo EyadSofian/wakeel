@@ -22,8 +22,12 @@ const mockStateFor = (screen: Screen, state: ScreenState): MockState => {
   return MOCK_STATES.find((m) => m === state) ?? "default";
 };
 
-const canvasFor = (state: ScreenState): CanvasFixture =>
-  state === "dense-300" || state === "issues" || state === "empty" ? state : "typical";
+const canvasFor = (screen: Screen, state: ScreenState): CanvasFixture | "variables" =>
+  screen.id === "variables"
+    ? "variables"
+    : state === "dense-300" || state === "issues" || state === "empty"
+      ? state
+      : "typical";
 
 /** Which card row of the first standard node each inspector state opens. */
 const CARD_ROW: Partial<Record<ScreenState, number>> = {
@@ -32,6 +36,7 @@ const CARD_ROW: Partial<Record<ScreenState, number>> = {
   "card-condition": 2,
   "card-invalid": 0,
   "card-rtl": 0,
+  picker: 1,
 };
 
 async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<void> {
@@ -96,6 +101,29 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
       await expect(page.getByRole("complementary").getByRole("alert")).toBeVisible();
     }
   }
+  if (state === "picker") {
+    // The Ask card's "Save the answer to" picker, open, with a new name typed.
+    const picker = page.getByRole("complementary").getByLabel("Save the answer to");
+    await picker.click();
+    await page.getByRole("combobox", { name: "Search variables" }).fill("order");
+    await expect(page.getByRole("listbox", { name: "Variables" }).getByRole("option").first()).toBeVisible();
+  }
+  if (screen.id === "variables" && !["loading", "error"].includes(state)) {
+    await expect(page.getByRole("heading", { name: "Conversation" })).toBeVisible();
+  }
+  if (state === "usages") {
+    await page.getByRole("button", { name: /^conversation\.topic: / }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+  }
+  if (state === "edit") {
+    await page.getByRole("button", { name: "Edit user.plan" }).click();
+    await page.getByRole("dialog").getByLabel("Name").fill("tier");
+    await expect(page.getByRole("dialog")).toContainText("will change to user.tier");
+  }
+  if (state === "delete-blocked") {
+    await page.getByRole("button", { name: "Delete conversation.topic" }).click();
+    await expect(page.getByRole("dialog", { name: "conversation.topic is in use" })).toBeVisible();
+  }
   if (state === "selection") {
     // Two nodes: one by click, one by Shift+click (design system §5.1 Selection).
     await page.locator(".react-flow__node").nth(2).locator("header").click();
@@ -120,7 +148,7 @@ for (const screen of selectedScreens()) {
         test(`${screen.id} ${name}`, async ({ page }) => {
           await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
           await page.setViewportSize({ width, height });
-          if (screen.mock) await mockApi(page, mockStateFor(screen, state), canvasFor(state));
+          if (screen.mock) await mockApi(page, mockStateFor(screen, state), canvasFor(screen, state));
           await page.goto(screen.route);
           if (screen.mock && state !== "loading") await page.waitForLoadState("networkidle");
           await page.evaluate(() => document.fonts.ready);

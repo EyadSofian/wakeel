@@ -12,6 +12,7 @@ export function AppShell({
   actions,
   active,
   workspaceId,
+  botId,
   panel,
   inspector,
   children,
@@ -22,6 +23,8 @@ export function AppShell({
   active?: string;
   /** The workspace the screen is in, for the rail's links. */
   workspaceId?: string;
+  /** The bot the screen is in; its destinations in the rail become links. */
+  botId?: string;
   /** Resource panel docked between the rail and the screen (node library, lists). */
   panel?: ReactNode;
   /** Inspector docked on the end side. */
@@ -35,6 +38,7 @@ export function AppShell({
         <LeftRail
           {...(active === undefined ? {} : { active })}
           {...(workspaceId === undefined ? {} : { workspaceId })}
+          {...(botId === undefined ? {} : { botId })}
         />
         {panel}
         <main className="min-h-0 min-w-0 flex-1 overflow-auto">{children}</main>

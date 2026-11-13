@@ -10,6 +10,7 @@ export * from "./json-schema";
 export * from "./message";
 export * from "./node";
 export * from "./platform";
+export * from "./references";
 export * from "./runtime";
 export * from "./seed";
 export * from "./table";
