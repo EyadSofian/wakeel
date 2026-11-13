@@ -12,7 +12,12 @@ export type ScreenState =
   // Canvas (task 2.4, design system §8.1): a 300-node flow, a multi-selection, validation issues.
   | "dense-300"
   | "selection"
-  | "issues";
+  | "issues"
+  // Task 2.5: the add-node and card menus, the shortcut sheet, the keyboard cursor in a node.
+  | "node-menu"
+  | "card-menu"
+  | "shortcuts"
+  | "cursor";
 
 export interface Screen {
   id: string;
@@ -121,7 +126,20 @@ SCREENS.push(
 SCREENS.push({
   id: "canvas",
   route: `/w/${WS}/b/bot_01m7a256m0a13warwhczsjhx9b`,
-  states: ["default", "empty", "dense-300", "selection", "issues", "loading", "error", "rtl"],
+  states: [
+    "default",
+    "empty",
+    "dense-300",
+    "selection",
+    "issues",
+    "loading",
+    "error",
+    "rtl",
+    "node-menu",
+    "card-menu",
+    "shortcuts",
+    "cursor",
+  ],
   sizes: DESKTOP,
   mock: true,
   interactions: [],

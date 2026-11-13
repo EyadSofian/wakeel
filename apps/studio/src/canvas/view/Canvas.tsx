@@ -16,6 +16,13 @@ import {
 import { type DragEvent, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAddNode } from "../add-node";
 import { useCanvas, useCanvasStore } from "../context";
+import { CanvasMenus } from "../interaction/CanvasMenus";
+import { ConnectionWatcher } from "../interaction/ConnectionWatcher";
+import { estimateSize, fitViewport } from "../interaction/layout";
+import { nodeRows } from "../interaction/rows";
+import { ShortcutSheet } from "../interaction/ShortcutSheet";
+import { useUi, useUiStore } from "../interaction/ui-store";
+import { useCanvasKeyboard } from "../interaction/use-canvas-keyboard";
 import type { groupIssues, NodeIssues } from "../issues";
 import { NODE_DRAG_TYPE } from "../library/NodeLibrary";
 import { type Command, commands } from "../store/commands";
@@ -39,6 +46,7 @@ const SNAP: [number, number] = [8, 8];
  */
 export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
   const store = useCanvasStore();
+  const ui = useUiStore();
   const wf = useCanvas((s) => (s.activeWorkflowId ? s.workflows[s.activeWorkflowId]?.doc : undefined));
   const selection = useCanvas((s) => s.selection);
   const [minimap, setMinimap] = useState(true);
@@ -177,10 +185,16 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
       if (state.isValid === true || !state.fromNode || state.fromHandle?.type !== "source" || !state.fromHandle.id)
         return;
       const to = nodeUnder(event);
-      if (to && targetable(to, state.fromNode.id))
-        run(commands.connect({ nodeId: state.fromNode.id, port: state.fromHandle.id }, to));
+      const from = { nodeId: state.fromNode.id, port: state.fromHandle.id };
+      if (to) {
+        if (targetable(to, from.nodeId)) run(commands.connect(from, to));
+        return;
+      }
+      // Released over empty canvas: the add-node menu, and the new node is wired from this output.
+      const at = pointOf(event);
+      if (at) ui.getState().set({ menu: { kind: "node", at, from } });
     },
-    [run, targetable, nodeUnder],
+    [run, targetable, nodeUnder, ui],
   );
   const onReconnectEnd = useCallback(
     (
@@ -242,46 +256,31 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
     [addNodeAt],
   );
 
-  // Double-click on empty canvas adds a node there (§5.1). The add-node menu arrives in 2.5.
+  // Double-click on empty canvas opens the add-node menu there (§5.1).
   const onDoubleClick = useCallback(
     (e: MouseEvent) => {
-      if ((e.target as HTMLElement).classList.contains("react-flow__pane")) addNodeAt({ x: e.clientX, y: e.clientY });
+      if ((e.target as HTMLElement).classList.contains("react-flow__pane"))
+        ui.getState().set({ menu: { kind: "node", at: { x: e.clientX, y: e.clientY } } });
     },
-    [addNodeAt],
+    [ui],
   );
 
-  // Keyboard: undo, redo, add node at pointer or centre, toggle minimap. The full table is 2.5.
-  // Listens on the document because clicking the empty pane leaves focus on <body>; it acts only
-  // when focus is on the canvas or on nothing, never inside a field, a dialog or another panel.
+  // The whole interaction table (§5.1) lives in useCanvasKeyboard; announcements go to a live region.
   const region = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      const active = document.activeElement;
-      const onCanvas = !active || active === document.body || region.current?.contains(active);
-      if (!onCanvas || e.defaultPrevented) return;
-      if ((e.target as HTMLElement).closest("input, textarea, select, [contenteditable], [role=dialog]")) return;
-      const mod = e.metaKey || e.ctrlKey;
-      if (e.key === "Escape") {
-        store.getState().clearSelection();
-      } else if (mod && e.key.toLowerCase() === "z") {
-        e.preventDefault();
-        if (e.shiftKey) store.getState().redo();
-        else store.getState().undo();
-      } else if (!mod && !e.altKey && e.key === "n") {
-        const rect = region.current?.getBoundingClientRect();
-        if (!rect) return;
-        addNodeAt(pointer.current ?? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
-      } else if (!mod && !e.altKey && e.key === "m") {
-        setMinimap((v) => !v);
-      } else if (!mod && !e.altKey && e.key === "v") {
-        setMode("select");
-      } else if (!mod && !e.altKey && e.key === "h") {
-        setMode("hand");
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [addNodeAt, store]);
+  const [said, setSaid] = useState("");
+  useCanvasKeyboard({ region, pointer, run, announce: setSaid, setMinimap, setMode });
+  const insideNode = useUi((s) => s.cursor !== undefined);
+
+  // Fit from the document before anything renders: with off-screen culling, xyflow's own fit
+  // would wait for nodes it never renders. Sizes are estimated from each node's rows.
+  const onInit = useCallback(() => {
+    const doc = store.getState();
+    const current = doc.activeWorkflowId ? doc.workflows[doc.activeWorkflowId]?.doc : undefined;
+    const pane = region.current?.getBoundingClientRect();
+    if (!current || !pane) return;
+    const sizes = new Map(current.nodes.map((n) => [n.id, estimateSize(n, nodeRows(n).length)]));
+    void flow.setViewport(fitViewport(current, sizes, { width: pane.width, height: pane.height }, FIT_VIEW));
+  }, [store, flow]);
 
   if (!wf) return null;
 
@@ -319,7 +318,10 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
         onReconnectEnd={onReconnectEnd}
         isValidConnection={isValidConnection}
         onSelectionChange={onSelectionChange}
-        deleteKeyCode={["Backspace", "Delete"]}
+        // Inside a node, Backspace deletes the card under the cursor, not the node.
+        deleteKeyCode={insideNode ? null : DELETE_KEYS}
+        // The canvas keyboard (useCanvasKeyboard) replaces xyflow's arrow-key moves and focus.
+        disableKeyboardA11y
         multiSelectionKeyCode="Shift"
         zoomOnDoubleClick={false}
         snapToGrid
@@ -327,14 +329,14 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
         minZoom={0.1}
         maxZoom={2}
         onlyRenderVisibleElements
-        fitView
-        fitViewOptions={FIT_VIEW}
+        onInit={onInit}
         attributionPosition="bottom-center"
         panOnDrag={mode === "hand" ? true : PAN_BUTTONS}
         selectionOnDrag={mode === "select"}
         aria-label={`${wf.name} workflow`}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} className="wk-grid" />
+        <ConnectionWatcher />
         {minimap ? (
           <MiniMap
             pannable
@@ -348,8 +350,10 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
         <CanvasToolbar minimap={minimap} onToggleMinimap={() => setMinimap((v) => !v)} mode={mode} onMode={setMode} />
       </ReactFlow>
       <p role="status" aria-live="polite" className="sr-only">
-        {notice}
+        {notice || said}
       </p>
+      <CanvasMenus />
+      <ShortcutSheet />
       {notice ? (
         <div className="pointer-events-none absolute inset-x-0 top-6 flex justify-center">
           <p className="rounded-md border border-hairline bg-surface px-5 py-3 text-body text-primary shadow-pop">
@@ -368,6 +372,7 @@ function pointOf(event: globalThis.MouseEvent | TouchEvent): { x: number; y: num
 }
 
 const ORIGIN = { x: 0, y: 0 };
+const DELETE_KEYS = ["Backspace", "Delete"];
 
 /** Minimap blocks take their node's category colour (ADR-017). */
 const minimapNodeClass = (n: CanvasRFNode) => `wk-mm-${NODE_CATEGORY[n.data.node.type]}`;

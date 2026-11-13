@@ -275,6 +275,13 @@ Wireframes show structure and density, not final pixels. `│` and `─` are hai
 | Search in bot | — | `⌘F` (nodes, cards, text, variables) |
 | Shortcut sheet | — | `?` |
 
+Clarifications from task 2.5 (no change to the table):
+- **`Enter` on a node** goes inside it (to its cards and outputs) when it has any; on a node with none it renames. `F2` always renames.
+- **Inside a node** the cursor walks cards and outputs in drawing order. `Enter` on an output starts keyboard connect; on an output that already has a transition it re-points that transition, so `R` is only needed for a transition selected with the pointer. While connecting, a hint bar at the bottom of the canvas shows the keys.
+- **Adding a card** that writes a value (Ask, Set variable) also creates a workflow variable for it (`answer`, `value`, then `answer_2`…) in the same undo step. Cards that need a knowledge base, a table or a sub-workflow stay in the menu, dimmed, saying what to create first.
+- **Copy and paste** carry the nodes, the transitions between them, their positions and the workflow variables their cards use. Every element id is replaced on paste; references to things outside (bot variables, workflows, knowledge bases, tables) are kept and validated where they land. Start and Entry are never copied.
+- **A transition can be dropped anywhere on a node**, not only on its input port; released over empty canvas it opens the add-node menu, and the new node is wired from that output in one undo step.
+
 **Motion**
 
 | Moment | Spec |

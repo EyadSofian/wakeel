@@ -113,6 +113,8 @@
   --spacing-tile: var(--size-tile);
   --spacing-tile-lg: var(--size-tile-lg);
   --spacing-page: var(--size-page);
+  --spacing-picker: var(--size-picker);
+  --spacing-picker-height: var(--size-picker-height);
   --spacing-port: var(--size-port);
   --spacing-row: var(--size-row);
   --spacing-row-table: var(--size-row-table);

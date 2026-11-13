@@ -10,6 +10,7 @@ import { useWorkspace } from "../../api/queries";
 import { useAddNode } from "../../canvas/add-node";
 import { CanvasStoreContext, useCanvas } from "../../canvas/context";
 import { Inspector } from "../../canvas/inspector/Inspector";
+import { createUiStore, UiStoreContext } from "../../canvas/interaction/ui-store";
 import { groupIssues, useIssues } from "../../canvas/issues";
 import { NodeLibrary } from "../../canvas/library/NodeLibrary";
 import { createSaver, type Saver } from "../../canvas/store/saver";
@@ -76,9 +77,12 @@ export function BotCanvas({ workspaceId, botId }: { workspaceId: string; botId: 
 
 /** Inside the store provider: validates once and shares the result with the top bar and canvas. */
 function Body({ workspaceId, state }: { workspaceId: string; state: "loading" | "ready" | { error: unknown } }) {
+  const [ui] = useState(createUiStore);
   return (
     <ReactFlowProvider>
-      <Frame workspaceId={workspaceId} state={state} />
+      <UiStoreContext.Provider value={ui}>
+        <Frame workspaceId={workspaceId} state={state} />
+      </UiStoreContext.Provider>
     </ReactFlowProvider>
   );
 }
