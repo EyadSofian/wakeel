@@ -15,6 +15,7 @@ export * from "./runtime";
 export * from "./seed";
 export * from "./table";
 export * from "./trace";
+export * from "./typings";
 export * from "./validate/index";
 export * from "./variable";
 export * from "./workflow";
