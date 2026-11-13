@@ -123,8 +123,21 @@ describe("exec", () => {
     );
     setTimeout(() => controller.abort(), 50);
     await expect(running).rejects.toThrow();
-    await pool.whenReady();
-    expect(pool.health().busy).toBe(0);
+    // Both runners serve again long before the 30 s deadline, and the interrupt stopped the loop
+    // without a hard kill.
+    const kills = pool.health().kills;
+    const started = Date.now();
+    const both = await Promise.all(
+      [1, 2].map(() =>
+        client.exec(
+          { execId: execId(), kind: "code", source: "return 1;" },
+          { onToolCall: () => Promise.resolve(null) },
+        ),
+      ),
+    );
+    expect(both.map((o) => o.t)).toEqual(["result", "result"]);
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(pool.health().kills).toBe(kills);
   });
 
   test("an unreachable sandbox rejects with internal_error", async () => {

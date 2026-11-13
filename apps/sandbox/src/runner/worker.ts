@@ -9,7 +9,7 @@
 import { parentPort, workerData } from "node:worker_threads";
 import variant from "@jitl/quickjs-wasmfile-release-sync";
 import { newQuickJSWASMModuleFromVariant, type QuickJSWASMModule } from "quickjs-emscripten-core";
-import { type HostChannel, NO_GUEST_API } from "../guest/index.ts";
+import type { CallAnswer, HostChannel } from "../guest/index.ts";
 import type { MainToWorker, RunnerData, WorkerToMain } from "./messages.ts";
 import { runExec } from "./run-exec.ts";
 
@@ -34,6 +34,8 @@ async function load(): Promise<QuickJSWASMModule | undefined> {
 }
 
 const listeners = new Map<string, Set<(frame: unknown) => void>>();
+const fetches = new Map<number, (answer: CallAnswer) => void>();
+let nextFetch = 0;
 
 const channelFor = (execId: string): HostChannel => ({
   send: (frame) => post({ type: "frame", execId, frame }),
@@ -43,6 +45,12 @@ const channelFor = (execId: string): HostChannel => ({
     listeners.set(execId, set);
     return () => set.delete(listener);
   },
+  fetch: (request) =>
+    new Promise<CallAnswer>((resolve) => {
+      const fetchId = nextFetch++;
+      fetches.set(fetchId, resolve);
+      post({ type: "fetch", execId, fetchId, request });
+    }),
 });
 
 function serve(quickjs: QuickJSWASMModule) {
@@ -51,16 +59,23 @@ function serve(quickjs: QuickJSWASMModule) {
       for (const listener of listeners.get(message.execId) ?? []) listener(message.frame);
       return;
     }
+    if (message.type === "fetch_result") {
+      const resolve = fetches.get(message.fetchId);
+      fetches.delete(message.fetchId);
+      resolve?.(message.answer);
+      return;
+    }
     void (async () => {
       const { job } = message;
       const report = await runExec(
         quickjs,
         job,
         { cancelled: () => Atomics.load(cancel, 0) !== 0 },
-        NO_GUEST_API,
         channelFor(job.execId),
       );
       listeners.delete(job.execId);
+      // A fetch still out when the exec ended is answered into nothing; the pool aborts it.
+      fetches.clear();
       // Freed runtimes return memory to the module's allocator, but the WASM memory never shrinks.
       const grown = quickjs.getWasmMemory().buffer.byteLength > data.wasmMemoryMaxBytes;
       post({ type: "done", execId: job.execId, outcome: report.outcome, recycle: report.recycle || grown });

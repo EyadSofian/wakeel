@@ -12,6 +12,7 @@ if (config) {
   const logger = createLogger({ service: "sandbox", level: config.logLevel });
   const pool = new SandboxPool({
     size: config.sandboxPoolSize,
+    egressUrl: config.sandboxEgressUrl,
     onKill: ({ execId, reason }) => logger.warn({ execId, reason }, "runner killed"),
   });
 

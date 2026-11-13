@@ -7,12 +7,14 @@
  * QuickJS host layer itself therefore retires the runner (`recycle`) instead of reusing it.
  */
 import type { QuickJSContext, QuickJSHandle, QuickJSWASMModule } from "quickjs-emscripten-core";
-import type { GuestApi, GuestSession, HostChannel } from "../guest/index.ts";
+import { type GuestSession, type HostChannel, installGuest, PreludeError } from "../guest/index.ts";
 import type { ErrorFrame, ExecOutcome } from "../protocol.ts";
 import type { ExecJob } from "./messages.ts";
 
 /** File name the guest's stack traces and syntax errors refer to. */
 export const SOURCE_NAME = "code.js";
+/** File name of each expression in a batch. */
+const EXPRESSION_NAME = "expression.js";
 
 /**
  * Code runs as the body of an async function so it can `await` and `return`. The prefix shares the
@@ -40,11 +42,10 @@ export async function runExec(
   quickjs: QuickJSWASMModule,
   job: ExecJob,
   control: RunControl,
-  guest: GuestApi,
   channel: HostChannel,
 ): Promise<RunReport> {
   const started = performance.now();
-  if (job.kind !== "code") {
+  if (job.kind !== "code" && job.kind !== "expressions") {
     return internal(`kind ${job.kind} has no guest layer yet`, false);
   }
 
@@ -64,21 +65,33 @@ export async function runExec(
     json.dispose();
     held.push(stringify);
 
-    session = guest.install(ctx, job, channel);
+    session = installGuest(ctx, job, channel);
     const setupMs = performance.now() - started;
 
-    const outcome = await evaluate(ctx, job, control, session, stringify);
+    const outcome =
+      job.kind === "expressions"
+        ? evaluateExpressions(ctx, job, control, stringify)
+        : await evaluate(ctx, job, control, session, stringify);
+    session.finish();
     const runMs = performance.now() - started - setupMs;
     report = {
-      outcome: outcome.t === "result" ? { ...outcome, stats: { setupMs, runMs } } : outcome,
+      outcome:
+        outcome.t === "result"
+          ? { ...outcome, stats: { setupMs, runMs } }
+          : { ...outcome, message: session.redact(outcome.message) },
       recycle: false,
     };
   } catch (error) {
     // Raised by the host layer, not the guest: QuickJS reports guest errors as values.
-    report =
-      error instanceof RangeError && /call stack/i.test(error.message)
-        ? { outcome: { t: "error", code: "code_error", message: "stack overflow" }, recycle: true }
-        : internal(error instanceof Error ? error.message : String(error), true);
+    if (error instanceof PreludeError) {
+      // The guest API could not be installed: no guest code ran yet, so only the limits can be to blame.
+      report = { outcome: limitFailure(ctx, job, control) ?? internal(error.message, false).outcome, recycle: false };
+    } else {
+      report =
+        error instanceof RangeError && /call stack/i.test(error.message)
+          ? { outcome: { t: "error", code: "code_error", message: "stack overflow" }, recycle: true }
+          : internal(error instanceof Error ? error.message : String(error), true);
+    }
   }
 
   try {
@@ -102,7 +115,8 @@ async function evaluate(
   session: GuestSession,
   stringify: QuickJSHandle,
 ): Promise<Settled> {
-  const evaluated = ctx.evalCode(`${PREFIX}${job.source}${SUFFIX}`, SOURCE_NAME, { type: "global" });
+  // Strict mode (ADR-023 §7): a write to a frozen scope throws at its line instead of being ignored.
+  const evaluated = ctx.evalCode(`${PREFIX}${job.source}${SUFFIX}`, SOURCE_NAME, { type: "global", strict: true });
   if (evaluated.error) {
     const handle = evaluated.error;
     try {
@@ -153,7 +167,7 @@ async function evaluate(
       }
 
       if (session.inFlight() > 0) {
-        await session.waitForHost();
+        await session.waitForHost(job.deadline);
         continue;
       }
 
@@ -170,6 +184,36 @@ async function evaluate(
   }
 }
 
+/** Scope patches from the prelude's snapshot (ADR-023 §2), or the error that stopped them. */
+function patchesOf(
+  ctx: QuickJSContext,
+  job: ExecJob,
+  control: RunControl,
+  session: GuestSession,
+): { ok: true; patches: Record<string, unknown> } | { ok: false; error: ErrorFrame } {
+  if (!session.snapshot) return { ok: true, patches: {} };
+  // Runs guest code (toJSON, getters) under the same deadline and memory limit.
+  const taken = ctx.callFunction(session.snapshot, ctx.undefined);
+  if (taken.error) {
+    const handle = taken.error;
+    try {
+      return { ok: false, error: classify(ctx, job, control, describe(ctx, handle)) };
+    } finally {
+      handle.dispose();
+    }
+  }
+  const handle = taken.value;
+  try {
+    const text = ctx.typeof(handle) === "string" ? ctx.getString(handle) : "";
+    return { ok: true, patches: session.parsePatches(text) };
+  } catch {
+    // Only a guest that replaced the built-ins the snapshot relies on gets here.
+    return { ok: false, error: { t: "error", code: "code_error", message: "the variables could not be saved" } };
+  } finally {
+    handle.dispose();
+  }
+}
+
 function serialise(
   ctx: QuickJSContext,
   job: ExecJob,
@@ -178,6 +222,8 @@ function serialise(
   stringify: QuickJSHandle,
   value: QuickJSHandle,
 ): Settled {
+  const patches = patchesOf(ctx, job, control, session);
+  if (!patches.ok) return patches.error;
   // Runs guest code (toJSON, getters, proxies) under the same deadline and memory limit.
   const text = ctx.callFunction(stringify, ctx.undefined, value);
   if (text.error) {
@@ -197,7 +243,7 @@ function serialise(
     return {
       t: "result",
       value: json === undefined ? null : (JSON.parse(json) as unknown),
-      scopePatches: session.scopePatches(),
+      scopePatches: patches.patches,
     };
   } finally {
     handle.dispose();
@@ -294,14 +340,14 @@ function classify(
  * reported the same way; nothing else can tell the two apart. Only called after the guest stopped:
  * the limit is lifted so the measurement itself can allocate.
  */
-function atMemoryLimit(ctx: QuickJSContext, job: ExecJob): boolean {
+function atMemoryLimit(ctx: QuickJSContext, job: ExecJob, share = 1): boolean {
   const limitBytes = job.memoryMb * 1024 * 1024;
   let usage: QuickJSHandle | undefined;
   try {
     ctx.runtime.setMemoryLimit(-1);
     usage = ctx.runtime.computeMemoryUsage();
     const used = readProp(ctx, usage, "memory_used_size");
-    return typeof used === "number" && used >= limitBytes;
+    return typeof used === "number" && used >= limitBytes * share;
   } catch {
     return false;
   } finally {
@@ -319,6 +365,75 @@ function position(described: Described): { line?: number; column?: number } {
   let column = match?.[2] !== undefined ? Number(match[2]) : undefined;
   if (column !== undefined && line === 1) column -= PREFIX.length;
   return column !== undefined && column >= 1 ? { line, column } : { line };
+}
+
+/**
+ * `kind: "expressions"` (ADR-018 §2–§3): each expression in its own evaluation, so a syntax error or
+ * a throw affects only its own outcome. The pool parsed every source first and marked the ones that
+ * are not a single expression, so the parentheses here cannot be closed early to run statements.
+ * Only a deadline or memory failure ends the batch as a whole.
+ */
+function evaluateExpressions(
+  ctx: QuickJSContext,
+  job: ExecJob,
+  control: RunControl,
+  stringify: QuickJSHandle,
+): Settled {
+  const outcomes: ({ ok: true; value?: unknown } | { ok: false; message: string })[] = [];
+  for (const expression of job.expressions ?? []) {
+    if (expression.invalid !== undefined) {
+      outcomes.push({ ok: false, message: expression.invalid });
+      continue;
+    }
+    const evaluated = ctx.evalCode(`(${expression.source}\n)`, EXPRESSION_NAME, { type: "global", strict: true });
+    if (evaluated.error) {
+      const handle = evaluated.error;
+      try {
+        const failure = classify(ctx, job, control, describe(ctx, handle));
+        if (failure.code !== "code_error") return failure;
+        outcomes.push({ ok: false, message: failure.message });
+      } finally {
+        handle.dispose();
+      }
+      continue;
+    }
+    const value = evaluated.value;
+    try {
+      const text = ctx.callFunction(stringify, ctx.undefined, value);
+      if (text.error) {
+        const handle = text.error;
+        try {
+          const described = describe(ctx, handle);
+          const failure = classify(ctx, job, control, described);
+          if (failure.code !== "code_error") return failure;
+          outcomes.push({ ok: false, message: `the value cannot be turned into JSON: ${described.message}` });
+        } finally {
+          handle.dispose();
+        }
+        continue;
+      }
+      const handle = text.value;
+      try {
+        if (ctx.typeof(handle) === "string") outcomes.push({ ok: true, value: JSON.parse(ctx.getString(handle)) });
+        else outcomes.push({ ok: true });
+      } finally {
+        handle.dispose();
+      }
+    } finally {
+      value.dispose();
+    }
+    if (Date.now() >= job.deadline || control.cancelled()) return classify(ctx, job, control, undefined);
+  }
+  return { t: "result", value: outcomes, scopePatches: {} };
+}
+
+/** A timeout or memory failure when that is what stopped the run, else undefined. */
+function limitFailure(ctx: QuickJSContext, job: ExecJob, control: RunControl): ErrorFrame | undefined {
+  if (Date.now() >= job.deadline || control.cancelled()) return classify(ctx, job, control, undefined);
+  if (atMemoryLimit(ctx, job, 0.5)) {
+    return { t: "error", code: "code_memory_exceeded", message: `used more than ${job.memoryMb} MB` };
+  }
+  return undefined;
 }
 
 function internal(message: string, recycle: boolean): RunReport {

@@ -9,9 +9,17 @@
  */
 import { Worker } from "node:worker_threads";
 import { SANDBOX_LIMITS } from "@wakeel/config";
-import { AppError } from "@wakeel/contracts";
+import { AppError, parseExpression } from "@wakeel/contracts";
+import { fetchThroughEgress } from "./egress-client.ts";
 import type { ExecOutcome } from "./protocol.ts";
-import type { ExecJob, ExecJobInput, MainToWorker, RunnerData, WorkerToMain } from "./runner/messages.ts";
+import type {
+  BatchExpression,
+  ExecJob,
+  ExecJobInput,
+  MainToWorker,
+  RunnerData,
+  WorkerToMain,
+} from "./runner/messages.ts";
 
 export type { ExecOutcome } from "./protocol.ts";
 
@@ -24,6 +32,8 @@ export interface PoolOptions {
   queueLimit?: number;
   /** Tests substitute stand-in runners. */
   workerUrl?: URL;
+  /** Base URL of the egress service for the guest `fetch` (ADR-023 §4). Without it, fetch fails. */
+  egressUrl?: string;
   /** Called on every hard kill, for metrics and logs. Never receives source or scopes. */
   onKill?: (info: { execId: string; reason: "deadline" | "cancelled" }) => void;
 }
@@ -50,6 +60,10 @@ export interface PoolHealth {
 
 interface Task {
   job: ExecJobInput;
+  /** `kind: "expressions"`: the batch, parsed on this thread (ADR-018). */
+  expressions?: BatchExpression[];
+  /** Aborts the guest's fetches when the exec ends. */
+  fetches: AbortController;
   options: ExecOptions;
   resolve: (outcome: ExecOutcome) => void;
   reject: (reason: unknown) => void;
@@ -70,9 +84,11 @@ export class SandboxPool {
   readonly #queueLimit: number;
   readonly #workerUrl: URL;
   readonly #onKill: PoolOptions["onKill"];
+  readonly #egressUrl: string | undefined;
   readonly #runners = new Set<Runner>();
   readonly #queue: Task[] = [];
   readonly #starting = new Map<Runner, { resolve: () => void; reject: (e: Error) => void }>();
+  readonly #deadlines = new WeakMap<Task, number>();
   #kills = 0;
   #loadError: string | undefined;
   #closed = false;
@@ -84,6 +100,7 @@ export class SandboxPool {
     this.#queueLimit = options.queueLimit ?? options.size * SANDBOX_LIMITS.queuePerRunner;
     this.#workerUrl = options.workerUrl ?? RUNNER_URL;
     this.#onKill = options.onKill;
+    this.#egressUrl = options.egressUrl;
   }
 
   /** Starts every runner. Rejects if QuickJS cannot load; the pool then stays unhealthy. */
@@ -121,8 +138,8 @@ export class SandboxPool {
    * cannot take it (`validation_failed`, `rate_limited`, `internal_error`) or with the abort reason.
    */
   exec(job: ExecJobInput, options: ExecOptions = {}): Promise<ExecOutcome> {
-    if (job.kind !== "code") {
-      // `expressions` (3.5, ADR-018) and `autonomy_run` (Phase 6) need their guest layers first.
+    if (job.kind === "autonomy_run") {
+      // `autonomy_run` (Phase 6) needs its guest layer first.
       return Promise.reject(
         new AppError(
           "validation_failed",
@@ -131,13 +148,20 @@ export class SandboxPool {
         ),
       );
     }
+    let expressions: BatchExpression[] | undefined;
+    if (job.kind === "expressions") {
+      const batch = parseBatch(job.source);
+      if (batch instanceof AppError) return Promise.reject(batch);
+      expressions = batch;
+    }
     if (this.#closed || this.#loadError !== undefined || this.#runners.size === 0) {
       return Promise.reject(new AppError("internal_error", {}, { detail: "the sandbox has no working runner" }));
     }
     if (options.signal?.aborted) return Promise.reject(options.signal.reason);
 
     return new Promise<ExecOutcome>((resolve, reject) => {
-      const task: Task = { job, options, resolve, reject, settled: false };
+      const task: Task = { job, options, resolve, reject, settled: false, fetches: new AbortController() };
+      if (expressions) task.expressions = expressions;
       const idle = this.#idleRunner();
       if (idle) {
         this.#dispatch(idle, task);
@@ -234,6 +258,27 @@ export class SandboxPool {
         if (task && !task.settled && task.job.execId === message.execId) task.options.onFrame?.(message.frame);
         return;
       }
+      case "fetch": {
+        const task = runner.task;
+        if (!task || task.settled || task.job.execId !== message.execId) return;
+        void fetchThroughEgress({
+          egressUrl: this.#egressUrl,
+          capabilityToken: task.job.capabilityToken,
+          request: message.request,
+          deadline: this.#deadlines.get(task) ?? Date.now(),
+          signal: task.fetches.signal,
+        }).then((answer) => {
+          // The exec may have ended, or the runner moved on, while egress answered.
+          if (runner.state !== "busy" || runner.task !== task) return;
+          runner.worker.postMessage({
+            type: "fetch_result",
+            execId: message.execId,
+            fetchId: message.fetchId,
+            answer,
+          } satisfies MainToWorker);
+        });
+        return;
+      }
       case "done": {
         clearTimeout(runner.killTimer);
         const task = runner.task;
@@ -272,7 +317,11 @@ export class SandboxPool {
     runner.task = task;
     Atomics.store(runner.cancel, 0, 0);
     const deadline = Date.now() + task.job.timeoutMs;
-    const job: ExecJob = { ...task.job, deadline, stackBytes: SANDBOX_LIMITS.interpreterStackBytes };
+    this.#deadlines.set(task, deadline);
+    // The capability token stays on this thread: runners never see a credential.
+    const { capabilityToken: _token, ...rest } = task.job;
+    const job: ExecJob = { ...rest, deadline, stackBytes: SANDBOX_LIMITS.interpreterStackBytes };
+    if (task.expressions) job.expressions = task.expressions;
     runner.worker.postMessage({ type: "exec", job } satisfies MainToWorker);
 
     runner.killTimer = setTimeout(
@@ -362,8 +411,28 @@ export class SandboxPool {
   #settle(task: Task, how: { outcome: ExecOutcome } | { reason: unknown }): void {
     if (task.settled) return;
     task.settled = true;
+    task.fetches.abort();
     if (task.onAbort) task.options.signal?.removeEventListener("abort", task.onAbort);
     if ("outcome" in how) task.resolve(how.outcome);
     else task.reject(how.reason);
   }
+}
+
+/** Parses an expression batch (ADR-018 §2): a JSON array of strings, each checked to be one expression. */
+function parseBatch(source: string): BatchExpression[] | AppError {
+  const refuse = (message: string) =>
+    new AppError("validation_failed", {}, { errors: [{ path: "source", code: "invalid_batch", message }] });
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    return refuse("An expressions source must be a JSON array of strings.");
+  }
+  if (!Array.isArray(parsed) || !parsed.every((e) => typeof e === "string")) {
+    return refuse("An expressions source must be a JSON array of strings.");
+  }
+  return parsed.map((text: string) => {
+    const checked = parseExpression(text);
+    return checked.ok ? { source: text } : { source: text, invalid: `not a single expression: ${checked.reason}` };
+  });
 }

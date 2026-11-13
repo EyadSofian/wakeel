@@ -77,7 +77,8 @@ describe("runs code", () => {
   });
 
   test("the guest sees no host objects", async () => {
-    const names = ["require", "process", "module", "console", "setTimeout", "setInterval", "fetch", "WebAssembly"];
+    // `fetch` left this list in 3.3: the guest API defines its own, bridged through egress (guest.test.ts).
+    const names = ["require", "process", "module", "console", "setTimeout", "setInterval", "WebAssembly"];
     const out = resultOf(await run(`return ${JSON.stringify(names)}.map((n) => typeof globalThis[n]);`));
     expect(out).toEqual(names.map(() => "undefined"));
   });
