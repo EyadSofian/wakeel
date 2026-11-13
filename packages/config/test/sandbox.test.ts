@@ -18,14 +18,26 @@ describe("sandbox env", () => {
       sandboxHost: "127.0.0.1",
       sandboxPort: 4300,
       sandboxPoolSize: availableParallelism() * 2,
+      sandboxEgressUrl: "http://127.0.0.1:4400",
     });
   });
 
   test("reads every variable", () => {
     const config = loadConfig(sandboxEnv, {
-      env: { SANDBOX_HOST: "0.0.0.0", SANDBOX_PORT: "4301", SANDBOX_POOL_SIZE: "3" },
+      env: { SANDBOX_HOST: "0.0.0.0", SANDBOX_PORT: "4301", SANDBOX_POOL_SIZE: "3", EGRESS_URL: "http://egress:4400" },
     });
-    expect(config).toEqual({ sandboxHost: "0.0.0.0", sandboxPort: 4301, sandboxPoolSize: 3 });
+    expect(config).toEqual({
+      sandboxHost: "0.0.0.0",
+      sandboxPort: 4301,
+      sandboxPoolSize: 3,
+      sandboxEgressUrl: "http://egress:4400",
+    });
+  });
+
+  test("holds no egress token or capability key (ADR-023 §4)", () => {
+    const names = Object.values(sandboxEnv).map((v) => v.env);
+    expect(names).not.toContain("EGRESS_TOKEN");
+    expect(names).not.toContain("EGRESS_CAPABILITY_KEY");
   });
 
   test.each([
@@ -33,6 +45,7 @@ describe("sandbox env", () => {
     ["SANDBOX_PORT", "70000"],
     ["SANDBOX_POOL_SIZE", "0"],
     ["SANDBOX_POOL_SIZE", "two"],
+    ["EGRESS_URL", "ftp://egress"],
   ])("rejects %s=%s", (variable, value) => {
     expect(() => loadConfig(sandboxEnv, { env: { [variable]: value } })).toThrow(ConfigError);
     expect(problemsFor({ [variable]: value })).toEqual([variable]);

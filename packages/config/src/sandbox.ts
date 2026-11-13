@@ -28,6 +28,13 @@ export const sandboxEnv = defineEnv({
       .default(availableParallelism() * 2),
     description: "Worker threads that run code at once in this replica. Unset means two per CPU core.",
   },
+  sandboxEgressUrl: {
+    env: "EGRESS_URL",
+    schema: z.url({ protocol: /^https?$/ }).default("http://127.0.0.1:4400"),
+    // The sandbox authenticates each guest fetch with the exec's capability token, so it is never
+    // given EGRESS_TOKEN (ADR-023 §4).
+    description: "Base URL of the egress service the guest fetch goes through, for example http://egress:4400.",
+  },
 });
 
 /**

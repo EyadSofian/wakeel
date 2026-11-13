@@ -14,6 +14,7 @@
     "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
     "@wakeel/config": "workspace:*",
     "@wakeel/contracts": "workspace:*",
+    "@wakeel/sandbox-client": "workspace:*",
     "@wakeel/telemetry": "workspace:*",
     "quickjs-emscripten-core": "0.32.0",
     "zod": "4.6.7"

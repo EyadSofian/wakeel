@@ -115,6 +115,11 @@ async function exec(options: ServerOptions, req: IncomingMessage, res: ServerRes
       source: request.source,
       timeoutMs: request.limits.timeoutMs,
       memoryMb: request.limits.memoryMb,
+      scopes: request.scopes,
+      secretKeys: request.secretKeys,
+      tables: request.tables,
+      ...(request.ctx ? { idempotencyKey: request.ctx.idempotencyKey } : {}),
+      ...(request.capabilityToken ? { capabilityToken: request.capabilityToken } : {}),
     },
     {
       signal: controller.signal,

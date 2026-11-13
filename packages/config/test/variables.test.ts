@@ -4,6 +4,8 @@ import {
   ConfigError,
   commonEnv,
   databaseEnv,
+  egressClientEnv,
+  egressEnv,
   loadConfig,
   MASTER_KEY_BYTES,
   masterKeyEnv,
@@ -135,6 +137,56 @@ describe("worker", () => {
   });
   test("rejects an empty list", () => {
     fails(() => loadConfig(workerEnv, { env: { QUEUES: " , " } }), "QUEUES");
+  });
+});
+
+describe("egress", () => {
+  const token = "t".repeat(32);
+  const key = "k".repeat(32);
+  test("listens on 127.0.0.1:4400 with 600 requests a minute and a burst of 60 by default", () => {
+    const c = loadConfig(egressEnv, { env: { EGRESS_TOKEN: token, EGRESS_CAPABILITY_KEY: key } });
+    expect(c.egressHost).toBe("127.0.0.1");
+    expect(c.egressPort).toBe(4400);
+    expect(c.egressRatePerMinute).toBe(600);
+    expect(c.egressRateBurst).toBe(60);
+    expect(c.egressToken.reveal()).toBe(token);
+    expect(String(c.egressToken)).toBe("[redacted]");
+  });
+  test("needs a token of at least 32 characters and never echoes it", () => {
+    fails(() => loadConfig(egressEnv, { env: { EGRESS_CAPABILITY_KEY: key } }), "EGRESS_TOKEN");
+    try {
+      loadConfig(egressEnv, { env: { EGRESS_TOKEN: "short-canary", EGRESS_CAPABILITY_KEY: key } });
+    } catch (e) {
+      expect((e as Error).message).not.toContain("short-canary");
+    }
+    fails(
+      () => loadConfig(egressEnv, { env: { EGRESS_TOKEN: "short-canary", EGRESS_CAPABILITY_KEY: key } }),
+      "EGRESS_TOKEN",
+    );
+  });
+  test("needs a capability key of at least 32 characters and never echoes it (ADR-023)", () => {
+    fails(() => loadConfig(egressEnv, { env: { EGRESS_TOKEN: token } }), "EGRESS_CAPABILITY_KEY");
+    try {
+      loadConfig(egressEnv, { env: { EGRESS_TOKEN: token, EGRESS_CAPABILITY_KEY: "short-key-canary" } });
+    } catch (e) {
+      expect((e as Error).message).not.toContain("short-key-canary");
+    }
+    const c = loadConfig(egressEnv, { env: { EGRESS_TOKEN: token, EGRESS_CAPABILITY_KEY: key } });
+    expect(String(c.egressCapabilityKey)).toBe("[redacted]");
+  });
+  test("rejects a rate of zero", () => {
+    fails(
+      () =>
+        loadConfig(egressEnv, {
+          env: { EGRESS_TOKEN: token, EGRESS_CAPABILITY_KEY: key, EGRESS_RATE_PER_MINUTE: "0" },
+        }),
+      "EGRESS_RATE_PER_MINUTE",
+    );
+  });
+  test("callers share the token and default to the local service", () => {
+    const c = loadConfig(egressClientEnv, { env: { EGRESS_TOKEN: token } });
+    expect(c.egressUrl).toBe("http://127.0.0.1:4400");
+    fails(() => loadConfig(egressClientEnv, { env: { EGRESS_TOKEN: token, EGRESS_URL: "ftp://x" } }), "EGRESS_URL");
   });
 });
 
