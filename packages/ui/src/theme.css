@@ -118,6 +118,11 @@
   --shadow-pop: var(--shadow-pop);
   --shadow-drag: var(--shadow-drag);
   --shadow-modal: var(--shadow-modal);
+
+  /* Motion: transition-colors and friends default to 80 ms ease-out; duration-fast … duration-slower. */
+  --default-transition-duration: var(--duration-instant);
+  --default-transition-timing-function: var(--ease-out);
+  --ease-out: var(--ease-out);
 }
 
 /*

@@ -34,10 +34,13 @@ export const spring = {
   gentle: { type: "spring", visualDuration: 0.24, bounce: 0.1 },
 } as const satisfies Record<string, SpringToken>;
 
-export const ease = {
+/** A cubic-bezier curve as Motion takes it. */
+export type CubicBezier = [number, number, number, number];
+
+export const ease: { readonly out: CubicBezier } = {
   /** Opacity and colour (non-spring). */
   out: [0.2, 0, 0, 1],
-} as const;
+};
 
 export const stagger = {
   /** Trace steps, emulator message groups: 24 ms per item, at most 8 items. */
@@ -53,7 +56,7 @@ export const MAX_BOUNCE = 0.1;
 
 export interface Transition {
   readonly duration?: number;
-  readonly ease?: readonly number[];
+  readonly ease?: CubicBezier;
   readonly type?: "spring" | "tween";
   readonly visualDuration?: number;
   readonly bounce?: number;
@@ -95,3 +98,30 @@ export function motionTokens(reduced: boolean): MotionTokens {
 
 /** Exit transition for an entrance of `enter` seconds: fade only, 0.75× as long. */
 export const exitDuration = (enter: number) => enter * EXIT_DURATION_FACTOR;
+
+/**
+ * Per-value transition for an entrance (§2.6): travel (`y`/`x`) on `spring`, opacity on `ease.out`
+ * over the matching duration, since opacity and colour never use springs. With reduced motion both
+ * are the 80 ms opacity tween. Pass as Motion's `transition` prop or inside `animate`.
+ */
+export function enterTransition(
+  tokens: MotionTokens,
+  kind: "gentle" | "smooth" | "snappy" = "gentle",
+): { y: Transition; x: Transition; opacity: Transition } {
+  const travel = tokens.spring[kind];
+  const fade: Transition = tokens.reduced
+    ? { type: "tween", duration: duration.instant, ease: ease.out }
+    : { type: "tween", duration: FADE_DURATION[kind], ease: ease.out };
+  return { y: travel, x: travel, opacity: fade };
+}
+
+const FADE_DURATION = { gentle: duration.slower, smooth: duration.slow, snappy: duration.fast } as const;
+
+/** Exit (§2.6): fade only, 0.75× the entrance time; 80 ms when motion is reduced. */
+export function exitTransition(tokens: MotionTokens, kind: "gentle" | "smooth" | "snappy" = "gentle"): Transition {
+  return {
+    type: "tween",
+    duration: tokens.reduced ? duration.instant : exitDuration(FADE_DURATION[kind]),
+    ease: ease.out,
+  };
+}
