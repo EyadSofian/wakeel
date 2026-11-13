@@ -101,8 +101,11 @@ export const WorkspaceResponse = z.object({
   settings: WorkspaceSettings,
   createdAt: isoDate,
   updatedAt: isoDate,
-  /** The caller's role and what it allows, so the Studio can hide what it cannot do. */
-  role: WorkspaceRole,
+  /**
+   * The caller's role and what it allows, so the Studio can hide what it cannot do. An API key has
+   * no role (`null`); `permissions` are then its scopes.
+   */
+  role: WorkspaceRole.nullable(),
   permissions: z.array(z.string()),
 });
 export type WorkspaceResponse = z.infer<typeof WorkspaceResponse>;
@@ -142,3 +145,27 @@ export const AcceptInvitationRequest = z.strictObject({ token: z.string().regex(
 
 export const page = <T extends z.ZodType>(item: T) =>
   z.object({ data: z.array(item), nextCursor: z.string().nullable() });
+
+// API keys (task 1.4). The key itself appears once, in the create response.
+
+export const ApiKeyResponse = z.object({
+  id: z.string(),
+  name: z.string(),
+  /** `wk_live_<prefix>_…`: enough to recognise a key, useless to call with. */
+  prefix: z.string(),
+  scopes: z.array(z.string()),
+  createdBy: z.string().nullable(),
+  lastUsedAt: isoDate.nullable(),
+  expiresAt: isoDate.nullable(),
+  revokedAt: isoDate.nullable(),
+  createdAt: isoDate,
+});
+export type ApiKeyResponse = z.infer<typeof ApiKeyResponse>;
+
+export const CreatedApiKeyResponse = ApiKeyResponse.extend({ key: z.string() });
+
+export const CreateApiKeyRequest = z.strictObject({
+  name: z.string().trim().min(1).max(100),
+  scopes: z.array(z.string()).min(1).max(64),
+  expiresAt: isoDate.optional(),
+});

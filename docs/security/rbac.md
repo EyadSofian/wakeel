@@ -46,6 +46,10 @@ These are not in the matrix because they depend on who is being changed. Code: `
 - The last owner cannot be demoted or removed: `last_owner` (409).
 - An invitation carries the same ceiling as a role change.
 
+## API key scopes (task 1.4)
+
+A workspace API key has no role. Its scopes are permission names from the matrix, at most the ones its creator holds, and never these: `workspace.update`, `workspace.delete`, `member.*` except `member.read`, `api_key.*`, `secret.*`. A leaked key therefore cannot lock the owners out, mint more keys or read provider keys. Routes for members, invitations, keys and secrets accept people only.
+
 ## Open points for review
 
 - Builders cannot read API keys. A builder who wants to call the API from CI needs an admin to create the key. The alternative is to give builders `api_key.read` and `api_key.create` for workspace keys.

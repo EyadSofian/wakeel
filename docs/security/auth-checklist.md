@@ -59,6 +59,11 @@ Status: ✅ done and tested · ⏳ later task · ⚠️ known gap (accepted or o
 | T5b | Owners: only owners touch owners; the last owner stays | ✅ | `checkRoleChange` and `checkRemoval`; owner rows locked and the actor's role read again in the transaction | "the last owner cannot be demoted", "two owners demoting each other at once" |
 | T5c | Invitation links: random 32 bytes, only SHA-256 stored, shown once, 7 days, single use, only for the invited email | ✅ | `apps/api/src/routes/invitations.ts` | "invitations" tests |
 | T5d | Someone who signs up with the invitee's email before they do can accept the invitation | ⚠️ open | Needs email verification (P7) | — |
-| T6 | API keys hashed, shown once, revocable, scoped | ⏳ | 1.4 | — |
+| T6 | API keys: `wk_live_<8>_<43>`, 32 random bytes, only SHA-256 of the secret stored, compared in constant time, shown once (`no-store`) | ✅ | `packages/auth/src/keys.ts`, `apps/api/src/routes/api-keys.ts` | `apps/api/test/api-keys.test.ts` "only the SHA-256 …", `packages/auth/test/keys.test.ts` |
+| T6a | Revoked and expired keys are `unauthenticated`; wrong secret, unknown prefix and other formats are too | ✅ | `requirePermission` key path | "a revoked key", "an expired key", "… is unauthenticated" |
+| T6b | A key from workspace A cannot reach workspace B | ✅ | The key's workspace must equal the path's, else `not_found` (a mutation check proved the test catches its removal) | "a key from workspace A cannot read or write workspace B" |
+| T6c | Keys cannot manage people, keys or secrets, or delete the workspace; a key gets only scopes its creator holds | ✅ | `KEY_SCOPES`; people-only routes use `requireMember`, which refuses any `Authorization` header | "scopes that manage people … are refused", "people-only routes refuse any key" |
+| T6d | Last use recorded, at most once a minute per key | ✅ | `touchApiKey` | "last use is written at most once a minute" |
+| T6e | Keys are not rate limited per key yet | ⚠️ open | ADR-012 asks for a token bucket per key; it belongs with 11.2 (quota engine) or 15.1 | — |
 | T7 | Secrets encrypted with per-row data keys | ⏳ | 1.5 | — |
 | T8 | Every mutation writes an audit entry | ⏳ | 1.6 | — |

@@ -20,7 +20,7 @@ import {
 } from "@wakeel/db";
 import type { FastifyInstance } from "fastify";
 import { requireSession } from "../session";
-import { requirePermission, type StudioDeps } from "../studio";
+import { requireMember, type StudioDeps } from "../studio";
 import { denialError } from "./members";
 
 const INVITATION_DAYS = 7;
@@ -41,13 +41,13 @@ const toResponse = (i: Invitation): InvitationResponse => ({
  */
 export async function invitationRoutes(app: FastifyInstance, deps: StudioDeps): Promise<void> {
   app.get("/v1/workspaces/:workspaceId/invitations", async (request, reply) => {
-    const ctx = await requirePermission(deps, request, reply, "member.invite");
+    const ctx = await requireMember(deps, request, reply, "member.invite");
     const open = await deps.db.withWorkspace(ctx.workspaceId, (tx) => listOpenInvitations(tx, deps.now()));
     return { data: open.map(toResponse), nextCursor: null };
   });
 
   app.post("/v1/workspaces/:workspaceId/invitations", async (request, reply) => {
-    const ctx = await requirePermission(deps, request, reply, "member.invite");
+    const ctx = await requireMember(deps, request, reply, "member.invite");
     const body = CreateInvitationRequest.parse(request.body);
     const denial = checkInvite(ctx.membership.role, body.role);
     if (denial) throw denialError(denial);
@@ -75,7 +75,7 @@ export async function invitationRoutes(app: FastifyInstance, deps: StudioDeps): 
   });
 
   app.delete("/v1/workspaces/:workspaceId/invitations/:invitationId", async (request, reply) => {
-    const ctx = await requirePermission(deps, request, reply, "member.invite");
+    const ctx = await requireMember(deps, request, reply, "member.invite");
     const { invitationId } = request.params as { invitationId: string };
     await deps.db.withWorkspace(ctx.workspaceId, (tx) => revokeInvitation(tx, invitationId, deps.now()));
     return reply.code(204).send();
