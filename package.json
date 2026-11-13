@@ -22,7 +22,8 @@
     "studio:shots": "pnpm --filter @wakeel/studio shots --",
     "studio:motion": "pnpm --filter @wakeel/studio motion --",
     "dev": "turbo run dev",
-    "licences": "node tools/licences.ts"
+    "licences": "node tools/licences.ts",
+    "e2e": "pnpm --filter @wakeel/studio e2e"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.7",

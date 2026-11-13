@@ -21,9 +21,9 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 
 <!-- BEGIN GENERATED: pnpm licences --write -->
 
-348 packages installed by `pnpm install` (runtime and development), not counting platform builds.
+374 packages installed by `pnpm install` (runtime and development), not counting platform builds.
 
-### MIT (265)
+### MIT (291)
 
 - @babel/helper-string-parser 7.29.14 — https://babel.dev/docs/en/next/babel-helper-string-parser
 - @babel/helper-validator-identifier 7.29.7
@@ -60,6 +60,22 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - @parcel/watcher 2.6.0
 - @pinojs/redact 0.4.0 — https://github.com/pinojs/redact#readme
 - @pkgjs/parseargs 0.11.0 — https://github.com/pkgjs/parseargs#readme
+- @radix-ui/primitive 1.2.0 — https://radix-ui.com/primitives
+- @radix-ui/react-compose-refs 1.1.5 — https://radix-ui.com/primitives
+- @radix-ui/react-context 1.3.0 — https://radix-ui.com/primitives
+- @radix-ui/react-dialog 1.3.1 — https://radix-ui.com/primitives
+- @radix-ui/react-dismissable-layer 1.2.1 — https://radix-ui.com/primitives
+- @radix-ui/react-focus-guards 1.2.0 — https://radix-ui.com/primitives
+- @radix-ui/react-focus-scope 1.3.1 — https://radix-ui.com/primitives
+- @radix-ui/react-id 1.1.4 — https://radix-ui.com/primitives
+- @radix-ui/react-portal 1.2.0 — https://radix-ui.com/primitives
+- @radix-ui/react-presence 1.1.11 — https://radix-ui.com/primitives
+- @radix-ui/react-primitive 2.2.0 — https://radix-ui.com/primitives
+- @radix-ui/react-slot 1.5.0 — https://radix-ui.com/primitives
+- @radix-ui/react-use-callback-ref 1.1.5 — https://radix-ui.com/primitives
+- @radix-ui/react-use-controllable-state 1.3.0 — https://radix-ui.com/primitives
+- @radix-ui/react-use-effect-event 0.0.5 — https://radix-ui.com/primitives
+- @radix-ui/react-use-layout-effect 1.1.4 — https://radix-ui.com/primitives
 - @rolldown/pluginutils 1.1.1 — https://github.com/rolldown/plugins/tree/main/packages/pluginutils#readme
 - @standard-schema/spec 1.1.0 — https://standardschema.dev
 - @tailwindcss/cli 4.3.5 — https://tailwindcss.com
@@ -68,6 +84,8 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - @tailwindcss/oxide-wasm32-wasi 4.3.5
 - @tailwindcss/vite 4.3.5 — https://tailwindcss.com
 - @tanstack/history 1.162.5 — https://tanstack.com/router
+- @tanstack/query-core 5.105.0 — https://tanstack.com/query
+- @tanstack/react-query 5.105.0 — https://tanstack.com/query
 - @tanstack/react-router 1.170.46 — https://tanstack.com/router
 - @tanstack/react-store 0.11.2 — https://tanstack.com/store
 - @tanstack/router-core 1.171.39 — https://tanstack.com/router
@@ -103,6 +121,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - ansi-styles 6.2.3
 - archiver 7.0.1 — https://github.com/archiverjs/node-archiver
 - archiver-utils 5.0.2 — https://github.com/archiverjs/archiver-utils#readme
+- aria-hidden 1.2.6 — https://github.com/theKashey/aria-hidden#readme
 - asn1 0.2.6
 - assertion-error 2.0.1
 - ast-v8-to-istanbul 1.0.8 — https://github.com/AriPerkkio/ast-v8-to-istanbul
@@ -137,6 +156,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - debug 4.4.3
 - defu 6.1.7
 - dequal 2.0.3
+- detect-node-es 1.1.0 — https://github.com/thekashey/detect-node
 - docker-compose 1.5.0 — https://pdmlab.github.io/docker-compose/
 - eastasianwidth 0.2.0
 - emoji-regex 8.0.0 — https://mths.be/emoji-regex
@@ -159,6 +179,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - find-my-way 9.10.0 — https://github.com/delvedor/find-my-way#readme
 - framer-motion 14.13.0
 - fs-constants 1.0.0 — https://github.com/mafintosh/fs-constants
+- get-nonce 1.0.1 — https://github.com/theKashey/get-nonce
 - get-port 5.1.1
 - ioredis 6.0.0
 - ipaddr.js 2.5.0
@@ -223,6 +244,9 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - quick-format-unescaped 4.0.4 — https://github.com/davidmarkclements/quick-format#readme
 - react 19.3.1 — https://react.dev/
 - react-dom 19.3.1 — https://react.dev/
+- react-remove-scroll 2.7.2
+- react-remove-scroll-bar 2.3.8
+- react-style-singleton 2.2.3 — https://github.com/theKashey/react-style-singleton#readme
 - readable-stream 2.3.8
 - readable-stream 3.6.2
 - readable-stream 4.8.0 — https://github.com/nodejs/readable-stream
@@ -279,6 +303,8 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - undici 8.12.4 — https://undici.nodejs.org
 - undici-types 5.26.5 — https://undici.nodejs.org
 - undici-types 6.21.0 — https://undici.nodejs.org
+- use-callback-ref 1.3.3
+- use-sidecar 1.1.3 — https://github.com/theKashey/use-sidecar
 - use-sync-external-store 1.7.0
 - util-deprecate 1.0.2 — https://github.com/TooTallNate/util-deprecate
 - vite 8.3.8 — https://vite.dev

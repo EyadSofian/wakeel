@@ -27,8 +27,8 @@ export function NotFoundState() {
         title={error.title}
         detail={error.fix}
         action={
-          <Link to="/__gallery" className={buttonClasses("primary")}>
-            Open gallery
+          <Link to="/" className={buttonClasses("primary")}>
+            Open home
           </Link>
         }
       />
