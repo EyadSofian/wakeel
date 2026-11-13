@@ -8,7 +8,7 @@
   },
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || true",
-    "check": "pnpm lint && turbo run typecheck test",
+    "check": "pnpm lint && pnpm licences && turbo run typecheck test",
     "lint": "biome check . && node tools/lint-rules/tokens-only.ts",
     "format": "biome check --write .",
     "typecheck": "turbo run typecheck",
@@ -21,7 +21,8 @@
     "ui:contrast": "node tools/contrast.ts",
     "studio:shots": "pnpm --filter @wakeel/studio shots --",
     "studio:motion": "pnpm --filter @wakeel/studio motion --",
-    "dev": "turbo run dev"
+    "dev": "turbo run dev",
+    "licences": "node tools/licences.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.7",
