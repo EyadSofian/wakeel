@@ -37,8 +37,13 @@ function networkProblem(): Problem {
   };
 }
 
-export async function api<T>(method: "GET" | "POST" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = {};
+export async function api<T>(
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
+  path: string,
+  body?: unknown,
+  extraHeaders: Record<string, string> = {},
+): Promise<T> {
+  const headers: Record<string, string> = { ...extraHeaders };
   if (body !== undefined) headers["content-type"] = "application/json";
   if (method !== "GET" && csrfToken !== undefined) headers["x-csrf-token"] = csrfToken;
   let res: Response;

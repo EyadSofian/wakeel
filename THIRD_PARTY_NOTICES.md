@@ -21,9 +21,9 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 
 <!-- BEGIN GENERATED: pnpm licences --write -->
 
-375 packages installed by `pnpm install` (runtime and development), not counting platform builds.
+376 packages installed by `pnpm install` (runtime and development), not counting platform builds.
 
-### MIT (292)
+### MIT (293)
 
 - @babel/helper-string-parser 7.29.14 — https://babel.dev/docs/en/next/babel-helper-string-parser
 - @babel/helper-validator-identifier 7.29.7
@@ -317,6 +317,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - yargs 17.7.3 — https://yargs.js.org/
 - zip-stream 6.0.1 — https://github.com/archiverjs/node-zip-stream
 - zod 4.6.7 — https://zod.dev
+- zustand 5.0.16 — https://github.com/pmndrs/zustand
 
 ### Apache-2.0 (27)
 
