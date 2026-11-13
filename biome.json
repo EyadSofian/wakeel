@@ -35,6 +35,18 @@
             "filenameCases": ["kebab-case"],
             "requireAscii": true
           }
+        },
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "pg": "Raw database connections skip tenant isolation. Use withWorkspace from @wakeel/db.",
+              "pg-pool": "Raw database connections skip tenant isolation. Use withWorkspace from @wakeel/db.",
+              "postgres": "Raw database connections skip tenant isolation. Use withWorkspace from @wakeel/db.",
+              "drizzle-orm/node-postgres": "Raw database connections skip tenant isolation. Use withWorkspace from @wakeel/db.",
+              "drizzle-orm/postgres-js": "Raw database connections skip tenant isolation. Use withWorkspace from @wakeel/db."
+            }
+          }
         }
       }
     }
@@ -83,6 +95,16 @@
         "rules": {
           "style": {
             "noDefaultExport": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/db/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
           }
         }
       }
