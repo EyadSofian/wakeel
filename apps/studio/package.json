@@ -11,6 +11,7 @@
     "test": "vitest run",
     "shots": "node scripts/review.ts shots",
     "motion": "node scripts/review.ts motion",
+    "perf": "playwright test --project=perf",
     "e2e": "playwright test -c playwright.e2e.config.ts"
   },
   "dependencies": {
@@ -20,6 +21,7 @@
     "@wakeel/contracts": "workspace:*",
     "@wakeel/testing": "workspace:*",
     "@wakeel/ui": "workspace:*",
+    "@xyflow/react": "12.12.0",
     "lucide-react": "1.72.0",
     "motion": "14.13.0",
     "react": "19.3.1",

@@ -21,9 +21,9 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 
 <!-- BEGIN GENERATED: pnpm licences --write -->
 
-376 packages installed by `pnpm install` (runtime and development), not counting platform builds.
+395 packages installed by `pnpm install` (runtime and development), not counting platform builds.
 
-### MIT (293)
+### MIT (303)
 
 - @babel/helper-string-parser 7.29.14 — https://babel.dev/docs/en/next/babel-helper-string-parser
 - @babel/helper-validator-identifier 7.29.7
@@ -93,6 +93,12 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - @testcontainers/postgresql 12.2.1 — https://github.com/testcontainers/testcontainers-node#readme
 - @testcontainers/redis 12.2.1 — https://github.com/testcontainers/testcontainers-node#readme
 - @types/chai 5.2.3 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/chai
+- @types/d3-color 3.1.3 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/d3-color
+- @types/d3-drag 3.0.7 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/d3-drag
+- @types/d3-interpolate 3.0.4 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/d3-interpolate
+- @types/d3-selection 3.0.12 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/d3-selection
+- @types/d3-transition 3.0.9 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/d3-transition
+- @types/d3-zoom 3.0.9 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/d3-zoom
 - @types/deep-eql 4.0.2 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/deep-eql
 - @types/docker-modem 3.0.6 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/docker-modem
 - @types/dockerode 4.0.2 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/dockerode
@@ -111,6 +117,8 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - @vitest/istanbul-lib-report 2.1.0 — https://vitest.dev
 - @vitest/mocker 5.1.0 — https://github.com/vitest-dev/vitest/tree/main/packages/mocker
 - @vitest/spy 5.1.0 — https://vitest.dev/api/mock
+- @xyflow/react 12.12.0 — https://reactflow.dev
+- @xyflow/system 0.0.83
 - abort-controller 3.0.0 — https://github.com/mysticatea/abort-controller#readme
 - abstract-logging 2.0.1 — https://github.com/jsumners/abstract-logging#readme
 - acorn 8.19.0 — https://github.com/acornjs/acorn
@@ -143,6 +151,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - bullmq 6.7.6 — https://bullmq.io/
 - byline 5.0.0 — https://github.com/jahewson/node-byline
 - chai 6.3.0 — http://chaijs.com
+- classcat 5.0.5
 - color-convert 2.0.1
 - color-name 1.1.4 — https://github.com/colorjs/color-name
 - compress-commons 6.0.2 — https://github.com/archiverjs/node-compress-commons
@@ -317,7 +326,45 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - yargs 17.7.3 — https://yargs.js.org/
 - zip-stream 6.0.1 — https://github.com/archiverjs/node-zip-stream
 - zod 4.6.7 — https://zod.dev
+- zustand 4.5.7 — https://github.com/pmndrs/zustand
 - zustand 5.0.16 — https://github.com/pmndrs/zustand
+
+### ISC (34)
+
+- @isaacs/cliui 8.0.2
+- chownr 1.1.4
+- cliui 8.0.1
+- d3-color 3.1.1 — https://d3js.org/d3-color/
+- d3-dispatch 3.0.2 — https://d3js.org/d3-dispatch/
+- d3-drag 3.0.1 — https://d3js.org/d3-drag/
+- d3-interpolate 3.0.2 — https://d3js.org/d3-interpolate/
+- d3-selection 3.0.1 — https://d3js.org/d3-selection/
+- d3-timer 3.0.2 — https://d3js.org/d3-timer/
+- d3-transition 3.0.2 — https://d3js.org/d3-transition/
+- d3-zoom 3.0.1 — https://d3js.org/d3-zoom/
+- fastq 1.20.3 — https://github.com/mcollina/fastq#readme
+- foreground-child 3.3.1
+- get-caller-file 2.0.5 — https://github.com/stefanpenner/get-caller-file#readme
+- glob 10.5.0
+- inherits 2.0.4
+- isexe 2.0.0 — https://github.com/isaacs/isexe#readme
+- lru-cache 10.4.3
+- lucide-react 1.72.0 — https://lucide.dev
+- minimatch 5.1.9
+- minimatch 9.0.9
+- once 1.4.0
+- pg-int8 1.0.1
+- picocolors 1.1.1
+- semver 7.8.6
+- signal-exit 3.0.7 — https://github.com/tapjs/signal-exit
+- signal-exit 4.1.0
+- split-ca 1.0.1 — https://github.com/bushong1/split-ca
+- split2 4.2.0
+- which 2.0.2
+- wrappy 1.0.2 — https://github.com/npm/wrappy
+- y18n 5.0.8 — https://github.com/yargs/y18n
+- yaml 2.9.1 — https://eemeli.org/yaml/
+- yargs-parser 21.1.1
 
 ### Apache-2.0 (27)
 
@@ -349,36 +396,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - text-decoder 1.2.7 — https://github.com/holepunchto/text-decoder#readme
 - typescript 5.9.3 — https://www.typescriptlang.org/
 
-### ISC (26)
-
-- @isaacs/cliui 8.0.2
-- chownr 1.1.4
-- cliui 8.0.1
-- fastq 1.20.3 — https://github.com/mcollina/fastq#readme
-- foreground-child 3.3.1
-- get-caller-file 2.0.5 — https://github.com/stefanpenner/get-caller-file#readme
-- glob 10.5.0
-- inherits 2.0.4
-- isexe 2.0.0 — https://github.com/isaacs/isexe#readme
-- lru-cache 10.4.3
-- lucide-react 1.72.0 — https://lucide.dev
-- minimatch 5.1.9
-- minimatch 9.0.9
-- once 1.4.0
-- pg-int8 1.0.1
-- picocolors 1.1.1
-- semver 7.8.6
-- signal-exit 3.0.7 — https://github.com/tapjs/signal-exit
-- signal-exit 4.1.0
-- split-ca 1.0.1 — https://github.com/bushong1/split-ca
-- split2 4.2.0
-- which 2.0.2
-- wrappy 1.0.2 — https://github.com/npm/wrappy
-- y18n 5.0.8 — https://github.com/yargs/y18n
-- yaml 2.9.1 — https://eemeli.org/yaml/
-- yargs-parser 21.1.1
-
-### BSD-3-Clause (17)
+### BSD-3-Clause (18)
 
 - @protobufjs/aspromise 1.1.2
 - @protobufjs/base64 1.1.2
@@ -390,6 +408,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - @protobufjs/pool 1.1.0
 - @protobufjs/utf8 1.1.2
 - bcrypt-pbkdf 1.0.2
+- d3-ease 3.0.2 — https://d3js.org/d3-ease/
 - fast-uri 3.1.9 — https://github.com/fastify/fast-uri
 - fast-uri 4.2.3 — https://github.com/fastify/fast-uri
 - ieee754 1.2.1

@@ -21,6 +21,9 @@ export default defineConfig({
   projects: [
     { name: "shots", testMatch: /(shots|content)\.spec\.ts/, use: { contextOptions: { reducedMotion: "reduce" } } },
     { name: "motion", testMatch: /motion\.spec\.ts/ },
+    // Canvas performance budget (design system §5.1), `pnpm studio:perf`. Device scale 1: a
+    // mid-range laptop, not a retina review shot.
+    { name: "perf", testMatch: /perf\.spec\.ts/, use: { deviceScaleFactor: 1 } },
   ],
   webServer: {
     command: "pnpm exec vite build && pnpm exec vite preview",

@@ -4,6 +4,7 @@ import { useSession, useWorkspaces } from "./api/queries";
 import { AcceptInvite } from "./routes/auth/AcceptInvite";
 import { NewWorkspace } from "./routes/auth/NewWorkspace";
 import { SignIn, SignUp } from "./routes/auth/SignIn";
+import { BotCanvas } from "./routes/bot/BotCanvas";
 import { Gallery } from "./routes/Gallery";
 import { ApiKeys } from "./routes/workspace/ApiKeys";
 import { General } from "./routes/workspace/General";
@@ -83,6 +84,16 @@ const homeRoute = createRoute({
   },
 });
 
+const botRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: "/b/$botId",
+  component: function BotRoute() {
+    const { workspaceId } = workspaceRoute.useParams();
+    const { botId } = botRoute.useParams();
+    return <RequireSession>{() => <BotCanvas key={botId} workspaceId={workspaceId} botId={botId} />}</RequireSession>;
+  },
+});
+
 const settingsIndexRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: "/settings",
@@ -144,7 +155,7 @@ export const router = createRouter({
     signUpRoute,
     newWorkspaceRoute,
     inviteRoute,
-    workspaceRoute.addChildren([homeRoute, settingsIndexRoute, generalRoute, membersRoute, apiKeysRoute]),
+    workspaceRoute.addChildren([homeRoute, botRoute, settingsIndexRoute, generalRoute, membersRoute, apiKeysRoute]),
     galleryRoute,
     errorPreviewRoute,
   ]),

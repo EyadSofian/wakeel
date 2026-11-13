@@ -73,6 +73,17 @@ describe("canvas store", () => {
     void main;
   });
 
+  test("deleting a selection is one undo step: the node comes back with its transitions", () => {
+    const { store, main } = loaded();
+    const agent = main.nodes[1]?.id ?? "";
+    const edges = main.edges.filter((e) => e.to.nodeId === agent).map((e) => e.id);
+    store.getState().execute(commands.deleteSelection([agent], edges));
+    store.getState().undo();
+    const wf = store.getState().workflows[main.id]?.doc as Workflow | undefined;
+    expect(wf?.nodes.map((n) => n.id)).toContain(agent);
+    expect(wf?.edges.map((e) => e.id)).toEqual(main.edges.map((e) => e.id));
+  });
+
   test("opening another workflow clears the selection", () => {
     const { store, main } = loaded();
     store.getState().select({ nodeIds: [main.nodes[0]?.id ?? ""] });

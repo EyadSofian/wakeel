@@ -1,6 +1,7 @@
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ApiKeyResponse,
+  BotResponse,
   InvitationResponse,
   MemberResponse,
   SessionResponse,
@@ -195,5 +196,24 @@ export function useRevokeApiKey(id: string) {
   return useMutation({
     mutationFn: (keyId: string) => api<void>("DELETE", `/v1/workspaces/${id}/api-keys/${keyId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.apiKeys(id) }),
+  });
+}
+
+// Bots (task 2.1 API).
+export const botKeys = { list: (ws: string) => ["workspace", ws, "bots"] as const };
+
+export function useBots(workspaceId: string) {
+  return useQuery({
+    queryKey: botKeys.list(workspaceId),
+    queryFn: () => api<Page<BotResponse>>("GET", `/v1/workspaces/${workspaceId}/bots`).then((p) => p.data),
+  });
+}
+
+export function useCreateBot(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; slug: string }) =>
+      api<BotResponse>("POST", `/v1/workspaces/${workspaceId}/bots`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: botKeys.list(workspaceId) }),
   });
 }

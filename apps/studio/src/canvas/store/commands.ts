@@ -153,6 +153,20 @@ export const commands = {
     };
   },
 
+  /**
+   * Deletes nodes and transitions as one undo step. The canvas uses this for Backspace, so undo
+   * brings back a deleted node together with the transitions that went with it.
+   */
+  deleteSelection(nodeIds: readonly string[], edgeIds: readonly string[]): Command {
+    const nodes = commands.deleteNodes(nodeIds);
+    const edges = commands.deleteEdges(edgeIds);
+    const count = nodeIds.length + edgeIds.length;
+    return {
+      label: nodeIds.length === 0 ? edges.label : edgeIds.length === 0 ? nodes.label : `Delete ${count} items`,
+      apply: (wf) => nodes.apply(edges.apply(wf)),
+    };
+  },
+
   /** Points an existing transition at another node (drag the arrowhead). */
   reconnect(edgeId: string, toNodeId: string): Command {
     return {
