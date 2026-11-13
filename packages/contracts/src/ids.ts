@@ -53,6 +53,13 @@ export function newId<P extends EntityPrefix>(prefix: P, options: NewIdOptions =
   return `${prefix}_${ulid(options.now ?? Date.now())}`;
 }
 
+/** Request ids (ADR-012 problem documents, logs, `X-Request-Id`): `req_<ULID>`. Not stored entities. */
+export const REQUEST_ID_PATTERN = /^req_[0-9a-hjkmnp-tv-z]{26}$/;
+
+export function newRequestId(options: NewIdOptions = {}): `req_${string}` {
+  return `req_${ulid(options.now ?? Date.now())}`;
+}
+
 /** Creates a definition-element id such as `card_V1StGXR8Z5`. */
 export function newElementId<P extends ElementPrefix>(prefix: P): `${P}_${string}` {
   return `${prefix}_${nanoid(ELEMENT_ID_CHARS)}`;

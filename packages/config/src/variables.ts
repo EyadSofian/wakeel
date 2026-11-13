@@ -111,6 +111,11 @@ export const apiEnv = defineEnv({
     schema: z.coerce.number().int().min(1).max(65_535).default(3000),
     description: "TCP port the HTTP server listens on.",
   },
+  host: {
+    env: "HOST",
+    schema: z.string().min(1).default("127.0.0.1"),
+    description: "Interface to listen on. 127.0.0.1 by default; containers set 0.0.0.0.",
+  },
 });
 
 /** Queues from architecture §11. */

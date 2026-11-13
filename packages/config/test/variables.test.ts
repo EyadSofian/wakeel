@@ -75,7 +75,7 @@ describe("MASTER_KEY", () => {
 
 describe("api", () => {
   test("defaults to every route on port 3000", () => {
-    expect(loadConfig(apiEnv, { env: {} })).toEqual({ role: "all", port: 3000 });
+    expect(loadConfig(apiEnv, { env: {} })).toEqual({ role: "all", port: 3000, host: "127.0.0.1" });
   });
   test.each(["studio", "bridge", "all"])("accepts ROLE=%s", (role) => {
     expect(loadConfig(apiEnv, { env: { ROLE: role } }).role).toBe(role);
