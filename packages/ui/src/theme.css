@@ -1,0 +1,150 @@
+/*
+ * Exposes tokens.css to Tailwind 4 (design system §2). Every default namespace is cleared first, so
+ * only token utilities exist: `bg-red-500`, `p-7` beyond the grid or `rounded-2xl` produce nothing.
+ * `inline` makes utilities reference the token variables directly, so the dark theme in tokens.css
+ * applies without Tailwind redefining any variable.
+ *
+ * Usage in an app stylesheet:
+ *   @import "tailwindcss";
+ *   @import "@wakeel/ui/theme.css";
+ */
+@import "./tokens.css";
+
+@theme inline reference {
+  --*: initial;
+
+  /* Colour: bg-canvas, text-primary, border-hairline, outline-accent … */
+  --color-canvas: var(--bg-canvas);
+  --color-surface: var(--bg-surface);
+  --color-subtle: var(--bg-subtle);
+  --color-muted: var(--bg-muted);
+  --color-hairline: var(--border-hairline);
+  --color-strong: var(--border-strong);
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-tertiary: var(--text-tertiary);
+  --color-on-accent: var(--text-on-accent);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-border: var(--accent-border);
+  --color-error: var(--error);
+  --color-error-subtle: var(--error-subtle);
+  --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-scrim: var(--scrim);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  /* Type: font-sans, font-mono, text-body … (size, line height and weight together) */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --text-micro: 11px;
+  --text-micro--line-height: 16px;
+  --text-micro--font-weight: 500;
+  --text-small: 12px;
+  --text-small--line-height: 16px;
+  --text-body: 13px;
+  --text-body--line-height: 20px;
+  --text-content: 14px;
+  --text-content--line-height: 22px;
+  --text-title: 16px;
+  --text-title--line-height: 24px;
+  --text-title--font-weight: 600;
+  --text-heading: 20px;
+  --text-heading--line-height: 28px;
+  --text-heading--font-weight: 600;
+  --text-display: 24px;
+  --text-display--line-height: 32px;
+  --text-display--font-weight: 600;
+  --text-code-small: 12px;
+  --text-code-small--line-height: 18px;
+  --text-code-body: 13px;
+  --text-code-body--line-height: 20px;
+
+  /* Space: p-4 is --space-4 (8 px), not Tailwind's 16 px. Only the grid exists. */
+  --spacing-0: var(--space-0);
+  --spacing-1: var(--space-1);
+  --spacing-2: var(--space-2);
+  --spacing-3: var(--space-3);
+  --spacing-4: var(--space-4);
+  --spacing-5: var(--space-5);
+  --spacing-6: var(--space-6);
+  --spacing-7: var(--space-7);
+  --spacing-8: var(--space-8);
+  --spacing-9: var(--space-9);
+  --spacing-10: var(--space-10);
+  --spacing-11: var(--space-11);
+  --spacing-12: var(--space-12);
+
+  /* Sizes: h-control, w-inspector, size-icon … */
+  --spacing-control-sm: var(--size-control-sm);
+  --spacing-control: var(--size-control);
+  --spacing-control-lg: var(--size-control-lg);
+  --spacing-icon-sm: var(--size-icon-sm);
+  --spacing-icon: var(--size-icon);
+  --spacing-icon-lg: var(--size-icon-lg);
+  --spacing-row: var(--size-row);
+  --spacing-row-table: var(--size-row-table);
+  --spacing-row-card: var(--size-row-card);
+  --spacing-topbar: var(--size-topbar);
+  --spacing-rail: var(--size-rail);
+  --spacing-resource-panel: var(--size-resource-panel);
+  --spacing-node: var(--size-node);
+  --spacing-inspector: var(--size-inspector);
+  --spacing-inspector-min: var(--size-inspector-min);
+  --spacing-inspector-max: var(--size-inspector-max);
+  --spacing-emulator: var(--size-emulator);
+  --spacing-emulator-min: var(--size-emulator-min);
+  --spacing-emulator-max: var(--size-emulator-max);
+  --spacing-sign-in: var(--size-sign-in);
+  --spacing-status-dot: var(--size-status-dot);
+  --spacing-full: 100%;
+
+  /* Radius: rounded-xs … rounded-full; rounded-none for docked panels. */
+  --radius-none: var(--radius-0);
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-full: var(--radius-full);
+
+  /* Elevation: shadow-pop, shadow-drag, shadow-modal. Nothing that does not float gets a shadow. */
+  --shadow-pop: var(--shadow-pop);
+  --shadow-drag: var(--shadow-drag);
+  --shadow-modal: var(--shadow-modal);
+}
+
+/*
+ * Clearing the theme also clears Tailwind's default font, so preflight falls back to system fonts.
+ * Restore the design system's base: Plex, 13/20 body text, page colours (§2.2).
+ */
+@layer base {
+  html,
+  :host {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--text-primary);
+    background-color: var(--bg-canvas);
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+    direction: ltr;
+  }
+
+  table,
+  meter,
+  progress {
+    font-variant-numeric: tabular-nums;
+  }
+}

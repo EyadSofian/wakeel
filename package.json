@@ -9,7 +9,7 @@
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || true",
     "check": "pnpm lint && turbo run typecheck test",
-    "lint": "biome check .",
+    "lint": "biome check . && node tools/lint-rules/tokens-only.ts",
     "format": "biome check --write .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
@@ -17,7 +17,8 @@
     "dev:infra:down": "docker compose --profile init down",
     "dev:infra:reset": "docker compose --profile init down --volumes",
     "db:bootstrap": "tsx --env-file-if-exists=.env packages/db/src/cli/bootstrap.ts",
-    "db:migrate": "tsx --env-file-if-exists=.env packages/db/src/cli/migrate.ts"
+    "db:migrate": "tsx --env-file-if-exists=.env packages/db/src/cli/migrate.ts",
+    "ui:contrast": "node tools/contrast.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.7",

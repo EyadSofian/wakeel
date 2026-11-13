@@ -1,0 +1,12 @@
+/*
+ * IBM Plex, self-hosted (design system §2.2; SIL OFL 1.1, via @fontsource). Weights 400, 500, 600
+ * only; @fontsource declares font-display: swap and per-script unicode-range, so the Arabic files
+ * load only when an Arabic glyph is on the page.
+ */
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-sans-arabic/400.css";
+@import "@fontsource/ibm-plex-sans-arabic/500.css";
+@import "@fontsource/ibm-plex-sans-arabic/600.css";
+@import "@fontsource/ibm-plex-mono/400.css";
