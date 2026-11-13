@@ -235,3 +235,100 @@ export function canvasDraft(kind: CanvasFixture): { manifest: BotManifest; workf
 }
 
 export const DRAFT_SCHEMA_VERSION = SCHEMA_VERSION;
+
+/**
+ * The Variables screen (task 2.7): the typical bot plus every scope, defaults of several types, a
+ * sensitive variable, and a sub-workflow with inputs and outputs that Main calls. `empty` has no
+ * variables anywhere.
+ */
+export function variablesDraft(kind: "default" | "rtl" | "empty"): { manifest: BotManifest; workflows: Workflow[] } {
+  const rtl = kind === "rtl";
+  const base = canvasDraft(rtl ? "rtl" : "typical");
+  const main = base.workflows[0] as Workflow;
+  if (kind === "empty") {
+    // A new bot: a lone Start node and nothing declared.
+    const blank = canvasDraft("empty");
+    return { manifest: { ...blank.manifest, variables: [] }, workflows: blank.workflows };
+  }
+  const sub: Workflow = {
+    id: id("wf", 2),
+    name: rtl ? "متابعة الطلب" : "Track order",
+    kind: "sub",
+    inputs: [{ name: "orderNumber", type: "string", required: true }],
+    outputs: [
+      { name: "status", type: "string", required: true },
+      { name: "eta", type: "date", required: false },
+    ],
+    variables: [
+      { id: id("var", 20), name: "attempts", scope: "workflow", type: "number", default: 0, sensitive: false },
+    ],
+    nodes: [
+      { id: id("node", 900), name: "Entry", type: "entry" },
+      {
+        id: id("node", 901),
+        name: rtl ? "تم" : "Done",
+        type: "exit",
+        outputs: { status: "workflow.orderNumber ? 'shipped' : 'unknown'" },
+      },
+    ],
+    edges: [{ id: id("edge", 900), from: { nodeId: id("node", 900), port: "next" }, to: { nodeId: id("node", 901) } }],
+    layout: { [id("node", 900)]: { x: 0, y: 0 }, [id("node", 901)]: { x: COLUMN, y: 0 } },
+  };
+  const mainWithCall: Workflow = {
+    ...main,
+    variables: [
+      { id: id("var", 10), name: "answer", scope: "workflow", type: "string", sensitive: false },
+      {
+        id: id("var", 11),
+        name: "cart",
+        scope: "workflow",
+        type: "object",
+        default: { items: [], total: 0 },
+        sensitive: false,
+      },
+    ],
+    nodes: main.nodes.map((n) =>
+      n.type === "standard" && n.id === id("node", 2)
+        ? {
+            ...n,
+            cards: [
+              ...n.cards,
+              {
+                id: id("card", 900),
+                type: "call_workflow",
+                disabled: false,
+                workflowId: sub.id,
+                inputs: { orderNumber: "conversation.orderNumber" },
+                outputs: { status: id("var", 2) },
+              },
+            ],
+          }
+        : n,
+    ),
+  };
+  const manifest: BotManifest = {
+    ...base.manifest,
+    variables: [
+      ...base.manifest.variables,
+      {
+        id: id("var", 4),
+        name: "brand",
+        scope: "bot",
+        type: "string",
+        default: rtl ? "متجر إنجوسوفت" : "Engosoft store",
+        sensitive: false,
+      },
+      {
+        id: id("var", 5),
+        name: "plan",
+        scope: "user",
+        type: "enum",
+        enumValues: ["basic", "pro"],
+        default: "basic",
+        sensitive: false,
+      },
+      { id: id("var", 6), name: "phone", scope: "user", type: "string", sensitive: true },
+    ],
+  };
+  return { manifest, workflows: [mainWithCall, sub] };
+}

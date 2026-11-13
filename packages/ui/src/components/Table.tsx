@@ -5,10 +5,14 @@ import type { HTMLAttributes, ReactNode, TdHTMLAttributes, ThHTMLAttributes } fr
  * rows, hairlines between rows, numbers in tabular figures. Plain table markup, so screen readers get
  * headers.
  */
-export function Table({ label, children }: { label: string; children: ReactNode }) {
+export function Table({ label, fixed = false, children }: { label: string; fixed?: boolean; children: ReactNode }) {
+  // `fixed`: column widths come from the header cells, so stacked tables line up.
   return (
     <div className="overflow-hidden rounded-lg border border-hairline bg-surface">
-      <table aria-label={label} className="w-full border-collapse text-start text-body">
+      <table
+        aria-label={label}
+        className={["w-full border-collapse text-start text-body", fixed ? "table-fixed" : ""].join(" ")}
+      >
         {children}
       </table>
     </div>

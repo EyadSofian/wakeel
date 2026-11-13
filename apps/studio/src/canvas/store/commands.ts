@@ -2,6 +2,7 @@ import {
   type Card,
   cardPortKeys,
   type Edge,
+  type IoField,
   NON_TARGETABLE_NODE_TYPES,
   type Node,
   newElementId,
@@ -265,6 +266,74 @@ export const commands = {
         cards.splice(Math.max(0, Math.min(toIndex, cards.length)), 0, card);
         // Moving a card that ends the node changes whether the node has a `next` output.
         return pruneEdges(replaceNode(wf, { ...node, cards }));
+      },
+    };
+  },
+
+  /** Declares a workflow variable (Variables screen, VariablePicker "Create"). */
+  addVariable(variable: Variable): Command {
+    return {
+      label: "Add variable",
+      apply: (wf) => {
+        if (variable.scope !== "workflow") throw new CommandRejected("Only workflow variables live in a workflow.");
+        if (wf.variables.length >= 200) throw new CommandRejected("A workflow holds at most 200 variables.");
+        if (wf.variables.some((v) => v.id === variable.id || v.name === variable.name)) {
+          throw new CommandRejected(`A variable named "${variable.name}" already exists.`);
+        }
+        return { ...wf, variables: [...wf.variables, variable] };
+      },
+    };
+  },
+
+  /**
+   * Changes a workflow variable's type, default, description or sensitivity. Its name changes only
+   * through the rename refactor, which also rewrites references.
+   */
+  updateVariable(variable: Variable): Command {
+    return {
+      label: "Edit variable",
+      apply: (wf) => {
+        const before = wf.variables.find((v) => v.id === variable.id);
+        if (!before) throw new CommandRejected("That variable no longer exists.");
+        if (before.name !== variable.name || before.scope !== variable.scope)
+          throw new CommandRejected("Rename a variable from the Variables screen.");
+        return { ...wf, variables: wf.variables.map((v) => (v.id === variable.id ? variable : v)) };
+      },
+    };
+  },
+
+  /** Removes a workflow variable. The Variables screen only offers this when nothing uses it. */
+  deleteVariable(variableId: string): Command {
+    return {
+      label: "Delete variable",
+      apply: (wf) => {
+        if (!wf.variables.some((v) => v.id === variableId))
+          throw new CommandRejected("That variable no longer exists.");
+        return { ...wf, variables: wf.variables.filter((v) => v.id !== variableId) };
+      },
+    };
+  },
+
+  /** Adds, changes (not renames) or removes a declared input or output of a sub-workflow. */
+  setIo(kind: "input" | "output", name: string, field: IoField | undefined): Command {
+    const key = kind === "input" ? "inputs" : "outputs";
+    return {
+      label: field === undefined ? `Delete ${kind}` : `Edit ${kind}`,
+      apply: (wf) => {
+        if (wf.kind !== "sub") throw new CommandRejected("Only sub-workflows have inputs and outputs.");
+        const list = wf[key];
+        const exists = list.some((f) => f.name === name);
+        if (field === undefined) {
+          if (!exists) throw new CommandRejected(`That ${kind} no longer exists.`);
+          return { ...wf, [key]: list.filter((f) => f.name !== name) };
+        }
+        if (field.name !== name) throw new CommandRejected(`Rename an ${kind} from the Variables screen.`);
+        if (exists) return { ...wf, [key]: list.map((f) => (f.name === name ? field : f)) };
+        if (list.length >= 30) throw new CommandRejected(`A workflow has at most 30 ${key}.`);
+        if (kind === "input" && wf.variables.some((v) => v.name === name)) {
+          throw new CommandRejected(`This workflow already has a variable named "${name}".`);
+        }
+        return { ...wf, [key]: [...list, field] };
       },
     };
   },

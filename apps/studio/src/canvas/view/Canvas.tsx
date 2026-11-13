@@ -218,8 +218,13 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
     [wf],
   );
 
+  // xyflow reports an empty selection once while it mounts, before its nodes are in. Taking that
+  // report would drop a selection the canvas opened with (a usage opened from the Variables
+  // screen), and the store and xyflow would then keep correcting each other.
+  const initialised = useRef(false);
   const onSelectionChange = useCallback(
     ({ nodes: n, edges: e }: OnSelectionChangeParams) => {
+      if (!initialised.current) return;
       const s = store.getState().selection;
       const nodeIds = n.map((x) => x.id);
       const edgeIds = e.map((x) => x.id);
@@ -274,12 +279,28 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
   // Fit from the document before anything renders: with off-screen culling, xyflow's own fit
   // would wait for nodes it never renders. Sizes are estimated from each node's rows.
   const onInit = useCallback(() => {
+    initialised.current = true;
     const doc = store.getState();
     const current = doc.activeWorkflowId ? doc.workflows[doc.activeWorkflowId]?.doc : undefined;
     const pane = region.current?.getBoundingClientRect();
     if (!current || !pane) return;
     const sizes = new Map(current.nodes.map((n) => [n.id, estimateSize(n, nodeRows(n).length)]));
-    void flow.setViewport(fitViewport(current, sizes, { width: pane.width, height: pane.height }, FIT_VIEW));
+    const fit = fitViewport(current, sizes, { width: pane.width, height: pane.height }, FIT_VIEW);
+    // Arriving with a node selected (a usage opened from the Variables screen): centre on it at no
+    // less than full size, so the card it points at is readable.
+    const focus = doc.selection.nodeIds[0];
+    const at = focus === undefined ? undefined : current.layout[focus];
+    const size = focus === undefined ? undefined : sizes.get(focus);
+    if (at && size) {
+      const zoom = Math.max(fit.zoom, 1);
+      void flow.setViewport({
+        zoom,
+        x: pane.width / 2 - (at.x + size.width / 2) * zoom,
+        y: pane.height / 2 - (at.y + size.height / 2) * zoom,
+      });
+      return;
+    }
+    void flow.setViewport(fit);
   }, [store, flow]);
 
   if (!wf) return null;

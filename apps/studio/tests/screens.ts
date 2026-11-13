@@ -23,7 +23,12 @@ export type ScreenState =
   | "card-ask"
   | "card-condition"
   | "card-invalid"
-  | "card-rtl";
+  | "card-rtl"
+  // Task 2.7: the Variables screen's dialogs and the VariablePicker in the inspector.
+  | "usages"
+  | "edit"
+  | "delete-blocked"
+  | "picker";
 
 export interface Screen {
   id: string;
@@ -150,7 +155,18 @@ SCREENS.push({
     "card-condition",
     "card-invalid",
     "card-rtl",
+    "picker",
   ],
+  sizes: DESKTOP,
+  mock: true,
+  interactions: [],
+});
+
+// Task 2.7: the Variables screen (design system §5.7).
+SCREENS.push({
+  id: "variables",
+  route: `/w/${WS}/b/bot_01m7a256m0a13warwhczsjhx9b/variables`,
+  states: ["default", "focus", "empty", "loading", "error", "rtl", "usages", "edit", "delete-blocked"],
   sizes: DESKTOP,
   mock: true,
   interactions: [],

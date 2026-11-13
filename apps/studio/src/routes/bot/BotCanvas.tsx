@@ -3,91 +3,44 @@ import type { DefinitionIssue } from "@wakeel/contracts";
 import { Badge, Banner, Button, Skeleton } from "@wakeel/ui";
 import { ReactFlowProvider } from "@xyflow/react";
 import { CircleAlert, CircleCheck, LoaderCircle, Play, Rocket, TriangleAlert } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ApiError } from "../../api/client";
-import { draftSaver, loadDraft } from "../../api/drafts";
 import { useWorkspace } from "../../api/queries";
 import { useAddNode } from "../../canvas/add-node";
-import { CanvasStoreContext, useCanvas } from "../../canvas/context";
+import { useCanvas } from "../../canvas/context";
 import { createUiStore, UiStoreContext } from "../../canvas/interaction/ui-store";
 import { groupIssues, useIssues } from "../../canvas/issues";
 import { NodeLibrary } from "../../canvas/library/NodeLibrary";
-import { createSaver, type Saver } from "../../canvas/store/saver";
-import { type CanvasStore, createCanvasStore, isDirty } from "../../canvas/store/store";
+import { isDirty } from "../../canvas/store/store";
 import { useSummaryContext } from "../../canvas/use-summary";
 import { Canvas } from "../../canvas/view/Canvas";
 import { Inspector } from "../../inspector/Inspector";
 import { AppShell } from "../../shell/AppShell";
 import { ProblemBanner } from "../../shell/ProblemBanner";
+import { type LoadState, useLoadState } from "./BotLayout";
 
 /**
  * The bot canvas screen (design system §5.1): top bar with the breadcrumb, save state and issue
- * count, then the canvas of the open workflow. The draft loads once into a canvas store; autosave
- * writes it back.
+ * count, then the canvas of the open workflow. The draft is loaded by `BotLayout`.
  */
 export function BotCanvas({ workspaceId, botId }: { workspaceId: string; botId: string }) {
-  const store = useMemo<CanvasStore>(() => createCanvasStore(), []);
-  const [state, setState] = useState<"loading" | "ready" | { error: unknown }>("loading");
-
-  useEffect(() => {
-    let saver: Saver | undefined;
-    let cancelled = false;
-    loadDraft(workspaceId, botId).then(
-      (draft) => {
-        if (cancelled) return;
-        store.getState().load(draft);
-        saver = createSaver({
-          store,
-          save: draftSaver(workspaceId, botId),
-          timers: {
-            setTimeout: (fn, ms) => window.setTimeout(fn, ms),
-            clearTimeout: (h) => window.clearTimeout(h as number),
-          },
-        });
-        setState("ready");
-      },
-      (error: unknown) => !cancelled && setState({ error }),
-    );
-    // Save anything pending when the screen closes.
-    const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (
-        store
-          .getState()
-          .docs()
-          .some((d) => isDirty(d.state))
-      ) {
-        void saver?.flush();
-        e.preventDefault();
-      }
-    };
-    window.addEventListener("beforeunload", beforeUnload);
-    return () => {
-      cancelled = true;
-      window.removeEventListener("beforeunload", beforeUnload);
-      void saver?.flush().finally(() => saver?.stop());
-    };
-  }, [store, workspaceId, botId]);
-
-  return (
-    <CanvasStoreContext.Provider value={store}>
-      <Body workspaceId={workspaceId} state={state} />
-    </CanvasStoreContext.Provider>
-  );
+  const state = useLoadState();
+  return <Body workspaceId={workspaceId} botId={botId} state={state} />;
 }
 
 /** Inside the store provider: validates once and shares the result with the top bar and canvas. */
-function Body({ workspaceId, state }: { workspaceId: string; state: "loading" | "ready" | { error: unknown } }) {
+function Body({ workspaceId, botId, state }: { workspaceId: string; botId: string; state: LoadState }) {
   const [ui] = useState(createUiStore);
   return (
     <ReactFlowProvider>
       <UiStoreContext.Provider value={ui}>
-        <Frame workspaceId={workspaceId} state={state} />
+        <Frame workspaceId={workspaceId} botId={botId} state={state} />
       </UiStoreContext.Provider>
     </ReactFlowProvider>
   );
 }
 
-function Frame({ workspaceId, state }: { workspaceId: string; state: "loading" | "ready" | { error: unknown } }) {
+function Frame({ workspaceId, botId, state }: { workspaceId: string; botId: string; state: LoadState }) {
   const result = useIssues();
   const issues = useMemo(() => result ?? [], [result]);
   const active = useCanvas((s) => s.activeWorkflowId);
@@ -100,6 +53,7 @@ function Frame({ workspaceId, state }: { workspaceId: string; state: "loading" |
       title={<Breadcrumb workspaceId={workspaceId} ready={ready} />}
       active="Workflows"
       workspaceId={workspaceId}
+      botId={botId}
       actions={ready ? <TopBarStatus issues={issues} validated={result !== undefined} /> : null}
       panel={ready ? <NodeLibrary onAdd={(type) => addNode(type)} /> : null}
       inspector={ready ? <Inspector issues={issues} summary={summary} /> : null}
@@ -123,20 +77,26 @@ function Frame({ workspaceId, state }: { workspaceId: string; state: "loading" |
   );
 }
 
-function Breadcrumb({ workspaceId, ready }: { workspaceId: string; ready: boolean }) {
+/** Workspace / bot / page; the page is the open workflow unless a screen names another. */
+export function Breadcrumb({ workspaceId, ready, page }: { workspaceId: string; ready: boolean; page?: string }) {
   const workspace = useWorkspace(workspaceId);
   const bot = useCanvas((s) => s.manifest?.doc.name);
-  const wf = useCanvas((s) => (s.activeWorkflowId ? s.workflows[s.activeWorkflowId]?.doc.name : undefined));
+  const open = useCanvas((s) => (s.activeWorkflowId ? s.workflows[s.activeWorkflowId]?.doc.name : undefined));
+  const wf = page ?? open;
   return (
     <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-3 text-body">
-      <Link
-        to="/w/$workspaceId"
-        params={{ workspaceId }}
-        className="truncate text-secondary hover:text-primary"
-        dir="auto"
-      >
-        {workspace.data?.name ?? ""}
-      </Link>
+      {workspace.data ? (
+        <Link
+          to="/w/$workspaceId"
+          params={{ workspaceId }}
+          className="truncate text-secondary hover:text-primary"
+          dir="auto"
+        >
+          {workspace.data.name}
+        </Link>
+      ) : (
+        <Skeleton className="h-4 w-11" />
+      )}
       <span aria-hidden="true" className="text-tertiary">
         /
       </span>
@@ -163,7 +123,7 @@ function Breadcrumb({ workspaceId, ready }: { workspaceId: string; ready: boolea
 }
 
 /** Save state (§4 SaveIndicator) and the issue count. */
-function TopBarStatus({ issues: all, validated }: { issues: DefinitionIssue[]; validated: boolean }) {
+export function TopBarStatus({ issues: all, validated }: { issues: DefinitionIssue[]; validated: boolean }) {
   const manifest = useCanvas((s) => s.manifest);
   const workflows = useCanvas((s) => s.workflows);
   const docs = [manifest, ...Object.values(workflows)];

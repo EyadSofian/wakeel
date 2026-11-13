@@ -10,7 +10,7 @@ import type {
   WorkspaceSummary,
 } from "@wakeel/contracts";
 import { SCREENSHOT_FIXTURES } from "@wakeel/testing/fixtures/rtl";
-import { BOT, type CanvasFixture, canvasDraft } from "./canvas-fixtures";
+import { BOT, type CanvasFixture, canvasDraft, variablesDraft } from "./canvas-fixtures";
 
 /**
  * The mock API layer for the screenshot review (design system §8.1): every `/v1` call is answered
@@ -190,9 +190,16 @@ const json = (route: Route, status: number, body: unknown) =>
  * Answers `/v1/*` for `state`. Session and the switcher always load, so the frame is real. `canvas`
  * picks the draft the bot canvas opens; autosave PUTs succeed with the next revision.
  */
-export async function mockApi(page: Page, state: MockState, canvas: CanvasFixture = "typical"): Promise<void> {
+export async function mockApi(
+  page: Page,
+  state: MockState,
+  canvas: CanvasFixture | "variables" = "typical",
+): Promise<void> {
   const d = data(state);
-  const draft = canvasDraft(state === "rtl" ? "rtl" : canvas);
+  const draft =
+    canvas === "variables"
+      ? variablesDraft(state === "rtl" ? "rtl" : state === "empty" ? "empty" : "default")
+      : canvasDraft(state === "rtl" ? "rtl" : canvas);
   let rev = 3;
   await page.route("**/v1/**", async (route) => {
     const url = new URL(route.request().url());

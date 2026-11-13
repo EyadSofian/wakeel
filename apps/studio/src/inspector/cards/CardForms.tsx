@@ -1,6 +1,8 @@
-import { type Card, type Node, newElementId } from "@wakeel/contracts";
-import { SegmentedControl, Select, Switch } from "@wakeel/ui";
+import { Card, type Node, newElementId, type Variable, type VariableType } from "@wakeel/contracts";
+import { SegmentedControl, Select, Switch, VariablePicker } from "@wakeel/ui";
 import { useId } from "react";
+import { useCanvasStore } from "../../canvas/context";
+import { commands } from "../../canvas/store/commands";
 import { FieldShell, StringField, useIssueAt, useVariables } from "../fields";
 import { ListEditor, MessageEditor } from "../message/MessageEditor";
 
@@ -42,33 +44,68 @@ function useWritable() {
   return useVariables().filter((v) => v.id !== "" && v.scope !== "bot");
 }
 
+const GROUPS: Record<string, string> = { workflow: "Workflow", conversation: "Conversation", user: "User" };
+
+/** What each answer type stores, for a variable created from the Ask form. */
+const CAPTURE_TYPES: Record<string, VariableType> = {
+  text: "string",
+  number: "number",
+  boolean: "boolean",
+  email: "string",
+  phone: "string",
+  date: "date",
+  choice: "string",
+  extract: "object",
+};
+
+/**
+ * VariablePicker for a card field (task 2.7). Picking commits the card; creating adds a workflow
+ * variable of `createType` and stores into it in the same undo step.
+ */
 function VariableSelect({
   label,
   help,
   value,
   path,
-  onChange,
+  node,
+  createType,
+  toCard,
+  commit,
 }: {
   label: string;
   help?: string;
   value: string;
   path: string;
-  onChange: (id: string) => void;
+  node: Node;
+  createType: VariableType;
+  toCard: (variableId: string) => Card;
+  commit: (card: Card) => void;
 }) {
+  const store = useCanvasStore();
   const writable = useWritable();
-  const known = writable.some((v) => v.id === value);
   const issue = useIssueAt(path);
+  const options = writable.map((v) => ({ id: v.id, path: v.path, type: v.type, group: GROUPS[v.scope] ?? v.scope }));
+  const create = (name: string) => {
+    const variable: Variable = { id: newElementId("var"), name, scope: "workflow", type: createType, sensitive: false };
+    const card = Card.safeParse(toCard(variable.id));
+    if (!card.success) return;
+    const add = commands.addVariable(variable);
+    const update = commands.updateCard(node.id, card.data);
+    store.getState().execute({ label: "Add variable", apply: (wf) => update.apply(add.apply(wf)) });
+  };
   return (
     <FieldShell label={label} {...(help ? { help } : {})} problem={issue}>
-      {({ id, invalid: _invalid, ...rest }) => (
-        <Select id={id} value={value} onChange={(e) => onChange(e.target.value)} {...rest}>
-          {known ? null : <option value={value}>Missing variable</option>}
-          {writable.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.path}
-            </option>
-          ))}
-        </Select>
+      {({ id, invalid, ...rest }) => (
+        <VariablePicker
+          id={id}
+          value={value}
+          options={options}
+          invalid={invalid}
+          onChange={(variableId) => commit(toCard(variableId))}
+          onCreate={create}
+          createNoun="workflow variable"
+          {...rest}
+        />
       )}
     </FieldShell>
   );
@@ -108,7 +145,10 @@ export function AskForm({ card, node, path, commit }: CardFormProps<"capture">) 
         label="Save the answer to"
         value={card.into}
         path={`${path}.into`}
-        onChange={(into) => commit({ ...card, into })}
+        node={node}
+        createType={CAPTURE_TYPES[card.kind] ?? "any"}
+        toCard={(into) => ({ ...card, into })}
+        commit={commit}
       />
       <Switch
         label="Check the answer"
@@ -258,9 +298,13 @@ export function SetVariableForm({ card, node, path, commit }: CardFormProps<"set
             label="Variable"
             value={a.variableId}
             path={`${path}.assignments[${i}].variableId`}
-            onChange={(variableId) =>
-              commit({ ...card, assignments: card.assignments.map((x, j) => (j === i ? { ...x, variableId } : x)) })
-            }
+            node={node}
+            createType="any"
+            toCard={(variableId) => ({
+              ...card,
+              assignments: card.assignments.map((x, j) => (j === i ? { ...x, variableId } : x)),
+            })}
+            commit={commit}
           />
           <StringField
             label="Value"
