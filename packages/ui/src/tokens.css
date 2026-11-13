@@ -97,6 +97,9 @@
   --size-page: 1200px;
   --size-picker: 320px;
   --size-picker-height: 420px;
+  /* §5.15 command palette: 640 wide, its top at 20% of the viewport. */
+  --size-palette: 640px;
+  --size-palette-top: 20vh;
   --size-hairline: 1px;
   --size-status-dot: 6px;
   --size-port: 10px;
