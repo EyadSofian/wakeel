@@ -38,7 +38,7 @@ Alternative considered: drop better-auth and own sessions (scrypt from `node:cry
 - `bootstrapDatabase` creates `app_lookup`: `nologin`, `bypassrls`, no other attributes. Nobody can connect as it.
 - `app_migrator` gets membership in `app_lookup` with `inherit false, set true`, only so a migration can make it the owner of a function. `app_migrator` already owns every table and could turn RLS off, so this gives it no new power. `app_rw` and `app_admin_ro` get no membership and cannot `set role app_lookup`.
 - `app_lookup` gets `select` on exactly the columns each lookup reads, granted in the migration that creates the function.
-- Each lookup is a `security definer` SQL function in `public`, owned by `app_lookup`, with `set search_path = pg_catalog, public`. It returns only ids. Execute is revoked from `public` and granted to `app_rw` one function at a time.
+- Each lookup is a `security definer` SQL function in the schema `lookup`, owned by `app_lookup`, with `set search_path = pg_catalog, public`. It returns only ids. Execute is revoked from `public` and granted to `app_rw` one function at a time, before the owner changes, because after that `app_migrator` can no longer change the grants. `app_lookup` has `create` on `lookup` only, because a new function owner needs it, and no `create` anywhere else.
 - The lookups for task 1.1: a user's workspace ids, an API key prefix to its key and workspace ids, and an invitation token hash to its invitation and workspace ids.
 
 Alternatives considered:
