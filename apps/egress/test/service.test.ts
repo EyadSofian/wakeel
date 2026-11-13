@@ -54,13 +54,13 @@ describe("callers", () => {
       body: "{",
     });
     expect(res.status).toBe(400);
-    expect((await res.json()).code).toBe("validation_failed");
+    expect(((await res.json()) as { code: string }).code).toBe("validation_failed");
   });
 
   test("other paths are not found", async () => {
     const res = await fetch(`${h.egressUrl}/v1/other`, { headers: { authorization: `Bearer ${TOKEN}` } });
     expect(res.status).toBe(404);
-    expect((await res.json()).code).toBe("not_found");
+    expect(((await res.json()) as { code: string }).code).toBe("not_found");
   });
 
   test("a caller cannot raise the limits", async () => {

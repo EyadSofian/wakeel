@@ -79,9 +79,10 @@ export interface Harness {
 }
 
 const listen = (server: Server) =>
-  new Promise<number>((resolve) =>
-    server.listen(0, "127.0.0.1", () => resolve((server.address() as AddressInfo).port)),
-  );
+  new Promise<number>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => resolve((server.address() as AddressInfo).port));
+  });
 
 const close = (server: Server) =>
   new Promise<void>((resolve) => {

@@ -106,13 +106,27 @@ describe("IPv6 literals: loopback, mapped and embedded IPv4", () => {
     "http://[64:ff9b::127.0.0.1]/",
     "http://[2002:7f00:1::]/",
     "http://[fe80::1]/",
-    "http://[fe80::1%25eth0]/",
     "http://[fc00::1]/",
     "http://[fd00:ec2::254]/",
     "http://[ff02::1]/",
   ])("%s", async (url) => {
     await expectBlocked(url);
   });
+});
+
+describe("URLs the parser rejects never reach the policy or the network", () => {
+  // WHATWG URL refuses IPv6 zone ids, so these fail validation before any lookup or dial.
+  test.each(["http://[fe80::1%25eth0]/", "http://[::1/", "http://[::ffff:127.0.0.1:80/", "not a url"])(
+    "%s",
+    async (url) => {
+      const before = h.resolver.calls.length;
+      const reply = await callEgress(h, { url });
+      expect(reply.status).toBe(400);
+      expect(reply.json.code).toBe("validation_failed");
+      expect(reply.json.errors[0].path).toBe("url");
+      expect(h.resolver.calls.length).toBe(before);
+    },
+  );
 });
 
 describe("names that resolve to blocked addresses", () => {
