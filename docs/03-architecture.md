@@ -80,12 +80,12 @@ Dependency rule: `engine` and `autonomy` import only `contracts` and declare por
 - Row-level security is enabled and **forced** on every tenant-owned table: `using (workspace_id = current_setting('app.workspace_id', true))` and the same `with check`.
 - Database roles: `app_migrator` (owns objects, used only by migrations), `app_rw` (used by api and worker; `NOBYPASSRLS`, no DDL), `app_admin_ro` (support tooling; read-only, still RLS-bound unless a break-glass function is called and audited).
 - All tenant queries run through `withWorkspace(workspaceId, fn)` in `packages/db`, which opens a transaction and issues `select set_config('app.workspace_id', $1, true)`. A lint rule forbids importing the raw pool outside `packages/db`.
-- Cross-tenant lookups that must happen before the workspace is known (API key prefix → workspace, session → memberships, bridge key → connection) go through `security definer` functions that return only the ids needed.
+- Cross-tenant lookups that must happen before the workspace is known (API key prefix → workspace, session → memberships, bridge key → connection) go through `security definer` functions owned by the `nologin bypassrls` role `app_lookup` that return only the ids needed (ADR-015).
 - Test harness: every repository test runs twice, once as tenant A and once as tenant B, and asserts B sees nothing of A.
 
 ### 2.2 Identifiers (ADR-012)
 
-- Database and API ids are `text`: `<prefix>_<ULID lowercase>`, generated in the application. Prefixes: `ws usr mem inv key bot ver conn eu conv msg evt turn out dlv span use kb src doc chk tbl row suite case run file aud`.
+- Database and API ids are `text`: `<prefix>_<ULID lowercase>`, generated in the application. Prefixes: `ws usr ses acc vrf mem inv key sec bot ver conn eu conv msg evt turn out dlv span use kb src doc chk tbl row suite case run file aud`.
 - Ids inside a bot definition (workflow, node, card, edge, variable, tool, exit) are `<prefix>_<10-char nanoid>`, unique within the bot, and never reused.
 
 ### 2.3 Tables
@@ -93,8 +93,10 @@ Dependency rule: `engine` and `autonomy` import only `contracts` and declare por
 All have `created_at`; mutable ones have `updated_at`. `W` = has `workspace_id` + RLS.
 
 **Platform**
-- `users(id, email citext unique, name, password_hash, email_verified_at, locale)`
-- `sessions(id, user_id, token_hash, expires_at, ip, user_agent)`
+- `users(id, email citext unique, name, email_verified boolean, image?, locale)` — auth tables follow better-auth (ADR-015)
+- `sessions(id, user_id, token unique, expires_at, ip_address?, user_agent?)` — the cookie carries the token signed with `AUTH_SECRET`
+- `accounts(id, user_id, provider_id, account_id, password?, access_token?, refresh_token?, id_token?, access_token_expires_at?, refresh_token_expires_at?, scope?)` unique `(provider_id, account_id)`; the password hash lives here
+- `verifications(id, identifier, value, expires_at)`
 - `workspaces(id, name, slug unique, plan, region, settings jsonb)`
 - `memberships W (id, user_id, role)` role ∈ `owner | admin | builder | viewer`; unique `(workspace_id, user_id)`
 - `invitations W (id, email, role, token_hash, expires_at, accepted_at)`
