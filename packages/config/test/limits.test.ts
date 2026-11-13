@@ -1,7 +1,15 @@
 import * as contracts from "@wakeel/contracts";
 import { describe, expect, test } from "vitest";
 import { BRAND } from "../src/brand";
-import { API_LIMITS, LIMITS, PLAN_DEFAULTS, STATE_MAX_BYTES, TABLE_LIMITS, WEBHOOK_LIMITS } from "../src/limits";
+import {
+  API_LIMITS,
+  EGRESS_LIMITS,
+  LIMITS,
+  PLAN_DEFAULTS,
+  STATE_MAX_BYTES,
+  TABLE_LIMITS,
+  WEBHOOK_LIMITS,
+} from "../src/limits";
 
 describe("limits", () => {
   test("engine limits are the contract values, not a copy that can drift", () => {
@@ -36,6 +44,15 @@ describe("limits", () => {
 
   test("webhook retries match the schedule in the contract", () => {
     expect(WEBHOOK_LIMITS.retrySeconds).toBe(contracts.RETRY_SCHEDULE_SECONDS);
+  });
+});
+
+describe("egress limits", () => {
+  test("are the guest fetch limits from architecture §5.2", () => {
+    expect(EGRESS_LIMITS.timeoutMs).toBe(10_000);
+    expect(EGRESS_LIMITS.responseBytes).toBe(5 * 1024 * 1024);
+    expect(EGRESS_LIMITS.redirects).toBe(5);
+    expect(EGRESS_LIMITS.timeoutMs).toBe(LIMITS.fetchTimeoutMs);
   });
 });
 

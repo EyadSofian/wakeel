@@ -201,3 +201,50 @@ export const workerEnv = defineEnv({
     description: `Comma-separated queues this replica consumes, from: ${QUEUE_NAMES.join(", ")}. Unset means all.`,
   },
 });
+
+/**
+ * Shared by the egress service and its callers (sandbox, worker). Callers send it as a bearer token;
+ * the network policy is the first guard, this is the second (ADR-020).
+ */
+const egressToken = {
+  env: "EGRESS_TOKEN",
+  schema: z.string().min(32),
+  description:
+    "At least 32 random characters shared by the egress service and its callers; generate with `openssl rand -base64 32`.",
+  secret: true,
+} as const;
+
+/** The egress service itself (task 3.1, ADR-020). */
+export const egressEnv = defineEnv({
+  egressToken,
+  egressHost: {
+    env: "EGRESS_HOST",
+    schema: z.string().min(1).default("127.0.0.1"),
+    description: "Interface the egress service listens on. 127.0.0.1 by default; containers set 0.0.0.0.",
+  },
+  egressPort: {
+    env: "EGRESS_PORT",
+    schema: z.coerce.number().int().min(1).max(65_535).default(4400),
+    description: "TCP port the egress service listens on.",
+  },
+  egressRatePerMinute: {
+    env: "EGRESS_RATE_PER_MINUTE",
+    schema: z.coerce.number().int().min(1).default(600),
+    description: "Outbound requests one workspace may make per minute through one egress replica, redirects included.",
+  },
+  egressRateBurst: {
+    env: "EGRESS_RATE_BURST",
+    schema: z.coerce.number().int().min(1).default(60),
+    description: "Requests one workspace may make at once before EGRESS_RATE_PER_MINUTE applies.",
+  },
+});
+
+/** Services that send tenant URLs out through egress: sandbox (3.3), worker webhook and KB fetch. */
+export const egressClientEnv = defineEnv({
+  egressToken,
+  egressUrl: {
+    env: "EGRESS_URL",
+    schema: z.url({ protocol: /^https?$/ }).default("http://127.0.0.1:4400"),
+    description: "Base URL of the egress service, for example http://egress:4400.",
+  },
+});
