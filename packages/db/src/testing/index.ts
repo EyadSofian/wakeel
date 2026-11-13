@@ -73,3 +73,23 @@ export function tenantPairs(): [{ owner: string; other: string }, { owner: strin
     { owner: b, other: a },
   ];
 }
+
+/**
+ * Runs one query as the test container's superuser, which bypasses RLS. For assertions about what is
+ * stored (for example that only a hash is in a column), from test files outside packages/db that
+ * may not import the driver.
+ */
+export async function superuserQuery<R extends Record<string, unknown> = Record<string, unknown>>(
+  urls: TestDatabaseUrls,
+  text: string,
+  values: unknown[] = [],
+): Promise<R[]> {
+  const { default: pg } = await import("pg");
+  const client = new pg.Client({ connectionString: urls.superuser });
+  await client.connect();
+  try {
+    return (await client.query<R>(text, values)).rows;
+  } finally {
+    await client.end();
+  }
+}

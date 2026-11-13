@@ -34,6 +34,12 @@ export interface Database {
    * the ids to open `withWorkspace` and read the row there, under RLS.
    */
   lookup: Lookups;
+  /**
+   * Drizzle on the app_rw pool with no workspace set, for the platform tables only (users,
+   * sessions, accounts, verifications), which better-auth reads and writes (ADR-015). Tenant tables
+   * are invisible and unwritable through it: RLS fails closed without a workspace.
+   */
+  platform: NodePgDatabase;
   close(): Promise<void>;
 }
 
@@ -83,6 +89,8 @@ export function createDatabase(options: DatabaseOptions): Database {
       }
       return { role: row.role };
     },
+
+    platform: db,
 
     lookup: {
       async userWorkspaceIds(userId) {

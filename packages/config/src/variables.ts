@@ -118,6 +118,30 @@ export const apiEnv = defineEnv({
   },
 });
 
+/** Studio sign-in (task 1.2, ADR-015). */
+export const authEnv = defineEnv({
+  authSecret: {
+    env: "AUTH_SECRET",
+    schema: z.string().min(32),
+    description:
+      "At least 32 random characters; generate with `openssl rand -base64 32`. Signs session cookies and CSRF tokens.",
+    secret: true,
+  },
+  studioOrigin: {
+    env: "STUDIO_ORIGIN",
+    schema: z
+      .url({ protocol: /^https?$/ })
+      .transform((u) => new URL(u).origin)
+      .default("http://localhost:5173"),
+    description: "Origin the Studio is served from, for example https://studio.example.com. Only it may sign in.",
+  },
+  apiPublicUrl: {
+    env: "API_PUBLIC_URL",
+    schema: z.url({ protocol: /^https?$/ }).default("http://localhost:3000"),
+    description: "Public base URL of the api service, for example https://api.example.com.",
+  },
+});
+
 /** Queues from architecture §11. */
 export const QUEUE_NAMES = ["turn", "webhook", "kb-ingest", "kb-sync", "eval", "maintenance"] as const;
 export type QueueName = (typeof QUEUE_NAMES)[number];

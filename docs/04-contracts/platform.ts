@@ -39,3 +39,42 @@ export type AuditMeta = z.infer<typeof AuditMeta>;
 
 /** `workspace_secrets.name`: lower-case, for example `anthropic.api_key`. */
 export const SecretName = z.string().regex(/^[a-z0-9][a-z0-9_.-]{0,63}$/, "Use lower-case letters, digits, . _ or -");
+
+// Studio sign-in API (task 1.2). Passwords: 8–128 characters (NIST SP 800-63B minimum).
+
+export const PASSWORD_MIN_LENGTH = 8;
+export const PASSWORD_MAX_LENGTH = 128;
+
+export const EmailAddress = z.email().max(320);
+export const Password = z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH);
+
+export const SignUpRequest = z.strictObject({
+  name: z.string().trim().min(1).max(200),
+  email: EmailAddress,
+  password: Password,
+});
+export type SignUpRequest = z.infer<typeof SignUpRequest>;
+
+export const SignInRequest = z.strictObject({
+  email: EmailAddress,
+  // Any length is accepted here, so a too-short password is "not correct", not a validation error.
+  password: z.string().min(1).max(PASSWORD_MAX_LENGTH),
+});
+export type SignInRequest = z.infer<typeof SignInRequest>;
+
+export const AuthUser = z.object({
+  id: z.string(),
+  email: z.string(),
+  name: z.string(),
+  emailVerified: z.boolean(),
+  locale: z.string(),
+});
+export type AuthUser = z.infer<typeof AuthUser>;
+
+/** GET /v1/auth/session and the sign-in and sign-up responses. Send `csrfToken` as `X-CSRF-Token` on mutations. */
+export const SessionResponse = z.object({
+  user: AuthUser,
+  expiresAt: z.iso.datetime({ offset: false }),
+  csrfToken: z.string(),
+});
+export type SessionResponse = z.infer<typeof SessionResponse>;
