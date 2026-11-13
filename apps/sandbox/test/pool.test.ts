@@ -268,6 +268,59 @@ describe("isolation", () => {
   });
 });
 
+describe("escape", () => {
+  test("the guest's own Function constructor reaches only the guest's globals", async () => {
+    const out = resultOf(
+      await run(
+        "const F = (() => {}).constructor; const G = (async () => {}).constructor;" +
+          "return [F('return typeof process')(), await G('return typeof require')(), F('return this')() === globalThis];",
+      ),
+    );
+    expect(out).toEqual(["undefined", "undefined", true]);
+  });
+
+  test("dynamic import finds no modules", async () => {
+    for (const name of ["node:fs", "fs", "./worker.ts", "quickjs-emscripten-core"]) {
+      const e = errorOf(await run(`return await import(${JSON.stringify(name)});`));
+      expect(e.code).toBe("code_error");
+    }
+  });
+
+  test("replacing JSON.stringify does not change how the result is encoded", async () => {
+    const out = await run("JSON.stringify = () => '\"pwned\"'; JSON.parse = () => 0; return { a: 1 };");
+    expect(resultOf(out)).toEqual({ a: 1 });
+  });
+
+  test("a toJSON that never returns is stopped at the deadline", async () => {
+    const kills = pool.health().kills;
+    const e = errorOf(await run("return { toJSON() { for (;;) {} } };", { timeoutMs: 150 }));
+    expect(e.code).toBe("code_timeout");
+    expect(pool.health().kills).toBe(kills);
+  });
+
+  test("an error whose message getter never returns is stopped at the deadline", async () => {
+    const kills = pool.health().kills;
+    const e = errorOf(
+      await run("const e = {}; Object.defineProperty(e, 'message', { get() { for (;;) {} } }); throw e;", {
+        timeoutMs: 150,
+      }),
+    );
+    expect(e.code).toBe("code_timeout");
+    expect(pool.health().kills).toBe(kills);
+    expect(resultOf(await run("return 'still serving';"))).toBe("still serving");
+  });
+
+  test("an error whose getters throw is still reported as code_error", async () => {
+    const e = errorOf(
+      await run(
+        "const e = new Error('x'); for (const k of ['name', 'message', 'stack', 'lineNumber'])" +
+          " Object.defineProperty(e, k, { get() { throw new Error('trap'); } }); throw e;",
+      ),
+    );
+    expect(e.code).toBe("code_error");
+  });
+});
+
 describe("pool", () => {
   test("more execs than workers queue and all finish", async () => {
     // Two runners plus a queue of eight (four per runner).
