@@ -6,7 +6,7 @@ import { DEFAULT_MODELS, SCHEMA_VERSION } from "@wakeel/contracts";
  * and §8.1). Ids are fixed so shots are deterministic; every draft parses with the contract schemas
  * (tests/canvas-fixtures.test.ts).
  */
-export type CanvasFixture = "typical" | "dense-300" | "rtl" | "issues" | "empty";
+export type CanvasFixture = "typical" | "dense-300" | "rtl" | "issues" | "issues-rtl" | "empty";
 
 export const BOT = "bot_01m7a256m0a13warwhczsjhx9b";
 
@@ -228,8 +228,9 @@ function empty(): Workflow {
 }
 
 export function canvasDraft(kind: CanvasFixture): { manifest: BotManifest; workflows: Workflow[] } {
-  const rtl = kind === "rtl";
-  const main = kind === "dense-300" ? dense() : kind === "empty" ? empty() : typical(rtl, kind === "issues");
+  const rtl = kind === "rtl" || kind === "issues-rtl";
+  const issues = kind === "issues" || kind === "issues-rtl";
+  const main = kind === "dense-300" ? dense() : kind === "empty" ? empty() : typical(rtl, issues);
   const name = rtl ? "مساعد متجر إنجوسوفت" : kind === "dense-300" ? "Large flow" : "Store assistant";
   return { manifest: manifest(name, main.id, rtl), workflows: [main] };
 }
@@ -331,4 +332,96 @@ export function variablesDraft(kind: "default" | "rtl" | "empty"): { manifest: B
     ],
   };
   return { manifest, workflows: [mainWithCall, sub] };
+}
+
+/**
+ * The Workflows panel (task 2.8): the Variables draft (Main calls Track order) plus Refunds, which
+ * calls Track order too and lends it to an autonomous node as a tool, and the error workflow.
+ * Deleting Track order therefore warns about three places.
+ */
+export function workflowsDraft(rtl: boolean): { manifest: BotManifest; workflows: Workflow[] } {
+  const base = variablesDraft(rtl ? "rtl" : "default");
+  const track = base.workflows[1] as Workflow;
+  const refunds: Workflow = {
+    id: id("wf", 3),
+    name: rtl ? "الاسترجاع" : "Refunds",
+    kind: "sub",
+    inputs: [],
+    outputs: [],
+    variables: [{ id: id("var", 30), name: "status", scope: "workflow", type: "string", sensitive: false }],
+    nodes: [
+      { id: id("node", 950), name: "Entry", type: "entry" },
+      {
+        id: id("node", 951),
+        name: rtl ? "تحقق من الطلب" : "Check order",
+        type: "standard",
+        cards: [
+          {
+            id: id("card", 950),
+            type: "call_workflow",
+            disabled: false,
+            workflowId: track.id,
+            inputs: { orderNumber: "conversation.orderNumber" },
+            outputs: { status: id("var", 30) },
+          },
+        ],
+      },
+      {
+        id: id("node", 952),
+        name: rtl ? "وكيل الاسترجاع" : "Refund agent",
+        type: "autonomous",
+        instructions: rtl ? "ساعد العميل في استرجاع طلبه." : "Help the customer return their order.",
+        tools: [
+          {
+            id: id("tool", 950),
+            type: "workflow",
+            name: "trackOrder",
+            description: "Looks up where an order is.",
+            workflowId: track.id,
+          },
+        ],
+        variableAccess: [],
+        exits: [{ id: id("exit", 950), name: "done", description: "The refund is settled." }],
+        conversational: true,
+        allowHandoff: false,
+        maxIterations: 6,
+        temperature: 0.3,
+        messageTypes: ["text"],
+      },
+      { id: id("node", 953), name: "Exit", type: "exit", outputs: {} },
+    ],
+    edges: [
+      { id: id("edge", 950), from: { nodeId: id("node", 950), port: "next" }, to: { nodeId: id("node", 951) } },
+      { id: id("edge", 951), from: { nodeId: id("node", 951), port: "next" }, to: { nodeId: id("node", 952) } },
+      {
+        id: id("edge", 952),
+        from: { nodeId: id("node", 952), port: `exit:${id("exit", 950)}` },
+        to: { nodeId: id("node", 953) },
+      },
+    ],
+    layout: {
+      [id("node", 950)]: { x: 0, y: 0 },
+      [id("node", 951)]: { x: COLUMN, y: 0 },
+      [id("node", 952)]: { x: COLUMN * 2, y: 0 },
+      [id("node", 953)]: { x: COLUMN * 3, y: 0 },
+    },
+  };
+  const errors: Workflow = {
+    id: id("wf", 4),
+    name: rtl ? "معالجة الأخطاء" : "When something fails",
+    kind: "error",
+    inputs: [],
+    outputs: [],
+    variables: [],
+    nodes: [
+      { id: id("node", 960), name: rtl ? "خطأ" : "On error", type: "error_handler" },
+      { id: id("node", 961), name: rtl ? "إنهاء" : "End", type: "end", reason: "error" },
+    ],
+    edges: [{ id: id("edge", 960), from: { nodeId: id("node", 960), port: "next" }, to: { nodeId: id("node", 961) } }],
+    layout: { [id("node", 960)]: { x: 0, y: 0 }, [id("node", 961)]: { x: COLUMN, y: 0 } },
+  };
+  return {
+    manifest: { ...base.manifest, errorWorkflowId: errors.id },
+    workflows: [...base.workflows, refunds, errors],
+  };
 }

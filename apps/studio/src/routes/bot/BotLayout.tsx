@@ -4,6 +4,7 @@ import { draftSaver, loadDraft } from "../../api/drafts";
 import { CanvasStoreContext } from "../../canvas/context";
 import { createSaver, type Saver } from "../../canvas/store/saver";
 import { type CanvasStore, createCanvasStore, isDirty } from "../../canvas/store/store";
+import { ShellProvider } from "../../shell/ShellProvider";
 
 export type LoadState = "loading" | "ready" | { error: unknown };
 
@@ -63,7 +64,9 @@ export function BotLayout({ workspaceId, botId }: { workspaceId: string; botId: 
   return (
     <CanvasStoreContext.Provider value={store}>
       <LoadStateContext.Provider value={state}>
-        <Outlet />
+        <ShellProvider workspaceId={workspaceId} botId={botId} ready={state === "ready"}>
+          <Outlet />
+        </ShellProvider>
       </LoadStateContext.Provider>
     </CanvasStoreContext.Provider>
   );

@@ -1,4 +1,5 @@
 import { NON_TARGETABLE_NODE_TYPES, type NodeType, type Workflow } from "@wakeel/contracts";
+import { useMotionTokens } from "@wakeel/ui";
 import {
   applyNodeChanges,
   Background,
@@ -14,10 +15,12 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import { type DragEvent, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRegisterActions, useShell, useShellState } from "../../shell/shell-store";
 import { useAddNode } from "../add-node";
 import { useCanvas, useCanvasStore } from "../context";
 import { CanvasMenus } from "../interaction/CanvasMenus";
 import { ConnectionWatcher } from "../interaction/ConnectionWatcher";
+import { canvasPaletteActions, useCanvasActions, useCanvasAvailability } from "../interaction/canvas-actions";
 import { estimateSize, fitViewport } from "../interaction/layout";
 import { nodeRows } from "../interaction/rows";
 import { ShortcutSheet } from "../interaction/ShortcutSheet";
@@ -273,8 +276,15 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
   // The whole interaction table (§5.1) lives in useCanvasKeyboard; announcements go to a live region.
   const region = useRef<HTMLDivElement>(null);
   const [said, setSaid] = useState("");
-  useCanvasKeyboard({ region, pointer, run, announce: setSaid, setMinimap, setMode });
+  const actions = useCanvasActions({ region, run, setMinimap, setMode });
+  useCanvasKeyboard({ region, pointer, run, announce: setSaid, actions });
   const insideNode = useUi((s) => s.cursor !== undefined);
+
+  // The same actions in the command palette (task 2.8), for as long as the canvas is open.
+  const availability = useCanvasAvailability();
+  const paletteActions = useMemo(() => canvasPaletteActions(actions, availability), [actions, availability]);
+  useRegisterActions("canvas", paletteActions);
+  useFocusRequests(region);
 
   // Fit from the document before anything renders: with off-screen culling, xyflow's own fit
   // would wait for nodes it never renders. Sizes are estimated from each node's rows.
@@ -383,6 +393,78 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Jumps from the Issues panel, `F8` and the palette (task 2.8): centre the node if it is off
+ * screen, then focus the inspector field at the issue's path, or the node itself. A request for a
+ * node in another workflow waits for that workflow's canvas, which opens centred on the selection.
+ */
+function useFocusRequests(region: { current: HTMLElement | null }) {
+  const { store: shell } = useShell();
+  const focus = useShellState((s) => s.focus);
+  const wf = useCanvas((s) => (s.activeWorkflowId ? s.workflows[s.activeWorkflowId]?.doc : undefined));
+  const flow = useReactFlow<CanvasRFNode>();
+  const tokens = useMotionTokens();
+  const jumpMs = tokens.reduced ? 0 : tokens.duration.slower * 1000;
+  // The request is cleared only once handled, so this effect re-runs; the seq stops a second pass,
+  // and the frame loop lives outside the effect so that re-run does not cancel it.
+  const handled = useRef(0);
+  const frame = useRef(0);
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
+  useEffect(() => {
+    if (!focus || focus.seq === handled.current || !wf?.nodes.some((n) => n.id === focus.nodeId)) return;
+    handled.current = focus.seq;
+    const pane = region.current?.getBoundingClientRect();
+    const at = wf.layout[focus.nodeId];
+    const n = flow.getNode(focus.nodeId);
+    if (pane && at) {
+      const { x, y, zoom } = flow.getViewport();
+      const w = n?.measured?.width ?? 288;
+      const h = n?.measured?.height ?? 120;
+      const left = at.x * zoom + x;
+      const top = at.y * zoom + y;
+      const inside = left >= 0 && top >= 0 && left + w * zoom <= pane.width && top + h * zoom <= pane.height;
+      if (!inside) void flow.setCenter(at.x + w / 2, at.y + h / 2, { zoom: Math.max(zoom, 1), duration: jumpMs });
+    }
+    // The inspector renders the new selection a frame or two later. Wait for the field the issue
+    // names; without a path, or if it never appears, focus the node.
+    let frames = 0;
+    const done = (el: HTMLElement | null | undefined) => {
+      el?.focus({ preventScroll: true });
+      if (shell.getState().focus?.seq === focus.seq) shell.getState().set({ focus: undefined });
+    };
+    const tryFocus = () => {
+      const field = focus.path ? fieldControl(focus.path) : undefined;
+      if (field) return done(field);
+      if (!focus.path || frames++ >= FOCUS_FRAMES) {
+        return done(document.querySelector<HTMLElement>(`.react-flow__node[data-id="${focus.nodeId}"]`));
+      }
+      frame.current = requestAnimationFrame(tryFocus);
+    };
+    cancelAnimationFrame(frame.current);
+    frame.current = requestAnimationFrame(tryFocus);
+  }, [focus, wf, shell, flow, region, jumpMs]);
+}
+
+/** How long a jump waits for the inspector to show the field it names. */
+const FOCUS_FRAMES = 20;
+
+/**
+ * The control of the inspector field an issue points at: the field with exactly that path, else
+ * the deepest field the path is inside, else the first field inside the path (an issue on a card).
+ */
+function fieldControl(path: string): HTMLElement | undefined {
+  const fields = [...document.querySelectorAll<HTMLElement>("[data-issue-path]")];
+  const pathOf = (el: HTMLElement) => el.dataset["issuePath"] ?? "";
+  const field =
+    fields.find((f) => pathOf(f) === path) ??
+    fields.filter((f) => path.startsWith(`${pathOf(f)}.`)).sort((a, b) => pathOf(b).length - pathOf(a).length)[0] ??
+    fields.find((f) => pathOf(f).startsWith(`${path}.`));
+  return (
+    field?.querySelector<HTMLElement>("input, textarea, select, button, [contenteditable=true], [tabindex='0']") ??
+    undefined
   );
 }
 

@@ -1,7 +1,13 @@
 import { BotDefinition, validateDefinition } from "@wakeel/contracts";
 import { describe, expect, it } from "vitest";
 import { usageCounts } from "../src/routes/variables/model";
-import { type CanvasFixture, canvasDraft, DRAFT_SCHEMA_VERSION, variablesDraft } from "./canvas-fixtures";
+import {
+  type CanvasFixture,
+  canvasDraft,
+  DRAFT_SCHEMA_VERSION,
+  variablesDraft,
+  workflowsDraft,
+} from "./canvas-fixtures";
 
 const definition = (kind: CanvasFixture) => {
   const d = canvasDraft(kind);
@@ -9,7 +15,7 @@ const definition = (kind: CanvasFixture) => {
 };
 
 describe("canvas review fixtures", () => {
-  it.each(["typical", "rtl", "empty", "dense-300", "issues"] as const)(
+  it.each(["typical", "rtl", "empty", "dense-300", "issues", "issues-rtl"] as const)(
     "%s parses with the contract schemas",
     (kind) => {
       expect(() => definition(kind)).not.toThrow();
@@ -20,8 +26,8 @@ describe("canvas review fixtures", () => {
     expect(validateDefinition(definition(kind))).toEqual([]);
   });
 
-  it("issues has at least one error and one warning", () => {
-    const severities = new Set(validateDefinition(definition("issues")).map((i) => i.severity));
+  it.each(["issues", "issues-rtl"] as const)("%s has at least one error and one warning", (kind) => {
+    const severities = new Set(validateDefinition(definition(kind)).map((i) => i.severity));
     expect(severities).toEqual(new Set(["error", "warning"]));
   });
 
@@ -34,6 +40,11 @@ describe("canvas review fixtures", () => {
   it.each(["default", "rtl", "empty"] as const)("variables %s parses and validates clean", (kind) => {
     const d = variablesDraft(kind);
     const def = BotDefinition.parse({ schemaVersion: DRAFT_SCHEMA_VERSION, ...d });
+    expect(validateDefinition(def)).toEqual([]);
+  });
+
+  it.each([false, true])("workflows (rtl %s) parses and validates clean", (rtl) => {
+    const def = BotDefinition.parse({ schemaVersion: DRAFT_SCHEMA_VERSION, ...workflowsDraft(rtl) });
     expect(validateDefinition(def)).toEqual([]);
   });
 

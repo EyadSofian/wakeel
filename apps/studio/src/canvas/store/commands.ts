@@ -110,6 +110,19 @@ export const commands = {
     };
   },
 
+  /** Renames the workflow itself (task 2.8); the breadcrumb, panel and call cards read the name. */
+  renameWorkflow(name: string): Command {
+    return {
+      label: "Rename workflow",
+      apply: (wf) => {
+        const trimmed = name.trim();
+        if (trimmed === "") throw new CommandRejected("A workflow needs a name.");
+        const next = trimmed.slice(0, 80);
+        return next === wf.name ? wf : { ...wf, name: next };
+      },
+    };
+  },
+
   renameNode(nodeId: string, name: string): Command {
     return {
       label: "Rename node",

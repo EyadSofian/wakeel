@@ -94,7 +94,7 @@ function VariableSelect({
     store.getState().execute({ label: "Add variable", apply: (wf) => update.apply(add.apply(wf)) });
   };
   return (
-    <FieldShell label={label} {...(help ? { help } : {})} problem={issue}>
+    <FieldShell label={label} {...(help ? { help } : {})} problem={issue} path={path}>
       {({ id, invalid, ...rest }) => (
         <VariablePicker
           id={id}

@@ -5,9 +5,9 @@ import { type RefObject, useEffect } from "react";
 import { useCanvasStore } from "../context";
 import { type Command, commands } from "../store/commands";
 import type { CanvasRFNode } from "../view/CanvasNode";
-import { FIT_VIEW } from "../view/viewport";
+import type { CanvasActions } from "./canvas-actions";
 import { copyFragment, parseFragment } from "./clipboard";
-import { type Direction, nearestInDirection, type Rect, tidyLayout } from "./layout";
+import { type Direction, nearestInDirection, type Rect } from "./layout";
 import { nodeRows } from "./rows";
 import { useUiStore } from "./ui-store";
 
@@ -54,35 +54,32 @@ const ARROWS: Record<string, Direction> = {
   ArrowDown: "down",
 };
 const PAN_STEP = 48;
-const DUPLICATE_OFFSET = 32;
 
 /**
  * The canvas keyboard (design system §5.1 interaction table). Listens on the document because
  * clicking the empty pane leaves focus on <body>; acts only when focus is on the canvas or on
  * nothing, never inside a field, a menu or a dialog. Copy and paste use the browser's clipboard
- * events, so no clipboard permission is needed and pasting between bots and tabs works.
+ * events, so no clipboard permission is needed and pasting between bots and tabs works. Shortcuts
+ * that the command palette also offers call the same `CanvasActions` (task 2.8).
  */
 export function useCanvasKeyboard({
   region,
   pointer,
   run,
   announce,
-  setMinimap,
-  setMode,
+  actions: act,
 }: {
   region: RefObject<HTMLElement | null>;
   pointer: RefObject<{ x: number; y: number } | null>;
   run: (command: Command) => boolean;
   announce: (text: string) => void;
-  setMinimap: (fn: (v: boolean) => boolean) => void;
-  setMode: (mode: "hand" | "select") => void;
+  actions: CanvasActions;
 }) {
   const store = useCanvasStore();
   const ui = useUiStore();
   const flow = useReactFlow<CanvasRFNode>();
-  // §5.1: keyboard zoom animates in duration.base, fit and jump in duration.slower; xyflow takes ms.
+  // §5.1: moving the keyboard selection to an off-screen node animates in duration.slower.
   const tokens = useMotionTokens();
-  const zoomMs = tokens.reduced ? 0 : tokens.duration.base * 1000;
   const jumpMs = tokens.reduced ? 0 : tokens.duration.slower * 1000;
 
   useEffect(() => {
@@ -188,40 +185,26 @@ export function useCanvasKeyboard({
         const key = e.key.toLowerCase();
         if (key === "z") {
           handled();
-          if (e.shiftKey) s.redo();
-          else s.undo();
+          if (e.shiftKey) act.redo();
+          else act.undo();
         } else if (key === "l" && e.shiftKey) {
           handled();
-          const sizes = new Map(
-            flow.getNodes().map((n) => [n.id, { width: n.measured?.width ?? 288, height: n.measured?.height ?? 120 }]),
-          );
-          run({ ...commands.moveNodes(tidyLayout(wf, sizes)), label: "Tidy layout" });
-          void flow.fitView({ ...FIT_VIEW, duration: jumpMs });
+          act.tidy();
         } else if (key === "d") {
           handled();
-          const fragment = copyFragment(wf, selected);
-          if (!fragment) return;
-          const xs = Object.values(fragment.layout);
-          const command = commands.paste(fragment, {
-            x: Math.min(...xs.map((p) => p.x)) + DUPLICATE_OFFSET,
-            y: Math.min(...xs.map((p) => p.y)) + DUPLICATE_OFFSET,
-          });
-          if (run(command)) {
-            ui.getState().markFresh(command.created);
-            store.getState().select({ nodeIds: command.created, edgeIds: [], card: undefined });
-          }
+          act.duplicate();
         } else if (key === "=" || key === "+") {
           handled();
-          void flow.zoomIn({ duration: zoomMs });
+          act.zoomIn();
         } else if (key === "-" || key === "−") {
           handled();
-          void flow.zoomOut({ duration: zoomMs });
+          act.zoomOut();
         } else if (key === "0") {
           handled();
-          void flow.fitView({ ...FIT_VIEW, duration: jumpMs });
+          act.fit();
         } else if (key === "1") {
           handled();
-          void flow.zoomTo(1, { duration: zoomMs });
+          act.zoom100();
         }
         return;
       }
@@ -282,7 +265,7 @@ export function useCanvasKeyboard({
           }
         } else if (e.key === "/" && node.type === "standard") {
           handled();
-          openCardMenu(node.id, "");
+          act.addCard();
         }
         return;
       }
@@ -317,7 +300,7 @@ export function useCanvasKeyboard({
         }
       } else if (e.key === "F2" && one) {
         handled();
-        ui.getState().set({ renaming: one.id });
+        act.rename();
       } else if (dir && e.shiftKey && selected.length > 0) {
         handled();
         const step = e.altKey ? 1 : 8;
@@ -351,13 +334,10 @@ export function useCanvasKeyboard({
         void flow.setViewport({ x: x + dx, y: y + dy, zoom });
       } else if (e.key === "n" && !e.altKey) {
         handled();
-        ui.getState().set({ menu: { kind: "node", at: pointAt() } });
-      } else if (e.key === "c" && one?.type === "standard") {
+        act.addNode(pointAt());
+      } else if ((e.key === "c" || e.key === "/") && one?.type === "standard") {
         handled();
-        openCardMenu(one.id, "");
-      } else if (e.key === "/" && one?.type === "standard") {
-        handled();
-        openCardMenu(one.id, "");
+        act.addCard();
       } else if (e.key === "r" && s.selection.edgeIds.length === 1) {
         handled();
         const edge = wf.edges.find((x) => x.id === s.selection.edgeIds[0]);
@@ -367,25 +347,17 @@ export function useCanvasKeyboard({
         }
       } else if (e.key === "m") {
         handled();
-        setMinimap((v) => !v);
+        act.toggleMinimap();
       } else if (e.key === "v") {
         handled();
-        setMode("select");
+        act.selectTool();
       } else if (e.key === "h") {
         handled();
-        setMode("hand");
+        act.panTool();
       } else if (e.key === "?") {
         handled();
-        ui.getState().set({ sheet: true });
+        act.shortcuts();
       }
-    };
-
-    /** The card menu below the node's "Add card" button, or at the node's centre. */
-    const openCardMenu = (nodeId: string, query: string) => {
-      const button = region.current?.querySelector<HTMLElement>(`[data-add-card="${nodeId}"]`);
-      const r = button?.getBoundingClientRect();
-      const at = r ? { x: r.left, y: r.bottom + 4 } : pointAt();
-      ui.getState().set({ menu: { kind: "card", nodeId, at, query } });
     };
 
     const onCopy = (e: ClipboardEvent) => {
@@ -419,5 +391,5 @@ export function useCanvasKeyboard({
       document.removeEventListener("copy", onCopy);
       document.removeEventListener("paste", onPaste);
     };
-  }, [store, ui, flow, region, pointer, run, announce, setMinimap, setMode, zoomMs, jumpMs]);
+  }, [store, ui, flow, region, pointer, run, announce, act, jumpMs]);
 }
