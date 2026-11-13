@@ -53,7 +53,7 @@ Dependency direction: `apps → packages`; `engine` and `autonomy` depend only o
 
 ```bash
 pnpm install
-pnpm dev:infra          # Postgres + pgvector, Redis, MinIO
+pnpm dev:infra          # Postgres + pgvector, Redis, RustFS (S3)
 pnpm db:migrate         # apply SQL migrations as app_migrator
 pnpm dev                # api, worker, sandbox, egress, studio
 pnpm check              # typecheck + lint + unit + integration + contract tests
