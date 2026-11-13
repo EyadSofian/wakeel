@@ -121,27 +121,30 @@ export function checkWorkflowStructure(wf: Workflow): Issue[] {
     add("error", "error_handler_count", "A workflow can have one Error handler.", "Remove the extra handler.", "nodes");
 
   const seenPorts = new Set<string>();
-  // biome-ignore lint/suspicious/useIterableCallbackReturn: copied verbatim from docs/04-contracts; the returned value is discarded.
   wf.edges.forEach((e, i) => {
     const from = byId.get(e.from.nodeId);
     const to = byId.get(e.to.nodeId);
     const path = `edges[${i}]`;
-    if (!from)
-      return add(
+    if (!from) {
+      add(
         "error",
         "edge_source_missing",
         "A transition starts at a node that no longer exists.",
         "Delete the transition.",
         path,
       );
-    if (!to)
-      return add(
+      return;
+    }
+    if (!to) {
+      add(
         "error",
         "edge_target_missing",
         "A transition points to a node that no longer exists.",
         "Reconnect or delete it.",
         path,
       );
+      return;
+    }
     if (!nodePorts(from).includes(e.from.port))
       add(
         "error",

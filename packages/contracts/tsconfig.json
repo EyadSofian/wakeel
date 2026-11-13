@@ -1,10 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "noEmit": true,
-    // The schemas are copied verbatim from docs/04-contracts, which were verified with plain
-    // `--strict`; checkWorkflowStructure returns from a forEach callback on some paths only.
-    "noImplicitReturns": false
+    "noEmit": true
   },
   "include": ["src", "test"]
 }

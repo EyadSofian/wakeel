@@ -214,6 +214,20 @@ describe("workflow structure catches", () => {
     ["edge_duplicate", (wf) => wf.edges.push({ ...wf.edges[0], id: "edge_Duplicate1" } as Wf["edges"][number])],
     ["exit_unconnected", (wf) => wf.edges.splice(2, 1)],
     [
+      "edge_source_missing",
+      (wf) => {
+        const edge = wf.edges[1];
+        if (edge) edge.from.nodeId = "node_Gone000001";
+      },
+    ],
+    [
+      "edge_target_missing",
+      (wf) => {
+        const edge = wf.edges[1];
+        if (edge) edge.to.nodeId = "node_Gone000001";
+      },
+    ],
+    [
       "edge_port_missing",
       (wf) => {
         const edge = wf.edges[4];
