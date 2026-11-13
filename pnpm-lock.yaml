@@ -94,6 +94,9 @@ importers:
       '@wakeel/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@wakeel/sandbox-client':
+        specifier: workspace:*
+        version: link:../../packages/sandbox-client
       '@wakeel/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
@@ -260,6 +263,18 @@ importers:
       testcontainers:
         specifier: 12.2.1
         version: 12.2.1(bare-buffer@3.7.2)
+
+  packages/sandbox-client:
+    dependencies:
+      '@wakeel/config':
+        specifier: workspace:*
+        version: link:../config
+      '@wakeel/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
 
   packages/telemetry:
     dependencies:
