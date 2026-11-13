@@ -55,6 +55,12 @@ export const scale = {
   palette: 0.98,
 } as const;
 
+/**
+ * A panel that slides in from an edge of the screen travels its own size: the code drawer rises
+ * from below the canvas (§5.2). Everything else enters with `travel`.
+ */
+export const fromEdge = "100%" as const;
+
 /** Enter travels 4–8 px from where the thing came from; exit is a fade at 0.75× the enter time. */
 export const travel = { min: 4, max: 8 } as const;
 export const EXIT_DURATION_FACTOR = 0.75;

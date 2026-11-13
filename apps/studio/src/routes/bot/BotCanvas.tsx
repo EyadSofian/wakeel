@@ -11,6 +11,7 @@ import { groupIssues } from "../../canvas/issues";
 import { NodeLibrary } from "../../canvas/library/NodeLibrary";
 import { useSummaryContext } from "../../canvas/use-summary";
 import { Canvas } from "../../canvas/view/Canvas";
+import { CodeDrawer } from "../../code/CodeDrawer";
 import { Inspector } from "../../inspector/Inspector";
 import { AppShell } from "../../shell/AppShell";
 import { ProblemBanner } from "../../shell/ProblemBanner";
@@ -60,8 +61,11 @@ function Frame({ workspaceId, botId, state }: { workspaceId: string; botId: stri
       {state === "loading" ? (
         <CanvasSkeleton />
       ) : ready ? (
-        // A workflow opens with its own viewport: fitted, or centred on what a jump selected.
-        <Canvas key={active} issues={grouped} />
+        <div className="relative h-full">
+          {/* A workflow opens with its own viewport: fitted, or centred on what a jump selected. */}
+          <Canvas key={active} issues={grouped} />
+          <CodeDrawer />
+        </div>
       ) : (
         <div className="mx-auto max-w-page px-9 py-9">
           {state.error instanceof ApiError ? (

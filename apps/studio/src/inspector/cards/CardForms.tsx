@@ -1,7 +1,9 @@
 import { Card, type Node, newElementId, type Variable, type VariableType } from "@wakeel/contracts";
-import { SegmentedControl, Select, Switch, VariablePicker } from "@wakeel/ui";
+import { Button, SegmentedControl, Select, Switch, VariablePicker } from "@wakeel/ui";
+import { SquareCode } from "lucide-react";
 import { useId } from "react";
 import { useCanvasStore } from "../../canvas/context";
+import { useUiStore } from "../../canvas/interaction/ui-store";
 import { commands } from "../../canvas/store/commands";
 import { FieldShell, StringField, useIssueAt, useVariables } from "../fields";
 import { ListEditor, MessageEditor } from "../message/MessageEditor";
@@ -378,3 +380,67 @@ export function EndForm({ card, node, path, commit }: CardFormProps<"end">) {
     />
   );
 }
+
+/** How long Run code may take, in seconds (`timeoutMs` allows 0.1 to 60). */
+const CODE_TIMEOUTS = [1, 5, 10, 30, 60];
+
+/**
+ * Run code (task 2.9): the first lines of the code, the button that opens it in the code drawer,
+ * and the time limit. The code itself is edited in the drawer, with the bot's typings.
+ */
+export function CodeForm({ card, node, commit }: CardFormProps<"code">) {
+  const ui = useUiStore();
+  const timeoutId = useId();
+  const lines = card.source.split("\n");
+  const preview = lines.slice(0, CODE_PREVIEW_LINES).join("\n");
+  const seconds = card.timeoutMs / 1000;
+  const options = CODE_TIMEOUTS.includes(seconds) ? CODE_TIMEOUTS : [...CODE_TIMEOUTS, seconds].sort((a, b) => a - b);
+  const open = () => ui.getState().set({ code: { nodeId: node.id, cardId: card.id } });
+  return (
+    <>
+      <div className="flex flex-col gap-3">
+        <span className="text-small font-medium text-primary">Code</span>
+        {card.source.trim() === "" ? (
+          <p className="rounded-md border border-dashed border-hairline px-5 py-6 text-center text-small text-secondary">
+            No code yet. It runs in the sandbox with this bot's variables.
+          </p>
+        ) : (
+          <pre
+            dir="ltr"
+            className="max-h-picker-height overflow-hidden rounded-md border border-hairline bg-subtle px-5 py-4 font-mono text-code-small text-primary"
+          >
+            {preview}
+            {lines.length > CODE_PREVIEW_LINES ? `\n… ${lines.length - CODE_PREVIEW_LINES} more lines` : ""}
+          </pre>
+        )}
+        <Button
+          icon={<SquareCode className="size-icon" strokeWidth={1.75} aria-hidden="true" />}
+          onClick={open}
+          className="self-start"
+        >
+          Edit code
+        </Button>
+      </div>
+      <div className="flex flex-col gap-3">
+        <label htmlFor={timeoutId} className="text-small font-medium text-primary">
+          Time limit
+        </label>
+        <Select
+          id={timeoutId}
+          value={String(seconds)}
+          onChange={(e) => commit({ ...card, timeoutMs: Math.round(Number(e.target.value) * 1000) })}
+        >
+          {options.map((n) => (
+            <option key={n} value={n}>
+              {n === 1 ? "1 second" : `${n} seconds`}
+            </option>
+          ))}
+        </Select>
+        <p className="text-small text-tertiary">Longer runs stop and leave through "error".</p>
+      </div>
+    </>
+  );
+}
+
+/** Lines of code the inspector shows before "… more lines". */
+const CODE_PREVIEW_LINES = 8;
