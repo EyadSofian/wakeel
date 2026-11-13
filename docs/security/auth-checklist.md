@@ -65,5 +65,9 @@ Status: ✅ done and tested · ⏳ later task · ⚠️ known gap (accepted or o
 | T6c | Keys cannot manage people, keys or secrets, or delete the workspace; a key gets only scopes its creator holds | ✅ | `KEY_SCOPES`; people-only routes use `requireMember`, which refuses any `Authorization` header | "scopes that manage people … are refused", "people-only routes refuse any key" |
 | T6d | Last use recorded, at most once a minute per key | ✅ | `touchApiKey` | "last use is written at most once a minute" |
 | T6e | Keys are not rate limited per key yet | ⚠️ open | ADR-012 asks for a token bucket per key; it belongs with 11.2 (quota engine) or 15.1 | — |
-| T7 | Secrets encrypted with per-row data keys | ⏳ | 1.5 | — |
+| T7 | Secrets encrypted at rest: AES-256-GCM with a random data key per value, wrapped by the versioned master key | ✅ | `packages/db/src/crypto.ts`, `storeSecretValue` | `packages/db/test/crypto.test.ts` "round-trips", "a different master key fails", "any flipped byte fails" |
+| T7a | A ciphertext moved to another row or workspace does not decrypt | ✅ | AAD `workspace_secrets:<workspaceId>:<name>`; `key_version` is also bound | "a ciphertext copied to another workspace or name does not decrypt", "a changed key_version fails" |
+| T7b | Rotation re-wraps the data key; the encrypted value and plaintext are unchanged | ✅ | `rewrap`, `rewrapWorkspaceSecrets`; `MASTER_KEY_VERSION`, `MASTER_KEYS_PREVIOUS` | "rotation re-wraps every secret in place" |
+| T7c | Decrypted values print as `[redacted]` | ✅ | `readSecretValue` returns `Secret` | "store and read round-trip" |
+| T7d | The platform-wide rotation job and runbook | ⏳ | 15.4 runbooks | — |
 | T8 | Every mutation writes an audit entry | ⏳ | 1.6 | — |

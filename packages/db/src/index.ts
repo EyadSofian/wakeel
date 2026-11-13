@@ -1,4 +1,5 @@
 export * from "./client";
+export * from "./crypto";
 export * from "./migrate";
 export * from "./repos/index";
 export * from "./rls";
