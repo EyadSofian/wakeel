@@ -1,3 +1,4 @@
+export * from "./app-error";
 export * from "./bot-definition";
 export * from "./card";
 export * from "./common";

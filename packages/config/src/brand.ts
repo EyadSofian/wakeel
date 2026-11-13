@@ -9,4 +9,6 @@ export const BRAND = {
   name: "{{PLATFORM_NAME}}",
   /** Package scope, CLI name and the prefix of public contract names (headers, key prefixes). */
   codeName: "wakeel",
+  /** Public documentation; problem documents link to `${docsUrl}/errors/<code>` (ADR-012). */
+  docsUrl: "https://docs.{{PLATFORM_DOMAIN}}",
 } as const;
