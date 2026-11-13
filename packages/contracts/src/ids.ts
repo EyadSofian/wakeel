@@ -26,6 +26,15 @@ export const ENTITY_PREFIXES = [
   "chk",
   "tbl",
   "row",
+  "usr",
+  "ses",
+  "acc",
+  "vrf",
+  "mem",
+  "inv",
+  "key",
+  "sec",
+  "aud",
 ] as const;
 export type EntityPrefix = (typeof ENTITY_PREFIXES)[number];
 
