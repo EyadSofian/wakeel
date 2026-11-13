@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { EGRESS_LIMITS } from "@wakeel/config";
 import { BRAND } from "@wakeel/config/brand";
-import { AppError, ERRORS, formatPath, newRequestId, type Problem } from "@wakeel/contracts";
+import { AppError, ERRORS, formatPath, newRequestId, type Problem, verifyCapabilityToken } from "@wakeel/contracts";
 import type { Logger } from "@wakeel/telemetry";
 import type { Clock } from "./clock";
 import { type Dial, directDial, type FetchLog, formatBytes, performFetch } from "./fetch";
@@ -11,8 +11,13 @@ import { RateLimiter, type RateSettings } from "./rate-limit";
 import type { Resolver } from "./resolver";
 
 export interface EgressOptions {
-  /** Shared with callers; compared in constant time. */
+  /** Shared with platform callers (webhook delivery, crawler); compared in constant time. */
   token: string;
+  /**
+   * Verifies exec capability tokens minted by the worker (ADR-023 §4). The sandbox sends those and
+   * never holds `token`; egress takes the workspace from the token.
+   */
+  capabilityKey: string;
   resolver: Resolver;
   clock: Clock;
   rate: RateSettings;
@@ -46,10 +51,18 @@ export function createEgressServer(options: EgressOptions): Server {
   };
   const { logger } = options;
 
-  const authorised = (req: IncomingMessage) => {
+  /** Who is calling: a platform service, an exec for one workspace, or nobody we know. */
+  const authorise = async (req: IncomingMessage): Promise<{ workspaceId?: string } | undefined> => {
     const header = req.headers.authorization ?? "";
-    const match = /^Bearer (.+)$/.exec(header);
-    return match !== null && timingSafeEqual(digest(match[1] ?? ""), expected);
+    const bearer = /^Bearer (.+)$/.exec(header);
+    if (bearer) return timingSafeEqual(digest(bearer[1] ?? ""), expected) ? {} : undefined;
+    const capability = /^Capability (.+)$/.exec(header);
+    if (capability) {
+      const nowSeconds = Math.floor(options.clock.now() / 1000);
+      const claims = await verifyCapabilityToken(options.capabilityKey, capability[1] ?? "", nowSeconds);
+      return claims ? { workspaceId: claims.ws } : undefined;
+    }
+    return undefined;
   };
 
   return createServer(async (req, res) => {
@@ -60,9 +73,32 @@ export function createEgressServer(options: EgressOptions): Server {
         return sendJson(res, 200, { status: "ok" });
       }
       if (path !== "/v1/fetch" || req.method !== "POST") throw new AppError("not_found");
-      if (!authorised(req)) throw new AppError("unauthenticated");
+      const caller = await authorise(req);
+      if (!caller) throw new AppError("unauthenticated");
 
-      const parsed = FetchRequest.safeParse(await readJson(req));
+      let body = await readJson(req);
+      if (caller.workspaceId !== undefined && typeof body === "object" && body !== null && !Array.isArray(body)) {
+        // The token names the workspace. The body may leave it out or repeat it, never change it.
+        const named = (body as Record<string, unknown>)["workspaceId"];
+        if (named !== undefined && named !== caller.workspaceId) {
+          throw new AppError(
+            "validation_failed",
+            {},
+            {
+              errors: [
+                {
+                  path: "workspaceId",
+                  code: "mismatch",
+                  message: "Does not match the workspace of the capability token",
+                },
+              ],
+            },
+          );
+        }
+        body = { ...body, workspaceId: caller.workspaceId };
+      }
+
+      const parsed = FetchRequest.safeParse(body);
       if (!parsed.success) {
         throw new AppError(
           "validation_failed",

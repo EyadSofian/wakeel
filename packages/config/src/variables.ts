@@ -214,9 +214,22 @@ const egressToken = {
   secret: true,
 } as const;
 
+/**
+ * Signs and verifies exec capability tokens (ADR-023 §4). Held by the worker, which mints one per
+ * exec, and by egress, which checks them. Never given to the sandbox.
+ */
+const egressCapabilityKey = {
+  env: "EGRESS_CAPABILITY_KEY",
+  schema: z.string().min(32),
+  description:
+    "At least 32 random characters shared by the worker and the egress service to sign exec capability tokens; generate with `openssl rand -base64 32`.",
+  secret: true,
+} as const;
+
 /** The egress service itself (task 3.1, ADR-020). */
 export const egressEnv = defineEnv({
   egressToken,
+  egressCapabilityKey,
   egressHost: {
     env: "EGRESS_HOST",
     schema: z.string().min(1).default("127.0.0.1"),

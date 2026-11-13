@@ -18,6 +18,7 @@ if (config) {
   const logger = createLogger({ service: "egress", level: config.logLevel });
   const server = createEgressServer({
     token: config.egressToken.reveal(),
+    capabilityKey: config.egressCapabilityKey.reveal(),
     resolver: systemResolver,
     clock: systemClock,
     rate: { perMinute: config.egressRatePerMinute, burst: config.egressRateBurst },
