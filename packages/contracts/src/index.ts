@@ -11,6 +11,7 @@ export * from "./message";
 export * from "./node";
 export * from "./platform";
 export * from "./runtime";
+export * from "./seed";
 export * from "./table";
 export * from "./trace";
 export * from "./variable";

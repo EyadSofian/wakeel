@@ -5,6 +5,7 @@ import { PROBLEM_CONTENT_TYPE, toAppError, toProblem } from "./problem";
 import { apiKeyRoutes } from "./routes/api-keys";
 import { auditRoutes } from "./routes/audit";
 import { authRoutes } from "./routes/auth";
+import { botRoutes } from "./routes/bots";
 import { invitationRoutes } from "./routes/invitations";
 import { memberRoutes } from "./routes/members";
 import { workspaceRoutes } from "./routes/workspaces";
@@ -103,6 +104,7 @@ export function buildApp(options: AppOptions) {
     void app.register(invitationRoutes, deps);
     void app.register(apiKeyRoutes, deps);
     void app.register(auditRoutes, deps);
+    void app.register(botRoutes, deps);
   }
 
   return app;

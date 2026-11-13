@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import {
   addMember,
   appendAudit,
+  botTables,
   changeRole,
   countOwners,
   createDatabase,
@@ -498,17 +499,20 @@ describe("repositories", () => {
   });
 });
 
-describe("Drizzle schema agrees with migration 0003", () => {
-  test.each(Object.values(platformTables).map((t) => [getTableName(t), t] as const))("%s", async (name, table) => {
-    const { rows } = await query(
-      urls.superuser,
-      "select column_name from information_schema.columns where table_schema = 'public' and table_name = $1 order by column_name",
-      [name],
-    );
-    const inDb = rows.map((r) => r.column_name as string);
-    const inDrizzle = Object.values(getTableColumns(table))
-      .map((c) => c.name)
-      .sort();
-    expect(inDrizzle).toEqual(inDb);
-  });
+describe("Drizzle schema agrees with the migrations", () => {
+  test.each(Object.values({ ...platformTables, ...botTables }).map((t) => [getTableName(t), t] as const))(
+    "%s",
+    async (name, table) => {
+      const { rows } = await query(
+        urls.superuser,
+        "select column_name from information_schema.columns where table_schema = 'public' and table_name = $1 order by column_name",
+        [name],
+      );
+      const inDb = rows.map((r) => r.column_name as string);
+      const inDrizzle = Object.values(getTableColumns(table))
+        .map((c) => c.name)
+        .sort();
+      expect(inDrizzle).toEqual(inDb);
+    },
+  );
 });

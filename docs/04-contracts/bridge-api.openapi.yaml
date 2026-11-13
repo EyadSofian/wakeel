@@ -998,3 +998,10 @@ components:
               path: { type: string }
               code: { type: string }
               message: { type: string }
+        current:
+          type: object
+          description: Only on `revision_conflict` (Studio API). The server's copy of the document.
+          required: [rev, doc]
+          properties:
+            rev: { type: integer }
+            doc: { description: The document as stored. }

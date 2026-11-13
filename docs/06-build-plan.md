@@ -72,7 +72,7 @@ Read before starting any task: `CLAUDE.md`, the sections of `03-architecture.md`
 
 | ID | Task | Files | Acceptance |
 |---|---|---|---|
-| 2.1 | Schema and API: `bots`, `bot_draft_docs`; CRUD; document `GET/PUT` with `ETag` / `If-Match`; new bot seeds a Main workflow with Start and one Autonomous node | `packages/db/migrations/0003_bots.sql`, `apps/api/src/routes/bots/*` | Integration: stale `If-Match` returns `revision_conflict` with the server copy; two-tenant tests |
+| 2.1 | Schema and API: `bots`, `bot_draft_docs`; CRUD; document `GET/PUT` with `ETag` / `If-Match`; new bot seeds a Main workflow with Start and one Autonomous node | `packages/db/migrations/0004_bots.sql`, `apps/api/src/routes/bots/*` | Integration: stale `If-Match` returns `revision_conflict` with the server copy; two-tenant tests |
 | 2.2 | `validateDefinition` (all rules in architecture §3.1) on top of `checkWorkflowStructure`; runs in Node and in a web worker | `packages/contracts/src/validate/**` | Unit: one passing and one failing fixture per rule; messages and fixes come from a table |
 | 2.3 | Canvas store: document model, commands, undo/redo, selection, dirty tracking, debounced saver with conflict handling | `apps/studio/src/canvas/store/**` | Unit: every command has do/undo tests; 100 random command sequences keep the document schema-valid (property test) |
 | 2.4 | Canvas rendering: NodeShell for each node type, CardRow summaries, OutputDot, TransitionPath, toolbar, minimap, compact nodes below 50% zoom | `apps/studio/src/canvas/view/**`, `packages/ui/src/canvas/**` | E2E: add nodes, connect, reconnect, delete, undo; perf test with the 300-node fixture meets the budget in design system §5.1; screenshot review (typical, dense-300, selection, issues, rtl) |

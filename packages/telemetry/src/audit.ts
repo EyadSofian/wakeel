@@ -21,6 +21,11 @@ export const AUDIT_ACTIONS = [
   "api_key.revoked",
   "secret.written",
   "secret.deleted",
+  "bot.created",
+  "bot.updated",
+  "bot.deleted",
+  "workflow.created",
+  "workflow.deleted",
 ] as const;
 export type AuditActionName = (typeof AUDIT_ACTIONS)[number];
 
