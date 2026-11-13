@@ -6,5 +6,6 @@ export * from "./components/Field";
 export * from "./components/Table";
 export * from "./components/Tabs";
 export * from "./components/Tile";
+export * from "./editors";
 export * from "./motion";
 export * from "./use-motion-tokens";

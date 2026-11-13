@@ -288,7 +288,11 @@ export function useCanvasKeyboard({
       }
 
       if (e.key === "Escape") {
-        if (selected.length > 0 || s.selection.edgeIds.length > 0) {
+        // Up one level: from a card to its node, then from the node to nothing.
+        if (s.selection.card) {
+          handled();
+          store.getState().select({ card: undefined });
+        } else if (selected.length > 0 || s.selection.edgeIds.length > 0) {
           handled();
           store.getState().clearSelection();
         }
