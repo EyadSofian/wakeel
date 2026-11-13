@@ -1,4 +1,4 @@
-# ADR-020 — Signatures of the sandbox guest API
+# ADR-022 — Signatures of the sandbox guest API
 
 Status: proposed (task 2.9 generates editor typings with these signatures; 3.3 implements them in the sandbox) · Date: 2026-11-14
 
