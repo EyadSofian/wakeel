@@ -1,6 +1,6 @@
 # ADR-013 — Local object store: replace MinIO, which no longer publishes images
 
-Status: proposed · Date: 2026-11-13
+Status: accepted (Eyad delegated the choice, 2026-11-13) · Date: 2026-11-13
 
 ## Context
 Architecture §1.1 says local development uses `docker-compose.yml` with MinIO, and the build plan names MinIO for task 0.4 and for the integration test level. Production only needs "an S3-compatible object store" (managed S3 or equivalent), and nothing in this ADR changes that.
@@ -30,9 +30,26 @@ What we need from the local store: the plain S3 API through the AWS SDK (put, ge
 ## Recommendation
 Use **RustFS**, pinned by tag and digest, for `docker-compose.yml` and the Testcontainers integration level, with a one-shot step that creates the dev bucket. Keep application code on the plain S3 API through the AWS SDK only, so the local store stays swappable.
 
-Adopt it only after a check passes against the pinned image: create bucket, put and get an object with an Arabic key and body, multipart upload, list, delete, and a SigV4 presigned PUT and GET. That check runs as the first step of task 8.1 (or earlier if you prefer). If RustFS fails any of it, use **versitygw** instead.
+Adopt it only after a check passes against the pinned image: create bucket, put and get an object with an Arabic key and body, multipart upload, list, delete, and a SigV4 presigned PUT and GET. If RustFS fails any of it, use **versitygw** instead.
 
-This was not run while writing this ADR: starting a probe container was blocked by the executor's safety policy, so RustFS is recommended on its licence, maintenance and stated MinIO compatibility, not on our own test.
+## Compatibility check (2026-11-13)
+`rustfs/rustfs:1.0.5@sha256:b81d16a9…2dc1d74`, exercised with the AWS SDK for JavaScript v3 (`@aws-sdk/client-s3` 3.1168.0, path-style addressing). All eleven checks passed in 2.8 s; the container used 48 MB of memory.
+
+| Check | Result |
+|---|---|
+| Create bucket | pass |
+| Put object with an Arabic key (`مستندات/سياسة الشحن 2026.txt`) and Arabic body | pass |
+| Get object: bytes and `Content-Type` round-trip | pass |
+| Head object | pass |
+| List with an Arabic prefix | pass |
+| Multipart upload, 12 MB in three parts | pass |
+| Presigned PUT, then presigned GET, Arabic key | pass (200, 200) |
+| Expired presigned URL | refused (403) |
+| Tampered presigned signature | refused (400) |
+| Wrong secret key | refused (`SignatureDoesNotMatch`) |
+| Delete, then head | pass (`NotFound`) |
+
+Decision: RustFS, pinned by digest. `/health` answers 200 and the image ships `curl`, so the healthcheck and the one-shot bucket creation reuse the same image.
 
 ## Consequences
 - Wording changes once accepted: architecture §1.1 ("Local development uses `docker-compose.yml` with RustFS"), the diagram label `(S3 / MinIO)`, build plan task 0.4 and the integration test level, and the command list in `CLAUDE.md`.
