@@ -22,6 +22,9 @@ const MIN_PASSWORD_LENGTH = 16;
  * first migration and again whenever passwords rotate. Safe to run repeatedly.
  *
  * Also creates the `vector` extension, which needs elevated rights that app_migrator does not have.
+ *
+ * Not safe to run twice at the same moment against one cluster: roles are cluster-wide, and
+ * concurrent ALTER ROLE statements fail with "tuple concurrently updated". Run it from one place.
  */
 export async function bootstrapDatabase(superuserUrl: string, passwords: RolePasswords): Promise<void> {
   for (const role of Object.values(ROLES)) {
