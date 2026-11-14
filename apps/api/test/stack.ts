@@ -67,6 +67,9 @@ export async function startStack(
             },
             // A wait ends only by the turn-done signal while the stand-in runs; at once otherwise.
             sleep: () => (autoWork.on ? new Promise<void>(() => {}) : Promise.resolve()),
+            enqueueWebhook: async () => undefined,
+            sender: { send: async () => ({ kind: "refused", code: "fetch_failed", detail: "no egress in tests" }) },
+            keyring: { current: { version: 1, key: new Uint8Array(32) } },
           },
         }
       : {}),

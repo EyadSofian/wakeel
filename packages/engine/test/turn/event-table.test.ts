@@ -462,3 +462,37 @@ describe("timeout", () => {
     expect(commits).toEqual([]);
   });
 });
+
+describe("end (endConversation, ADR-029)", () => {
+  test.each([
+    ["idle", () => state()],
+    ["waiting_input", () => waitingCapture().waiting],
+    ["waiting_external", () => waitingAutonomous("tool").waiting],
+    ["handed_off", () => state({ status: "handed_off" })],
+  ] as const)("in %s ends the conversation with reason manual; user variables are kept", async (_status, make) => {
+    const bot = waitingCapture();
+    const s = scripted();
+    const { result, commits } = await run({
+      def: bot.def,
+      state: make(),
+      event: event("end"),
+      user: { vars: { kept: "yes" }, attributes: {} },
+      executors: s.executors,
+    });
+    expect(s.calls).toEqual([]);
+    expect(events(commits)).toEqual([{ type: "conversation.ended", data: { reason: "manual" } }]);
+    expect(result.status).toBe("ended");
+    expect(result.state).toEqual(state({ status: "ended", started: undefined }));
+    expect(commits.at(-1)?.user).toBeUndefined();
+  });
+
+  test("in ended does nothing", async () => {
+    const { commits, result } = await run({
+      def: linearBot([step()]).def,
+      state: state({ status: "ended", started: undefined }),
+      event: event("end"),
+    });
+    expect(commits).toEqual([]);
+    expect(result.state.status).toBe("ended");
+  });
+});

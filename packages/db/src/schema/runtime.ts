@@ -140,6 +140,8 @@ export const webhookDeliveries = pgTable("webhook_deliveries", {
   error: jsonb("error"),
   durationMs: integer("duration_ms"),
   createdAt: at("created_at").notNull().defaultNow(),
+  /** Migration 0010 (ADR-029 §3): a one-off replay, sent outside the ordered head. */
+  replay: boolean("replay").notNull().default(false),
 });
 
 /** Migration 0008 (task 4.7): span metadata, partitioned by month on started_at (ADR-009, ADR-026). */

@@ -11,9 +11,13 @@ import {
   createWorkspace,
   type Database,
   DEAD_EVENTS_TO_DISABLE,
+  type DeliveryCursor,
+  listConversationEvents,
+  listDeliveries,
   loadDeliveryStream,
   openSigningSecrets,
   recordAttempt,
+  replayDelivery,
   setSigningSecrets,
   sql,
 } from "../src/index";
@@ -153,7 +157,7 @@ describe("the stream", () => {
     expect(stream?.conversation).toEqual({ id: ids.conv, externalId: "c-1" });
     expect(stream?.user).toEqual({ id: ids.eu, externalId: "u-1" });
     expect(stream?.head?.event).toMatchObject({ seq: 1, type: "message.created" });
-    expect(stream?.ephemeral.map((d) => d.event.type)).toEqual(["typing"]);
+    expect(stream?.outOfBand.map((d) => d.event.type)).toEqual(["typing"]);
   });
 
   test("a delivery can be claimed by one sender until its lease runs out", async () => {
@@ -219,6 +223,88 @@ describe("the stream", () => {
     await expect(
       db.withWorkspace(ids.ws, (tx) => recordAttempt(tx, head?.id as string, { status: "delivered", attemptedAt: T0 })),
     ).rejects.toThrow(/not pending/);
+  });
+});
+
+describe("listing and replay (task 5.3, ADR-029)", () => {
+  const head = async (ids: Ids) => (await db.withWorkspace(ids.ws, (tx) => loadDeliveryStream(tx, ids.conv)))?.head;
+  const finishHead = async (ids: Ids, status: "delivered" | "dead" | "failed") => {
+    const h = await head(ids);
+    await db.withWorkspace(ids.ws, (tx) => recordAttempt(tx, h?.id as string, { status, attemptedAt: T0 }));
+    return h;
+  };
+
+  test("listConversationEvents returns ordered events after a seq, never ephemeral ones", async () => {
+    const ids = await conversation();
+    await append(ids, [{ type: "message.created" }, { type: "typing", ephemeral: true }, { type: "turn.completed" }]);
+    const events = (afterSeq: number) =>
+      db.withWorkspace(ids.ws, (tx) => listConversationEvents(tx, ids.conv, { afterSeq, limit: 10 }));
+    expect((await events(0)).map((e) => [e.seq, e.type])).toEqual([
+      [1, "message.created"],
+      [2, "turn.completed"],
+    ]);
+    expect((await events(1)).map((e) => e.seq)).toEqual([2]);
+  });
+
+  test("listDeliveries shows each event once, from its latest attempt, newest first, and filters by status", async () => {
+    const ids = await conversation();
+    await append(ids, [{ type: "message.created" }]);
+    await su.query("update outbox_events set created_at = $2 where conversation_id = $1", [ids.conv, T0]);
+    await append(ids, [{ type: "turn.completed" }]);
+    const h = await head(ids);
+    await db.withWorkspace(ids.ws, (tx) =>
+      recordAttempt(tx, h?.id as string, {
+        status: "failed",
+        attemptedAt: T0,
+        responseStatus: 500,
+        error: { code: "webhook_rejected" },
+        retryAt: later(5_000),
+      }),
+    );
+    const list = (options: Parameters<typeof listDeliveries>[2]) =>
+      db.withWorkspace(ids.ws, (tx) => listDeliveries(tx, ids.conn, options));
+    const all = await list({ limit: 10 });
+    expect(all.map((d) => [d.seq, d.eventType, d.status, d.attempt])).toEqual([
+      [2, "turn.completed", "pending", 1],
+      [1, "message.created", "pending", 2],
+    ]);
+    expect(all[1]).toMatchObject({ nextAttemptAt: later(5_000), conversationId: ids.conv });
+    const page = await list({ limit: 1 });
+    const next = await list({
+      limit: 1,
+      before: page[0]?.cursor as DeliveryCursor,
+    });
+    expect(next.map((d) => d.seq)).toEqual([1]);
+    expect(await list({ limit: 10, status: "delivered" })).toEqual([]);
+  });
+
+  test("replay: only a dead or failed event, as one out-of-band attempt that does not block the stream", async () => {
+    const ids = await conversation();
+    await append(ids, [{ type: "message.created" }, { type: "message.created" }]);
+    const first = await finishHead(ids, "dead");
+    const replay = (outboxEventId: string, connectionId = ids.conn) =>
+      db.withWorkspace(ids.ws, (tx) => replayDelivery(tx, { connectionId, outboxEventId, at: T0 }));
+
+    // Event 2 is still pending: nothing to replay yet.
+    const second = await head(ids);
+    expect(await replay(second?.event.id as string)).toEqual({ result: "not_replayable" });
+    expect(await replay(first?.event.id as string, newId("conn"))).toEqual({ result: "not_found" });
+    expect(await replay(first?.event.id as string)).toEqual({ result: "queued", conversationId: ids.conv });
+    // A second replay while the first is pending is refused.
+    expect(await replay(first?.event.id as string)).toEqual({ result: "not_replayable" });
+
+    const stream = await db.withWorkspace(ids.ws, (tx) => loadDeliveryStream(tx, ids.conv));
+    expect(stream?.head?.event.seq).toBe(2);
+    expect(stream?.outOfBand).toMatchObject([{ attempt: 2, replay: true, event: { seq: 1 } }]);
+
+    // A replay that dies does not count toward disabling the connection.
+    const before = (await su.query("select consecutive_dead from bridge_connections where id = $1", [ids.conn]))
+      .rows[0];
+    await db.withWorkspace(ids.ws, (tx) =>
+      recordAttempt(tx, stream?.outOfBand[0]?.id as string, { status: "failed", attemptedAt: T0 }),
+    );
+    const after = (await su.query("select consecutive_dead from bridge_connections where id = $1", [ids.conn])).rows[0];
+    expect(after).toEqual(before);
   });
 });
 

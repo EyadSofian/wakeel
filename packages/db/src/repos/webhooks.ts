@@ -68,15 +68,17 @@ export interface DeliveryStream {
   };
   conversation: { id: string; externalId: string };
   user: { id: string; externalId: string };
-  /** Pending ephemeral deliveries: sent once, out of order. */
-  ephemeral: PendingDelivery[];
-  /** The lowest-seq pending ordered delivery: the only ordered one that may be sent. */
+  /** Pending ephemeral deliveries and replays: sent once each, outside the ordered stream. */
+  outOfBand: PendingDelivery[];
+  /** The lowest-seq pending ordered delivery that is not a replay: the only ordered one that may be sent. */
   head: PendingDelivery | undefined;
 }
 
 export interface PendingDelivery {
   id: string;
   attempt: number;
+  /** A one-off replay (ADR-029 §3): never retried, never counted toward disabling. */
+  replay: boolean;
   nextAttemptAt: Date;
   leaseUntil: Date | null;
   event: {
@@ -108,7 +110,7 @@ export async function loadDeliveryStream(tx: Tx, conversationId: string): Promis
     .where(eq(conversations.id, conversationId));
   if (!row) return undefined;
 
-  const pending = (ephemeral: boolean) =>
+  const pending = (outOfBand: boolean) =>
     tx
       .select({ d: webhookDeliveries, o: outboxEvents })
       .from(webhookDeliveries)
@@ -117,11 +119,13 @@ export async function loadDeliveryStream(tx: Tx, conversationId: string): Promis
         and(
           eq(webhookDeliveries.conversationId, conversationId),
           eq(webhookDeliveries.status, "pending"),
-          eq(webhookDeliveries.ephemeral, ephemeral),
+          outOfBand
+            ? or(eq(webhookDeliveries.ephemeral, true), eq(webhookDeliveries.replay, true))
+            : and(eq(webhookDeliveries.ephemeral, false), eq(webhookDeliveries.replay, false)),
         ),
       )
       .orderBy(asc(webhookDeliveries.seq), asc(webhookDeliveries.createdAt), asc(webhookDeliveries.id));
-  const ephemeral = await pending(true);
+  const outOfBand = await pending(true);
   const [head] = await pending(false).limit(1);
 
   return {
@@ -134,7 +138,7 @@ export async function loadDeliveryStream(tx: Tx, conversationId: string): Promis
     },
     conversation: { id: conversationId, externalId: row.conversationExternalId },
     user: { id: row.userId, externalId: row.userExternalId },
-    ephemeral: ephemeral.map(toPending),
+    outOfBand: outOfBand.map(toPending),
     head: head ? toPending(head) : undefined,
   };
 }
@@ -145,6 +149,7 @@ const toPending = (r: {
 }): PendingDelivery => ({
   id: r.d.id,
   attempt: r.d.attempt,
+  replay: r.d.replay,
   nextAttemptAt: r.d.nextAttemptAt,
   leaseUntil: r.d.leaseUntil,
   event: {
@@ -226,8 +231,8 @@ export async function recordAttempt(
     });
   }
 
-  // Ephemeral events are best-effort: they never move the dead count.
-  if (row.ephemeral || outcome.status === "failed") return { disabled: false, consecutiveDead: -1 };
+  // Ephemeral events are best-effort and replays are one-offs: neither moves the dead count.
+  if (row.ephemeral || row.replay || outcome.status === "failed") return { disabled: false, consecutiveDead: -1 };
   const [connection] = await tx
     .update(bridgeConnections)
     .set(
@@ -246,4 +251,112 @@ export async function recordAttempt(
     disabled: outcome.status === "dead" && consecutiveDead === DEAD_EVENTS_TO_DISABLE,
     consecutiveDead,
   };
+}
+
+/** One event's delivery for `listDeliveries`: its latest attempt (ADR-029 §5). */
+export interface DeliverySummary {
+  outboxEventId: string;
+  eventType: string;
+  conversationId: string;
+  seq: number | null;
+  status: "pending" | "delivered" | "failed" | "dead";
+  attempt: number;
+  nextAttemptAt: Date | null;
+  responseStatus: number | null;
+  error: { code: string; detail?: string } | null;
+  /** The list's order and cursor position. */
+  cursor: DeliveryCursor;
+}
+
+/**
+ * A position in `listDeliveries`: the last event of the previous page. The time is in whole
+ * microseconds, as Postgres stores it (a JS `Date` would drop them and skip rows); events written in
+ * one transaction share it, so `seq` and then the id break the tie.
+ */
+export interface DeliveryCursor {
+  createdMicros: bigint;
+  seq: number;
+  outboxEventId: string;
+}
+
+/** A connection's events with deliveries, newest first, each from its latest attempt. */
+export async function listDeliveries(
+  tx: Tx,
+  connectionId: string,
+  options: { status?: DeliverySummary["status"]; limit: number; before?: DeliveryCursor },
+): Promise<DeliverySummary[]> {
+  const before = options.before
+    ? sql`and (o.created_us, coalesce(o.seq, 0), o.id) < (${options.before.createdMicros.toString()}::bigint, ${options.before.seq}, ${options.before.outboxEventId})`
+    : sql``;
+  const status = options.status ? sql`and latest.status = ${options.status}` : sql``;
+  const result = await tx.execute(sql`
+    select latest.*, o.type as event_type, o.created_us::text as created_us, o.seq as event_seq
+    from (
+      select distinct on (d.outbox_event_id) d.outbox_event_id, d.conversation_id, d.seq, d.status, d.attempt,
+             d.next_attempt_at, d.response_status, d.error
+      from webhook_deliveries d
+      where d.connection_id = ${connectionId}
+      order by d.outbox_event_id, d.attempt desc
+    ) latest
+    join (
+      select id, type, seq, (extract(epoch from created_at) * 1000000)::bigint as created_us from outbox_events
+    ) o on o.id = latest.outbox_event_id
+    where true ${status} ${before}
+    order by o.created_us desc, coalesce(o.seq, 0) desc, o.id desc
+    limit ${options.limit}`);
+  return (result.rows as Record<string, unknown>[]).map((r) => ({
+    outboxEventId: r["outbox_event_id"] as string,
+    eventType: r["event_type"] as string,
+    conversationId: r["conversation_id"] as string,
+    seq: r["seq"] === null ? null : Number(r["seq"]),
+    status: r["status"] as DeliverySummary["status"],
+    attempt: r["attempt"] as number,
+    nextAttemptAt: r["status"] === "pending" ? new Date(r["next_attempt_at"] as string) : null,
+    responseStatus: (r["response_status"] as number | null) ?? null,
+    error: (r["error"] as DeliverySummary["error"]) ?? null,
+    cursor: {
+      createdMicros: BigInt(r["created_us"] as string),
+      seq: r["event_seq"] === null ? 0 : Number(r["event_seq"]),
+      outboxEventId: r["outbox_event_id"] as string,
+    },
+  }));
+}
+
+/**
+ * Queues a one-off replay of a connection's event (ADR-029 §3): only when its latest attempt is
+ * dead or failed and nothing is pending for it. Returns the conversation to wake.
+ */
+export async function replayDelivery(
+  tx: Tx,
+  input: { connectionId: string; outboxEventId: string; at: Date },
+): Promise<{ result: "queued"; conversationId: string } | { result: "not_found" | "not_replayable" }> {
+  const [latest] = await tx
+    .select()
+    .from(webhookDeliveries)
+    .where(
+      and(
+        eq(webhookDeliveries.connectionId, input.connectionId),
+        eq(webhookDeliveries.outboxEventId, input.outboxEventId),
+      ),
+    )
+    .orderBy(sql`${webhookDeliveries.attempt} desc`)
+    .limit(1)
+    // Two replays at once: the second waits and then sees the first's pending row.
+    .for("update");
+  if (!latest) return { result: "not_found" };
+  if (latest.status !== "dead" && latest.status !== "failed") return { result: "not_replayable" };
+  await tx.insert(webhookDeliveries).values({
+    id: newId("dlv"),
+    workspaceId: currentWorkspace,
+    connectionId: latest.connectionId,
+    conversationId: latest.conversationId,
+    outboxEventId: latest.outboxEventId,
+    seq: latest.seq,
+    ephemeral: latest.ephemeral,
+    attempt: latest.attempt + 1,
+    status: "pending",
+    nextAttemptAt: input.at,
+    replay: true,
+  });
+  return { result: "queued", conversationId: latest.conversationId };
 }

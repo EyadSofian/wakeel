@@ -51,7 +51,16 @@ export type Payload = z.infer<typeof Payload>;
 const attrs = {
   turn: z.object({
     // One per inbound kind; run_from is the emulator's Run from here (ADR-025, ADR-026).
-    trigger: z.enum(["message", "event", "user_update", "tool_result", "handoff_release", "timeout", "run_from"]),
+    trigger: z.enum([
+      "message",
+      "event",
+      "user_update",
+      "tool_result",
+      "handoff_release",
+      "timeout",
+      "run_from",
+      "end",
+    ]),
     outcome: z.enum(["completed", "waiting", "handed_off", "ended", "failed"]).optional(),
     stepCount: z.number().int().nonnegative().optional(),
     usage: Usage.optional(),

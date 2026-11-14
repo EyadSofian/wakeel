@@ -60,6 +60,8 @@ export const InboundKind = z.enum([
   "handoff_release",
   "timeout",
   "run_from",
+  /** `endConversation` (ADR-029): ends the conversation with reason `manual`. */
+  "end",
 ]);
 export type InboundKind = z.infer<typeof InboundKind>;
 

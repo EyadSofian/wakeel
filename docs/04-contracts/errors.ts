@@ -88,6 +88,8 @@ export const ERRORS = {
   // Bridge
   conversation_ended: { status: 409, title: "This conversation has ended", fix: "Send a new message to start again." },
   not_handed_off: { status: 409, title: "This conversation is not handed off", fix: "Nothing to release." },
+  tool_call_not_pending: { status: 409, title: "This conversation is not waiting for that tool call", fix: "Send the toolCallId from the pending call, or check the conversation's status first." },
+  delivery_not_replayable: { status: 409, title: "Only a dead or failed event can be sent again", fix: "Wait for the current attempt to finish, then replay it if it failed." },
   webhook_url_blocked: { status: 422, title: "That webhook address cannot be used", fix: "Use a public https address." },
   connection_disabled: { status: 409, title: "This connection is turned off after repeated delivery failures", fix: "Fix the receiving endpoint, then turn the connection back on." },
   // Webhook delivery attempts (ADR-028).

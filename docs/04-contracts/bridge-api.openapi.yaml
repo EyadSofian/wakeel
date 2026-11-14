@@ -363,6 +363,7 @@ paths:
         "202":
           description: Queued.
         "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
 
   /connection:
     get:

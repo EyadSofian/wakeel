@@ -9,6 +9,7 @@ import {
   createWorkspace,
   type Database,
   DEAD_EVENTS_TO_DISABLE,
+  replayDelivery,
   setSigningSecrets,
   sql,
 } from "@wakeel/db";
@@ -341,6 +342,43 @@ describe("ephemeral events", () => {
     await deliverConversation(d, c.conv);
     expect(r.calls).toEqual([]);
     expect(await rows(c)).toMatchObject([{ attempt: 1, status: "dead", code: "webhook_stale" }]);
+  });
+});
+
+describe("replays (ADR-029 §3)", () => {
+  test("go out of band once, with the original seq and id, and a failed one is not retried", async () => {
+    const clock = new FakeClock("2026-11-14T10:00:00.000Z");
+    const c = await conversation();
+    await events(c, clock, 2);
+    // Event 1 died earlier; event 2 is the stream's head and its receiver is down.
+    await su(
+      `update webhook_deliveries set status = 'dead', attempted_at = $2, error = '{"code":"webhook_rejected"}'::jsonb
+        where conversation_id = $1 and seq = 1`,
+      [c.conv, clock.date()],
+    );
+    const [first] = (await su("select id from outbox_events where conversation_id = $1 and seq = 1", [c.conv])) as {
+      id: string;
+    }[];
+    await db.withWorkspace(c.ws, (tx) =>
+      replayDelivery(tx, { connectionId: c.conn, outboxEventId: first?.id as string, at: clock.date() }),
+    );
+    const r = receiver(() => ({ kind: "response", status: 500 }));
+    const { d } = deps(clock, r.sender);
+
+    expect(await deliverConversation(d, c.conv)).toEqual({ sent: 2, stopped: "waiting" });
+    // The replay went first, outside the stream, with its original seq; then the head.
+    expect(r.calls.map((x) => [seqOf(x), attemptOf(x)])).toEqual([
+      [1, 2],
+      [2, 1],
+    ]);
+    const replayed = (await su(
+      "select attempt, status, replay from webhook_deliveries where conversation_id = $1 and seq = 1 order by attempt",
+      [c.conv],
+    )) as unknown[];
+    expect(replayed).toEqual([
+      { attempt: 1, status: "dead", replay: false },
+      { attempt: 2, status: "failed", replay: true },
+    ]);
   });
 });
 
