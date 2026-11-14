@@ -274,6 +274,42 @@ describe("the conversation_started trigger (task 4.8, ADR-027)", () => {
   });
 });
 
+describe("webhooks (task 5.2)", () => {
+  test("a turn on a connection with a webhook creates deliveries and wakes the webhook queue once they commit", async () => {
+    const c = await seed([card({ type: "say", message: { type: "text", text: "أهلاً" } })]);
+    await su(
+      "update bridge_connections set webhook_url = 'https://receiver.example.test/hook', subscribed_events = array['message.created', 'turn.completed'] where id = $1",
+      [c.connectionId],
+    );
+    // The emulator's conversations are emulator mode; this one is a live bridge conversation.
+    await su("update conversations set mode = 'live' where id = $1", [c.conversationId]);
+    await send(c, "مرحبا");
+    const woken: { conversationId: string; deliveries: number }[] = [];
+    const { d } = deps({
+      enqueueWebhook: async (conversationId) => {
+        const [row] = await query<{ n: number }>(
+          "select count(*)::int as n from webhook_deliveries where conversation_id = $1",
+          [conversationId],
+        );
+        woken.push({ conversationId, deliveries: row?.n ?? 0 });
+      },
+    });
+    await drainConversation(d, c.conversationId);
+    // Every wake happens after a commit: the deliveries it announces are already visible.
+    expect(woken.length).toBeGreaterThanOrEqual(1);
+    for (const w of woken) expect(w).toMatchObject({ conversationId: c.conversationId });
+    expect(woken.every((w) => w.deliveries > 0)).toBe(true);
+    const rows = await query<{ type: string; seq: string; status: string }>(
+      `select o.type, d.seq, d.status from webhook_deliveries d join outbox_events o on o.id = d.outbox_event_id
+        where d.conversation_id = $1 order by d.seq`,
+      [c.conversationId],
+    );
+    // Typing is not subscribed, so only the message and the turn's end are delivered.
+    expect(rows.map((r) => r.type)).toEqual(["message.created", "turn.completed"]);
+    expect(rows.every((r) => r.status === "pending")).toBe(true);
+  });
+});
+
 describe("one message", () => {
   test("runs the bot, commits each step with deterministic message ids, and signals turn-done", async () => {
     const c = await seed([

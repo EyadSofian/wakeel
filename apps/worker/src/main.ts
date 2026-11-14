@@ -3,7 +3,9 @@ import { hostname } from "node:os";
 import {
   commonEnv,
   databaseEnv,
+  egressClientEnv,
   loadConfigOrExit,
+  masterKeyEnv,
   redisEnv,
   sandboxClientEnv,
   WORKER_LIMITS,
@@ -16,9 +18,18 @@ import { createLogger } from "@wakeel/telemetry";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import { maintenanceProcessor, type TurnDeps, turnEnqueuer, turnProcessor } from "./turn/index";
+import { egressSender, webhookEnqueuer, webhookProcessor } from "./webhook/index";
 import { startWorkers } from "./workers";
 
-const config = loadConfigOrExit({ ...commonEnv, ...redisEnv, ...workerEnv, ...databaseEnv, ...sandboxClientEnv });
+const config = loadConfigOrExit({
+  ...commonEnv,
+  ...redisEnv,
+  ...workerEnv,
+  ...databaseEnv,
+  ...sandboxClientEnv,
+  ...egressClientEnv,
+  ...masterKeyEnv,
+});
 if (config) {
   const logger = createLogger({ service: "worker", level: config.logLevel });
   const redisUrl = config.redisUrl.reveal();
@@ -33,6 +44,8 @@ if (config) {
   const connection = { url: redisUrl, maxRetriesPerRequest: null };
   const turnQueue = new Queue("turn", { connection });
   const maintenanceQueue = new Queue("maintenance", { connection });
+  const webhookQueue = new Queue("webhook", { connection });
+  const webhooks = webhookEnqueuer(webhookQueue);
   const publisher = new Redis(redisUrl);
   const sandbox = createSandboxClient({ url: config.sandboxUrl });
   const capabilityKey = config.egressCapabilityKey.reveal();
@@ -52,6 +65,7 @@ if (config) {
     publish: async (channel, message) => {
       await publisher.publish(channel, message);
     },
+    enqueueWebhook: webhooks.now,
   };
 
   const running = startWorkers({
@@ -59,7 +73,22 @@ if (config) {
     queues: config.queues,
     processors: {
       turn: turnProcessor(turnDeps),
-      maintenance: maintenanceProcessor({ db, logger, enqueueTurn: turnEnqueuer(turnQueue) }),
+      maintenance: maintenanceProcessor({
+        db,
+        logger,
+        enqueueTurn: turnEnqueuer(turnQueue),
+        enqueueWebhook: webhooks.now,
+      }),
+      webhook: webhookProcessor({
+        db,
+        logger,
+        sender: egressSender({ egressUrl: config.egressUrl, egressToken: config.egressToken.reveal() }),
+        keyring: {
+          current: { version: config.masterKeyVersion, key: config.masterKey.reveal() },
+          previous: config.previousMasterKeys.reveal(),
+        },
+        scheduleWake: webhooks.at,
+      }),
     },
     logger,
     concurrency: WORKER_LIMITS.concurrentTurnsPerProcess,
@@ -89,7 +118,13 @@ if (config) {
     logger.info({ signal }, "shutting down; waiting for jobs in flight");
     if (keepAlive) clearInterval(keepAlive);
     await running.close();
-    await Promise.all([turnQueue.close(), maintenanceQueue.close(), publisher.quit(), db.close()]);
+    await Promise.all([
+      turnQueue.close(),
+      maintenanceQueue.close(),
+      webhookQueue.close(),
+      publisher.quit(),
+      db.close(),
+    ]);
     process.exit(0);
   };
   process.once("SIGTERM", () => void shutdown("SIGTERM"));

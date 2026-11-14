@@ -26,6 +26,8 @@ export const AUDIT_ACTIONS = [
   "bot.deleted",
   "workflow.created",
   "workflow.deleted",
+  // Task 5.2 (ADR-028 §8): written by the delivery worker as the system actor.
+  "connection.disabled",
 ] as const;
 export type AuditActionName = (typeof AUDIT_ACTIONS)[number];
 
