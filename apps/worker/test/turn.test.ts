@@ -7,6 +7,7 @@ import {
   appendInboundEvent,
   createBot,
   createDatabase,
+  createWorkflowDoc,
   createWorkspace,
   type Database,
   listDraftDocs,
@@ -22,7 +23,6 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   autonomyPort,
   botMessageId,
-  callTool,
   drainConversation,
   modelHandoffSummary,
   resolveModel,
@@ -97,7 +97,7 @@ const card = (extra: Record<string, unknown>) => ({ id: newElementId("card"), ..
 async function seed(
   cards: unknown[],
   settings: Record<string, unknown> = {},
-  extra: { nodes?: unknown[]; edges?: unknown[]; mainNode?: Record<string, unknown> } = {},
+  extra: { nodes?: unknown[]; edges?: unknown[]; mainNode?: Record<string, unknown>; workflows?: unknown[] } = {},
 ) {
   const userId = newId("usr");
   await su("insert into users (id, email, name) values ($1, $2, 'Builder')", [userId, `${userId}@example.test`]);
@@ -136,6 +136,7 @@ async function seed(
         ],
       },
     });
+    for (const doc of extra.workflows ?? []) await createWorkflowDoc(tx, { botId: bot.id, doc, userId });
     const m = manifest.doc as { settings: Record<string, unknown> };
     await saveDraftDoc(tx, {
       botId: bot.id,
@@ -733,67 +734,8 @@ describe("the Autonomous Node (task 6.6)", () => {
   });
 });
 
-describe("tool calls (task 6.6, ADR-032 §2)", () => {
-  const node = {
-    id: newElementId("node"),
-    type: "autonomous" as const,
-    name: "Assistant",
-    instructions: "x",
-    tools: [
-      {
-        id: newElementId("tool"),
-        type: "code" as const,
-        name: "lookupOrder",
-        description: "Finds an order.",
-        input: { type: "object", properties: { number: { type: "string" } }, required: ["number"] },
-        output: { type: "object", properties: { status: { type: "string" } }, required: ["status"] },
-        source: "return 1",
-        sideEffects: false,
-        timeoutMs: 1000,
-      },
-      {
-        id: newElementId("tool"),
-        type: "kb_search" as const,
-        name: "searchHelp",
-        description: "d",
-        kbIds: [newId("kb")],
-        topK: 5,
-      },
-    ],
-    variableAccess: [],
-    exits: [],
-    conversational: true,
-    allowHandoff: false,
-    maxIterations: 6,
-    temperature: 0.3,
-    messageTypes: ["text" as const],
-  };
-  const call = (tool: string, input: unknown, value: unknown = { status: "shipped" }) =>
-    callTool(
-      node as never,
-      { tool, input: input as never },
-      {
-        code: { run: async () => ({ ok: true, value: value as never, patches: {}, said: [], logs: [] }) },
-        scopes: {},
-        idempotencyKey: "k",
-        logger,
-      },
-    );
-
-  test("input that does not match the schema is refused before anything runs", async () => {
-    await expect(call("lookupOrder", { number: 5678 })).rejects.toMatchObject({ code: "tool_input_invalid" });
-  });
-
-  test("output that does not match the schema fails the call", async () => {
-    await expect(call("lookupOrder", { number: "5678" }, { state: "x" })).rejects.toMatchObject({
-      code: "tool_failed",
-    });
-  });
-
-  test("a tool that is not on the node, or not built yet, fails with a message the model can read", async () => {
-    await expect(call("deleteEverything", {})).rejects.toMatchObject({ code: "tool_failed" });
-    await expect(call("searchHelp", "x")).rejects.toMatchObject({ code: "tool_failed" });
-  });
+describe("model resolution (task 6.6, ADR-032 §5)", () => {
+  const node = { model: undefined } as const;
 
   test("the model: the node's, then the bot's default, as a registry id", () => {
     const definition = { manifest: { settings: { models: { default: "anthropic:claude-sonnet-5-5" } } } } as never;
@@ -801,5 +743,196 @@ describe("tool calls (task 6.6, ADR-032 §2)", () => {
       "gpt-4.1-mini",
     );
     expect(resolveModel(node as never, definition, "gpt-4.1")).toBe("claude-sonnet-5-5");
+  });
+});
+
+describe("workflow tools (task 6.6, ADR-035)", () => {
+  /**
+   * Acceptance (build plan 6.6): a workflow tool that asks the user a question suspends the node; the
+   * user's answer finishes the workflow, and the node resumes with "code after the call did not run".
+   */
+  test("a workflow that asks the user a question suspends the node, which resumes with its outputs", async () => {
+    const sub = newElementId("wf");
+    const address = newElementId("var");
+    const entry = newElementId("node");
+    const ask = newElementId("node");
+    const exit = newElementId("node");
+    const askAddress = {
+      id: newElementId("tool"),
+      type: "workflow",
+      name: "askAddress",
+      description: "Asks the customer for their delivery address.",
+      workflowId: sub,
+    };
+    const c = await seed(
+      [],
+      {},
+      {
+        mainNode: {
+          type: "autonomous",
+          name: "Assistant",
+          instructions: "You arrange deliveries.",
+          model: "openai:gpt-4.1-mini",
+          tools: [askAddress],
+        },
+        workflows: [
+          {
+            id: sub,
+            name: "Ask address",
+            kind: "sub",
+            variables: [{ id: address, name: "address", scope: "workflow", type: "string" }],
+            inputs: [{ name: "reason", type: "string", required: true }],
+            outputs: [{ name: "address", type: "string", required: true }],
+            nodes: [
+              { id: entry, type: "entry", name: "Entry" },
+              {
+                id: ask,
+                type: "standard",
+                name: "Ask",
+                cards: [
+                  card({ type: "capture", prompt: { type: "text", text: "عنوانك إيه؟" }, kind: "text", into: address }),
+                ],
+              },
+              { id: exit, type: "exit", name: "Done", outputs: { address: "workflow.address" } },
+            ],
+            edges: [
+              { id: newElementId("edge"), from: { nodeId: entry, port: "next" }, to: { nodeId: ask } },
+              { id: newElementId("edge"), from: { nodeId: ask, port: "next" }, to: { nodeId: exit } },
+            ],
+          },
+        ],
+      },
+    );
+    const llm = new FakeLlm()
+      .scriptText(
+        ':::say text\nهحتاج عنوانك\n:::run\nmemo.asked = true\nconst a = await tools.askAddress({ reason: "delivery" })\nreturn a\n:::end',
+      )
+      .scriptText(":::say text\nتمام، هنوصل على ١٢ شارع التحرير\n:::exit listen\n:::end");
+    const afterCall: string[] = [];
+    const { d } = deps({
+      autonomy: (turn, port) =>
+        autonomyPort(
+          {
+            db,
+            llm: llm as never,
+            runPort: {
+              // Stands in for the sandbox: the code calls the tool, then would go on if it were answered.
+              run: (r) =>
+                new Promise((resolve, reject) => {
+                  r.signal?.addEventListener("abort", () => reject(r.signal?.reason), { once: true });
+                  r.onTool({ tool: "askAddress", input: { reason: "delivery" } }).then((value) => {
+                    afterCall.push("ran");
+                    resolve({ ok: true, value, patches: { memo: { set: { asked: true } } }, logs: [] });
+                  }, reject);
+                }),
+            },
+            logger,
+          },
+          turn,
+          port,
+        ),
+    });
+
+    await send(c, "عايز أغير عنوان التوصيل");
+    await drainConversation(d, c.conversationId);
+    expect(await botTexts(c)).toEqual(["هحتاج عنوانك", "عنوانك إيه؟"]);
+    const [waiting] = await query<{ status: string; state: { autonomy: Record<string, { pendingTool?: unknown }> } }>(
+      "select status, state from conversations where id = $1",
+      [c.conversationId],
+    );
+    expect(waiting?.status).toBe("waiting_input");
+    expect(Object.values(waiting?.state.autonomy ?? {})[0]?.pendingTool).toMatchObject({ name: "askAddress" });
+
+    await send(c, "١٢ شارع التحرير");
+    await drainConversation(d, c.conversationId);
+    expect(await botTexts(c)).toEqual(["هحتاج عنوانك", "عنوانك إيه؟", "تمام، هنوصل على ١٢ شارع التحرير"]);
+    expect(afterCall).toEqual([]);
+    const resumed = llm.calls[1]?.request as { messages: { content: string }[] };
+    const feedback = resumed.messages.at(-1)?.content ?? "";
+    expect(feedback).toContain('Tool askAddress finished with {"address":"١٢ شارع التحرير"}.');
+    expect(feedback).toContain("Code after that call did not run");
+    // memo was set before the call; the block was stopped, so its changes were not kept (ADR-035 §2).
+    expect(feedback).not.toContain('"asked"');
+    const [done] = await query<{ status: string; state: { autonomy: Record<string, { pendingTool?: unknown }> } }>(
+      "select status, state from conversations where id = $1",
+      [c.conversationId],
+    );
+    expect(done?.status).toBe("waiting_input");
+    expect(Object.values(done?.state.autonomy ?? {})[0]?.pendingTool).toBeUndefined();
+    llm.expectDone();
+  });
+
+  test("a submitted tool result resumes a node waiting on it (submitToolResult, ADR-029 §2)", async () => {
+    const tool = newElementId("tool");
+    const c = await seed(
+      [],
+      {},
+      {
+        mainNode: {
+          type: "autonomous",
+          name: "Assistant",
+          instructions: "You take payments.",
+          model: "openai:gpt-4.1-mini",
+          tools: [
+            {
+              id: tool,
+              type: "code",
+              name: "charge",
+              description: "Charges the card.",
+              input: { type: "object" },
+              source: "return null",
+            },
+          ],
+        },
+      },
+    );
+    // The state a code tool's `ctx.suspend` leaves (deferred, ADR-035 §7): the node waits on the call.
+    const [main] = await query<{ doc: { nodes: { id: string; type: string }[]; id: string } }>(
+      "select doc from bot_draft_docs where bot_id = $1 and kind = 'workflow'",
+      [c.botId],
+    );
+    const nodeId = main?.doc.nodes.find((n) => n.type === "autonomous")?.id as string;
+    const wfId = main?.doc.id as string;
+    const toolCallId = "turn_x:1:run:charge";
+    const state = {
+      ...emptyState(),
+      status: "waiting_external",
+      started: true,
+      stack: [{ workflowId: wfId, nodeId, cardIndex: 0, vars: {}, inputs: {} }],
+      wait: { kind: "tool", nodeId, toolId: tool, toolCallId, since: new Date().toISOString() },
+      autonomy: {
+        [`${wfId}:${nodeId}`]: {
+          iteration: 2,
+          memo: {},
+          feedback: [],
+          pendingTool: { toolId: tool, toolCallId, name: "charge", input: { amount: 10 } },
+        },
+      },
+    };
+    await su("update conversations set status = 'waiting_external', state = $2::jsonb where id = $1", [
+      c.conversationId,
+      JSON.stringify(state),
+    ]);
+    await db.withWorkspace(c.ws, (tx) =>
+      appendInboundEvent(tx, {
+        conversationId: c.conversationId,
+        kind: "tool_result",
+        payload: { toolCallId, result: { paid: true } },
+      }),
+    );
+    const llm = new FakeLlm().scriptText(":::say text\nتم الدفع\n:::exit listen\n:::end");
+    const { d } = deps({
+      autonomy: (turn, port) =>
+        autonomyPort(
+          { db, llm: llm as never, runPort: { run: async () => Promise.reject(new Error("no run")) }, logger },
+          turn,
+          port,
+        ),
+    });
+    await drainConversation(d, c.conversationId);
+    expect(await botTexts(c)).toEqual(["تم الدفع"]);
+    const request = llm.calls[0]?.request as { messages: { content: string }[] };
+    expect(request.messages.at(-1)?.content).toContain('Tool charge finished with {"paid":true}.');
+    llm.expectDone();
   });
 });

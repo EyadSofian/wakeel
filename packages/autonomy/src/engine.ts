@@ -12,6 +12,9 @@ import type { TranscriptMessage } from "./prompt/transcript";
 import { afterRun, feedbackFor } from "./protocol/outcome";
 import { contextFromNode, protocolV1 } from "./protocol/protocol-v1";
 import type { AutonomyProtocol, FinishReason, ResolvedExit } from "./protocol/types";
+import { mapCitations } from "./tools/citations";
+import { resumedFeedback, type ToolResolution } from "./tools/feedback";
+import type { PendingToolCall } from "./tools/suspension";
 
 /**
  * The Autonomous Node's iteration (architecture §6.3, task 6.5). The engine calls `step` once per
@@ -49,6 +52,17 @@ export type AutonomyOutcome =
   | { type: "next" }
   | { type: "goto"; port: string }
   | { type: "wait"; wait: { kind: "listen"; nodeId: string; since: string } }
+  | {
+      type: "wait";
+      wait: { kind: "tool"; nodeId: string; toolId: string; toolCallId: string; reason?: string; since: string };
+    }
+  | {
+      type: "call";
+      workflowId: string;
+      inputs: Record<string, Json>;
+      outputs: Record<string, string>;
+      toolCallId: string;
+    }
   | { type: "handoff"; reason: string; summary: string; variables: Record<string, Json> };
 
 export interface AutonomyStepResult {
@@ -83,7 +97,13 @@ export type RunOutcome =
       patches: Record<string, { set?: Record<string, Json>; unset?: string[] }>;
       logs?: { level: "debug" | "info" | "warn" | "error"; message: string }[];
     }
-  | { ok: false; error: { message: string; line?: number } };
+  | { ok: false; error: { message: string; line?: number } }
+  /** A tool call ended the block at the call site (ADR-035): nothing after it ran, no patch exists. */
+  | {
+      ok: false;
+      suspended: PendingToolCall & { reason?: string };
+      logs?: { level: "debug" | "info" | "warn" | "error"; message: string }[];
+    };
 
 /**
  * Runs the model's `:::run` block in the sandbox with the node's tools bridged (task 6.6, ADR-032).
@@ -129,8 +149,10 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
       const memory: AutonomyMemory = structuredClone(
         input.memory ?? { iteration: 0, memo: {}, feedback: [] },
       ) as AutonomyMemory;
-      // A user's reply after `listen` starts the node's next turn with a fresh iteration budget.
+      // A user's reply after `listen`, or a submitted tool result, starts the node's next turn with a
+      // fresh iteration budget (ADR-035 §5).
       if (input.resume?.kind === "message") memory.iteration = 0;
+      resumeTool(memory, input.resume);
       if (memory.iteration >= node.maxIterations)
         throw new AppError("autonomy_loop_exceeded", { node: node.name, limit: node.maxIterations });
       memory.iteration += 1;
@@ -169,7 +191,11 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
       for await (const chunk of handle.textStream) reader.push(chunk);
       const { finishReason } = await handle.result;
       const { result } = reader.end(asFinishReason(finishReason));
-      const messages = result.messages;
+      // Citation tokens never reach the user (§6.5). Until kb_search exists there are no sources.
+      // A text that was nothing but tokens is dropped rather than sent empty.
+      const messages = result.messages
+        .map((m) => (m.type === "text" ? { ...m, text: mapCitations(m.text, {}).text } : m))
+        .filter((m) => m.type !== "text" || m.text.trim() !== "");
       const logs: NonNullable<AutonomyStepResult["logs"]> = [];
       if (result.recovered) logs.push({ level: "warn", message: "protocol_recovered: the reply had no directives" });
 
@@ -197,6 +223,10 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
           idempotencyKey: `${input.idempotencyKey}:run`,
           deadline: input.deadline,
         });
+        if (!run.ok && "suspended" in run) {
+          for (const l of run.logs ?? []) logs.push(l);
+          return suspend(run.suspended);
+        }
         if (!run.ok) {
           memory.feedback.push({
             kind: "run_error",
@@ -220,6 +250,42 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
       if (result.exit) return leave(result.exit);
       // A reply with messages and neither code nor an exit: the protocol accepted it, so iterate.
       return iterate();
+
+      /** The call is kept pending until its result arrives (§6.3); the budget carries on. */
+      function suspend(pending: PendingToolCall & { reason?: string }): AutonomyStepResult {
+        memory.pendingTool = {
+          toolId: pending.toolId,
+          toolCallId: pending.toolCallId,
+          name: pending.name,
+          input: pending.input,
+        };
+        logs.push({ level: "info", message: `${pending.name} ended the run block; waiting for its result` });
+        const outcome: AutonomyOutcome = pending.workflowId
+          ? {
+              type: "call",
+              workflowId: pending.workflowId,
+              inputs: (pending.input ?? {}) as Record<string, Json>,
+              outputs: {},
+              toolCallId: pending.toolCallId,
+            }
+          : {
+              type: "wait",
+              wait: {
+                kind: "tool",
+                nodeId: node.id,
+                toolId: pending.toolId,
+                toolCallId: pending.toolCallId,
+                ...(pending.reason ? { reason: pending.reason } : {}),
+                since: ctx.now,
+              },
+            };
+        return {
+          outcome,
+          ...(messages.length > 0 ? { messages } : {}),
+          ...(logs.length > 0 ? { logs } : {}),
+          memory,
+        };
+      }
 
       function leave(exit: ResolvedExit): AutonomyStepResult {
         // Leaving the node ends its turn: the next visit starts with a fresh budget.
@@ -249,6 +315,46 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
       }
     },
   };
+}
+
+/**
+ * Turns a finished suspended call into feedback (§6.3, ADR-035 §4): the outputs the engine recorded
+ * when the called workflow returned, or a result submitted for the pending call. A result for any
+ * other call is ignored.
+ */
+function resumeTool(memory: AutonomyMemory, resume: AutonomyStepInput["resume"]): void {
+  const pending = memory.pendingTool;
+  if (!pending) return;
+  if (resume?.kind === "tool_result") {
+    if (resume.toolCallId !== pending.toolCallId) return;
+    const payload = field(resume.event, "payload");
+    const error = field(payload, "error");
+    const resolution: ToolResolution =
+      error !== undefined
+        ? { error: String(field(error, "message") ?? "the tool reported an error") }
+        : { result: field(payload, "result") ?? null };
+    memory.feedback.push({ kind: "tool_resumed", text: resumedFeedback(pending, resolution) });
+    memory.iteration = 0;
+    delete memory.pendingTool;
+    return;
+  }
+  for (const item of memory.feedback) {
+    if (item.kind !== "tool_resumed") continue;
+    let recorded: unknown;
+    try {
+      recorded = JSON.parse(item.text);
+    } catch {
+      continue;
+    }
+    if (field(recorded as Json, "toolCallId") !== pending.toolCallId) continue;
+    const outputs = (field(recorded as Json, "outputs") ?? {}) as Record<string, Json>;
+    item.text = resumedFeedback(pending, { outputs });
+    delete memory.pendingTool;
+  }
+}
+
+function field(value: Json | undefined, key: string): Json | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, Json>)[key] : undefined;
 }
 
 interface Access {

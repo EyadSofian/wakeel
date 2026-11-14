@@ -12,6 +12,15 @@ const NAME = "var_CustName00";
 const ORDER = "var_OrderNo000";
 const TIER = "var_TierLevel0";
 const SECRET = "var_Internal00";
+/** One writable variable of each remaining type, for the type checks. */
+const TYPED = [
+  ["var_TypeNumber", "number"],
+  ["var_TypeBool00", "boolean"],
+  ["var_TypeDate00", "date"],
+  ["var_TypeObject", "object"],
+  ["var_TypeArray0", "array"],
+  ["var_TypeAny000", "any"],
+] as const;
 const base = makeBotDefinition({ name: "مساعد النور" });
 const definition = {
   ...base,
@@ -22,6 +31,7 @@ const definition = {
       { id: ORDER, name: "orderNumber", scope: "conversation", type: "string", sensitive: false },
       { id: TIER, name: "tier", scope: "conversation", type: "enum", enumValues: ["gold", "silver"], sensitive: false },
       { id: SECRET, name: "internalNote", scope: "conversation", type: "string", sensitive: false },
+      ...TYPED.map(([id, type]) => ({ id, name: `t_${type}`, scope: "conversation", type, sensitive: false })),
     ],
   },
 } as unknown as BotDefinition;
@@ -35,6 +45,7 @@ const node = AutonomousNode.parse({
     { variableId: NAME, mode: "read" },
     { variableId: ORDER, mode: "write" },
     { variableId: TIER, mode: "write" },
+    ...TYPED.map(([variableId]) => ({ variableId, mode: "write" as const })),
   ],
   exits: [
     {
@@ -244,5 +255,254 @@ describe("across iterations", () => {
     const second = await s.autonomy.step(s.input(first.memory));
     expect(second.memory.memo).toEqual({ step: 2 });
     expect(second.memory.feedback[0]?.text).toBe("memo was not changed: it would be over 16 KB.");
+  });
+});
+
+describe("suspending tools (architecture §6.3, ADR-035)", () => {
+  const pending = {
+    toolId: "tool_AskAddr000",
+    name: "askAddress",
+    workflowId: "wf_AskAddres0",
+    input: { reason: "delivery" },
+    toolCallId: "turn_x:3:run:askAddress",
+  };
+  const pendingTool = {
+    toolId: pending.toolId,
+    toolCallId: pending.toolCallId,
+    name: pending.name,
+    input: pending.input,
+  };
+  const after = "Code after that call did not run, and the variables it set were not kept.";
+
+  test("a workflow tool ends the run at the call: the node calls the workflow and keeps the call pending", async () => {
+    const s = setup(
+      [
+        `${M}say text\nهسألك عن العنوان\n${M}run\nconversation.orderNumber = "5678"\nawait tools.askAddress({ reason: "delivery" })\n${M}end`,
+      ],
+      [{ ok: false, suspended: pending }],
+    );
+    const r = await s.autonomy.step(s.input());
+    expect(r.outcome).toEqual({
+      type: "call",
+      workflowId: "wf_AskAddres0",
+      inputs: { reason: "delivery" },
+      outputs: {},
+      toolCallId: "turn_x:3:run:askAddress",
+    });
+    expect(r.messages).toEqual([{ type: "text", text: "هسألك عن العنوان", format: "markdown" }]);
+    expect(r.writes).toBeUndefined();
+    expect(r.memory.pendingTool).toEqual(pendingTool);
+    // The budget continues: an inline workflow called in every iteration still hits maxIterations.
+    expect(r.memory.iteration).toBe(1);
+  });
+
+  test("when the workflow returns, the next iteration reads its outputs and that the rest did not run", async () => {
+    const s = setup([`${M}say text\nهنوصله على ١٢ شارع التحرير\n${M}exit listen\n${M}end`]);
+    // What the engine writes when the called frame returns (turn.ts #return).
+    const raw = JSON.stringify({ toolCallId: pending.toolCallId, outputs: { address: "١٢ شارع التحرير" } });
+    const r = await s.autonomy.step(
+      s.input({ iteration: 1, memo: {}, feedback: [{ kind: "tool_resumed", text: raw }], pendingTool }),
+    );
+    expect(s.lastPrompt()).toContain(`Tool askAddress finished with {"address":"١٢ شارع التحرير"}. ${after}`);
+    expect(r.memory.pendingTool).toBeUndefined();
+    expect(r.memory.feedback).toEqual([]);
+  });
+
+  test("a submitted tool result resumes the node with a fresh budget", async () => {
+    const s = setup([`${M}say text\nتم الدفع\n${M}exit listen\n${M}end`]);
+    const r = await s.autonomy.step(
+      s.input(
+        { iteration: 3, memo: {}, feedback: [], pendingTool },
+        {
+          resume: {
+            kind: "tool_result",
+            toolCallId: pending.toolCallId,
+            event: { kind: "tool_result", payload: { toolCallId: pending.toolCallId, result: { paid: true } } },
+          },
+        },
+      ),
+    );
+    expect(s.lastPrompt()).toContain(`Tool askAddress finished with {"paid":true}. ${after}`);
+    expect(r.outcome).toMatchObject({ type: "wait" });
+    expect(r.memory.pendingTool).toBeUndefined();
+  });
+
+  test("a submitted error is fed back as a failure", async () => {
+    const s = setup([`${M}say text\nالدفع ما تمش\n${M}exit listen\n${M}end`]);
+    await s.autonomy.step(
+      s.input(
+        { iteration: 1, memo: {}, feedback: [], pendingTool },
+        {
+          resume: {
+            kind: "tool_result",
+            toolCallId: pending.toolCallId,
+            event: {
+              kind: "tool_result",
+              payload: { toolCallId: pending.toolCallId, error: { message: "card declined" } },
+            },
+          },
+        },
+      ),
+    );
+    expect(s.lastPrompt()).toContain(`Tool askAddress failed: card declined. ${after}`);
+  });
+
+  test("a result for a call that is not pending is ignored", async () => {
+    const s = setup([`${M}say text\nلسه مستني\n${M}exit listen\n${M}end`]);
+    const r = await s.autonomy.step(
+      s.input(
+        { iteration: 1, memo: {}, feedback: [], pendingTool },
+        {
+          resume: { kind: "tool_result", toolCallId: "other", event: { kind: "tool_result", payload: { result: 1 } } },
+        },
+      ),
+    );
+    expect(s.lastPrompt()).not.toContain("finished with");
+    expect(r.memory.pendingTool).toEqual(pendingTool);
+  });
+
+  test("a tool that waits for an outside result makes the node wait for it", async () => {
+    const external = {
+      toolId: "tool_Pay0000000",
+      name: "charge",
+      input: { amount: 10 },
+      toolCallId: "turn_x:3:run:charge",
+      reason: "waiting for the payment page",
+    };
+    const s = setup([`${M}run\nawait tools.charge({ amount: 10 })\n${M}end`], [{ ok: false, suspended: external }]);
+    const r = await s.autonomy.step(s.input());
+    expect(r.outcome).toEqual({
+      type: "wait",
+      wait: {
+        kind: "tool",
+        nodeId: node.id,
+        toolId: "tool_Pay0000000",
+        toolCallId: "turn_x:3:run:charge",
+        reason: "waiting for the payment page",
+        since: "2026-11-14T10:00:00.000Z",
+      },
+    });
+    expect(r.memory.pendingTool?.toolCallId).toBe("turn_x:3:run:charge");
+  });
+});
+
+describe("citations (architecture §6.5)", () => {
+  test("citation tokens never reach the user", async () => {
+    const s = setup([`${M}say text\nالشحن بياخد ٣ أيام [[c1]].\n${M}exit listen\n${M}end`]);
+    const r = await s.autonomy.step(s.input());
+    expect(r.messages).toEqual([{ type: "text", text: "الشحن بياخد ٣ أيام.", format: "markdown" }]);
+  });
+});
+
+describe("write types", () => {
+  test.each([
+    ["number", 3, "x"],
+    ["boolean", true, "yes"],
+    ["date", "2026-11-14", "next week"],
+    ["object", { a: 1 }, [1]],
+    ["array", [1, 2], { a: 1 }],
+    ["any", null, undefined],
+  ] as const)("a %s accepts %j and refuses %j", async (type, good, bad) => {
+    const name = `t_${type}`;
+    const set: Record<string, unknown> = { [name]: good };
+    const s = setup(
+      [`${M}run\nx\n${M}end`, `${M}run\nx\n${M}end`],
+      [
+        { ok: true, returned: false, patches: { conversation: { set } } } as RunOutcome,
+        { ok: true, returned: false, patches: { conversation: { set: { [name]: bad ?? null } } } } as RunOutcome,
+      ],
+    );
+    const first = await s.autonomy.step(s.input());
+    expect(first.writes).toHaveLength(1);
+    const second = await s.autonomy.step(s.input());
+    if (type === "any") expect(second.writes).toHaveLength(1);
+    else expect(second.memory.feedback[0]?.text).toContain(`it must be a ${type}`);
+  });
+});
+
+describe("resume edge cases", () => {
+  const pendingTool = { toolId: "tool_AskAddr000", toolCallId: "k:askAddress", name: "askAddress", input: {} };
+  const reply = `${M}say text\nتمام\n${M}exit listen\n${M}end`;
+
+  test("feedback that is not the engine's record, or is for another call, is left as it is", async () => {
+    const s = setup([reply]);
+    const r = await s.autonomy.step(
+      s.input({
+        iteration: 1,
+        memo: {},
+        feedback: [
+          { kind: "run_result", text: "1" },
+          { kind: "tool_resumed", text: "not json" },
+          { kind: "tool_resumed", text: JSON.stringify({ toolCallId: "other", outputs: {} }) },
+        ],
+        pendingTool,
+      }),
+    );
+    expect(s.lastPrompt()).toContain("not json");
+    expect(r.memory.pendingTool).toEqual(pendingTool);
+  });
+
+  test("a workflow that returned no outputs, and a submitted error without a message", async () => {
+    const s = setup([reply, reply]);
+    await s.autonomy.step(
+      s.input({
+        iteration: 1,
+        memo: {},
+        feedback: [{ kind: "tool_resumed", text: JSON.stringify({ toolCallId: "k:askAddress" }) }],
+        pendingTool,
+      }),
+    );
+    expect(s.lastPrompt()).toContain("Tool askAddress finished with {}.");
+    await s.autonomy.step(
+      s.input(
+        { iteration: 1, memo: {}, feedback: [], pendingTool },
+        { resume: { kind: "tool_result", toolCallId: "k:askAddress", event: { payload: { error: {} } } } },
+      ),
+    );
+    expect(s.lastPrompt()).toContain("Tool askAddress failed: the tool reported an error.");
+  });
+
+  test("a submitted result with no value reads as null; with nothing pending, nothing happens", async () => {
+    const s = setup([reply, reply]);
+    await s.autonomy.step(
+      s.input(
+        { iteration: 1, memo: {}, feedback: [], pendingTool },
+        { resume: { kind: "tool_result", toolCallId: "k:askAddress", event: "odd" } },
+      ),
+    );
+    expect(s.lastPrompt()).toContain("Tool askAddress finished with null.");
+    const r = await s.autonomy.step(
+      s.input(undefined, { resume: { kind: "tool_result", toolCallId: "k:askAddress", event: {} } }),
+    );
+    expect(r.memory.feedback).toEqual([]);
+  });
+
+  test("a suspension without logs or messages, and a workflow call with no input", async () => {
+    const s = setup(
+      [`${M}run\nawait tools.askAddress()\n${M}end`],
+      [
+        {
+          ok: false,
+          suspended: {
+            toolId: "tool_AskAddr000",
+            name: "askAddress",
+            workflowId: "wf_AskAddres0",
+            input: null,
+            toolCallId: "k:askAddress",
+          },
+          logs: [{ level: "info", message: "before" }],
+        },
+      ],
+    );
+    const r = await s.autonomy.step(s.input());
+    expect(r.outcome).toMatchObject({ type: "call", inputs: {} });
+    expect(r.messages).toBeUndefined();
+    expect(r.logs?.map((l) => l.message)).toEqual(["before", "askAddress ended the run block; waiting for its result"]);
+  });
+
+  test("a text that is only a citation token is not sent", async () => {
+    const s = setup([`${M}say text\n[[c1]]\n${M}exit listen\n${M}end`]);
+    const r = await s.autonomy.step(s.input());
+    expect(r.messages).toBeUndefined();
   });
 });

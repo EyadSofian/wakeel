@@ -1,8 +1,12 @@
+import type { ToolCodeRunner } from "@wakeel/autonomy";
 import {
   type AutonomyCode,
   type AutonomyContext,
   type AutonomyStepInput,
+  callTool,
   createAutonomy,
+  isToolSuspended,
+  type PendingToolCall,
   type RunOutcome,
 } from "@wakeel/autonomy";
 import {
@@ -14,7 +18,6 @@ import {
   modelBaseUrlSecret,
   modelKeySecret,
   type Tool,
-  validateJson,
 } from "@wakeel/contracts";
 import {
   type Database,
@@ -145,21 +148,43 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
   const run: AutonomyCode = {
     async run(request) {
       const timeoutMs = Math.max(1_000, Math.min(RUN_MAX_MS, request.deadline - now()));
-      const outcome = await w.runPort.run({
-        source: request.source,
-        scopes: request.scopes,
-        tools: request.node.tools.map(manifestEntry),
-        timeoutMs,
-        memoryMb: RUN_MEMORY_MB,
-        idempotencyKey: request.idempotencyKey,
-        onTool: (call) =>
-          callTool(request.node, call, {
-            code,
-            scopes: request.scopes,
-            idempotencyKey: request.idempotencyKey,
-            logger: w.logger,
-          }),
-      });
+      // A workflow tool ends the block at the call site (ADR-035 §1): the call is never answered and
+      // the exec is stopped, so nothing after it runs, tool calls included.
+      const stop = new AbortController();
+      let suspended: PendingToolCall | undefined;
+      let outcome: Awaited<ReturnType<AutonomyRunPort["run"]>>;
+      try {
+        outcome = await w.runPort.run({
+          source: request.source,
+          scopes: request.scopes,
+          tools: request.node.tools.map(manifestEntry),
+          timeoutMs,
+          memoryMb: RUN_MEMORY_MB,
+          idempotencyKey: request.idempotencyKey,
+          signal: stop.signal,
+          onTool: async (call) => {
+            if (suspended) throw new AppError("tool_failed", { tool: call.tool, message: "the block already ended" });
+            try {
+              return await callTool(request.node, call, {
+                definition: turn.definition,
+                code: toolCode(code),
+                scopes: request.scopes,
+                idempotencyKey: request.idempotencyKey,
+                warn: (message, data) => w.logger.warn(data, message),
+              });
+            } catch (error) {
+              if (!isToolSuspended(error)) throw error;
+              suspended = error.pending;
+              stop.abort(error);
+              return new Promise<never>(() => {});
+            }
+          },
+        });
+      } catch (error) {
+        if (suspended) return { ok: false, suspended } satisfies RunOutcome;
+        throw error;
+      }
+      if (suspended) return { ok: false, suspended } satisfies RunOutcome;
       const logs = outcome.logs.map((l) => ({ level: l.level, message: l.args.map(logText).join(" ") }));
       if (!outcome.ok) {
         // A sandbox failure that is not the code's own is ours: never hand it to the model as its bug.
@@ -225,60 +250,14 @@ function logText(arg: unknown): string {
   return typeof arg === "string" ? arg : JSON.stringify(arg);
 }
 
-/**
- * Answers one tool call from the model's code (architecture §6.5): the tool must be on the node, its
- * input must match its schema, and so must its output. A code tool runs in the sandbox as its own
- * exec, reading the node's scopes; it cannot write variables (ADR-032 §2).
- */
-export async function callTool(
-  node: AutonomousNode,
-  call: { tool: string; operation?: string; input: Json },
-  deps: { code: CodePort; scopes: Record<string, Json>; idempotencyKey: string; logger: Logger },
-): Promise<Json> {
-  const tool = node.tools.find((t) => t.name === call.tool);
-  if (!tool) throw new AppError("tool_failed", { tool: call.tool, message: "this node has no such tool" });
-  switch (tool.type) {
-    case "code": {
-      const issues = validateJson(tool.input as Record<string, unknown>, call.input);
-      if (issues.length > 0)
-        throw new AppError("tool_input_invalid", { tool: tool.name, message: describeIssues(issues) });
-      const outcome = await deps.code.run({
-        // On the code's first line, so the line numbers in its errors stay the builder's own.
-        source: `const input = ${JSON.stringify(call.input)}; ${tool.source}`,
-        scopes: deps.scopes as never,
-        timeoutMs: tool.timeoutMs,
-        memoryMb: RUN_MEMORY_MB,
-        idempotencyKey: `${deps.idempotencyKey}:${tool.name}`,
-        secretKeys: [],
-      });
-      if (!outcome.ok) throw new AppError("tool_failed", { tool: tool.name, message: outcome.message });
-      if (Object.keys(outcome.patches).length > 0 || outcome.said.length > 0)
-        deps.logger.warn(
-          { tool: tool.name },
-          "a tool changed variables or sent messages; tools only return a value, so this was not applied",
-        );
-      if (tool.output) {
-        const out = validateJson(tool.output as Record<string, unknown>, outcome.value);
-        if (out.length > 0)
-          throw new AppError("tool_failed", {
-            tool: tool.name,
-            message: `it returned a value that does not match its output: ${describeIssues(out)}`,
-          });
-      }
-      return outcome.value;
-    }
-    case "kb_search":
-      throw new AppError("tool_failed", { tool: tool.name, message: "knowledge base search is not available yet" });
-    case "table":
-      throw new AppError("tool_failed", { tool: tool.name, message: "tables are not available yet" });
-    case "workflow":
-      throw new AppError("tool_failed", { tool: tool.name, message: "workflow tools are not available yet" });
-  }
-}
-
-function describeIssues(issues: readonly { path: string; message: string }[]): string {
-  return issues
-    .slice(0, 5)
-    .map((i) => (i.path ? `${i.path} ${i.message}` : i.message))
-    .join("; ");
+/** The engine's code port as a tool runner: a code tool's exec has the node's scopes, read only. */
+function toolCode(code: CodePort): ToolCodeRunner {
+  return {
+    run: async (request) => {
+      const outcome = await code.run({ ...request, scopes: request.scopes as never });
+      return outcome.ok
+        ? { ok: true, value: outcome.value, patches: outcome.patches, said: outcome.said }
+        : { ok: false, message: outcome.message };
+    },
+  };
 }

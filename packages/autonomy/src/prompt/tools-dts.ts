@@ -37,11 +37,13 @@ function member(tool: Tool, definition: BotDefinition): string {
         list.length === 0
           ? "Record<string, never>"
           : `{ ${list.map((f) => `${f.name}${f.required ? "" : "?"}: ${variableTypeToTs(f.type, f.schema as never)}`).join("; ")} }`;
+      // ADR-035: every workflow call ends the code at the call site; the outputs come in the next step.
       const notes = [
         description,
-        "If the workflow asks the user something, your code stops at this call and you are told the result in a later step; code after the call does not run.",
+        "Calling it ends your code at this call, and you get its outputs in your next step; call it last.",
+        `Outputs: ${fields(wf?.outputs ?? [])}`,
       ];
-      return `${doc(notes)}\n  ${tool.name}(input: ${fields(wf?.inputs ?? [])}): Promise<${fields(wf?.outputs ?? [])}>;`;
+      return `${doc(notes)}\n  ${tool.name}(input: ${fields(wf?.inputs ?? [])}): Promise<never>;`;
     }
   }
 }

@@ -148,8 +148,9 @@ describe("buildPrompt", () => {
     expect(system).toContain('priority?: "low" | "high";');
     expect(system).toContain("Promise<{\n    ticketId: string;\n  }>");
     expect(system).toContain("searchHelp(query: string)");
-    expect(system).toContain("lookupOrder(input: { orderNumber: string }): Promise<{ status: string; eta?: string }>;");
-    expect(system).toContain("code after the call does not run");
+    expect(system).toContain("lookupOrder(input: { orderNumber: string }): Promise<never>;");
+    expect(system).toContain("Outputs: { status: string; eta?: string }");
+    expect(system).toContain("Calling it ends your code at this call");
     expect(system).toContain("- escalate: The customer wants a refund over the limit.\n  data: {");
     expect(system).toContain("- listen:");
     expect(system).toContain("- handoff:");
