@@ -53,6 +53,37 @@ const toConnection = (row: typeof bridgeConnections.$inferSelect): ConnectionRec
   status: row.status as ConnectionRecord["status"],
 });
 
+/**
+ * The emulator's draft connection for this builder session and bot, created on first use (ADR-025).
+ * It has no webhook, no subscribed events and no keys; the Studio emulator routes run the Bridge
+ * inbound path for it in-process. Removing the session removes it (0007).
+ */
+export async function ensureEmulatorConnection(
+  tx: Tx,
+  input: { botId: string; sessionId: string },
+): Promise<ConnectionRecord> {
+  await tx
+    .insert(bridgeConnections)
+    .values({
+      id: newId("conn"),
+      workspaceId: currentWorkspace,
+      botId: input.botId,
+      name: "Emulator",
+      target: "draft",
+      emulatorSessionId: input.sessionId,
+    })
+    .onConflictDoNothing({
+      target: [bridgeConnections.emulatorSessionId, bridgeConnections.botId],
+      where: sql`emulator_session_id is not null`,
+    });
+  const [row] = await tx
+    .select()
+    .from(bridgeConnections)
+    .where(and(eq(bridgeConnections.emulatorSessionId, input.sessionId), eq(bridgeConnections.botId, input.botId)));
+  if (!row) throw new Error("the emulator connection was neither inserted nor found");
+  return toConnection(row);
+}
+
 export async function getBridgeConnection(tx: Tx, connectionId: string): Promise<ConnectionRecord | undefined> {
   const [row] = await tx.select().from(bridgeConnections).where(eq(bridgeConnections.id, connectionId));
   return row ? toConnection(row) : undefined;
