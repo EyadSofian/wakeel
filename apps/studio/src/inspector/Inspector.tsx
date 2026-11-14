@@ -16,7 +16,7 @@ import {
   type SummaryContext,
   summarizeCard,
 } from "../canvas/view/summaries";
-import { ModelField } from "./autonomous/ModelSection";
+import { type AgentView, AutonomousSections } from "./autonomous/AutonomousSections";
 import { AskForm, ConditionForm, EndForm, LogForm, SayForm, SetVariableForm } from "./cards/CardForms";
 import { IssuesContext, Section, StringField, useCommitCard, useDraft } from "./fields";
 
@@ -205,6 +205,12 @@ function NodeConfigure({ node, wfId, summary }: { node: Node; wfId: string; summ
   const [description, setDescription] = useDraft(node.description ?? "");
   const update = (fn: (n: Node) => Node) => store.getState().execute(commands.updateNode(node.id, fn));
   const path = `workflows.${wfId}.nodes.${node.id}`;
+  // An Autonomous Node's tool or exit opens in place of the whole node form (§5.2).
+  const [agentView, setAgentView] = useState<AgentView>();
+  const agentSub =
+    node.type === "autonomous" &&
+    agentView !== undefined &&
+    (agentView.kind === "tool" ? node.tools : node.exits).some((x) => x.id === agentView.id);
 
   const commitName = () => {
     const next = name.trim();
@@ -222,19 +228,23 @@ function NodeConfigure({ node, wfId, summary }: { node: Node; wfId: string; summ
 
   return (
     <>
-      <Section id="general" nodeType={node.type} title="General">
-        <PlainField label="Name" value={name} onChange={setName} onCommit={commitName} />
-        <PlainField
-          label="Description"
-          help="For builders. The bot never sees it."
-          value={description}
-          onChange={setDescription}
-          onCommit={commitDescription}
-          multiline
-        />
-      </Section>
+      {agentSub ? null : (
+        <Section id="general" nodeType={node.type} title="General">
+          <PlainField label="Name" value={name} onChange={setName} onCommit={commitName} />
+          <PlainField
+            label="Description"
+            help="For builders. The bot never sees it."
+            value={description}
+            onChange={setDescription}
+            onCommit={commitDescription}
+            multiline
+          />
+        </Section>
+      )}
       {node.type === "standard" ? <CardsSection node={node} summary={summary} /> : null}
-      {node.type === "autonomous" ? <AutonomousSections node={node} path={path} update={update} /> : null}
+      {node.type === "autonomous" ? (
+        <AutonomousSections node={node} path={path} update={update} view={agentView} setView={setAgentView} />
+      ) : null}
       {node.type === "end" ? (
         <Section id="end" nodeType={node.type} title="End">
           <StringField
@@ -354,95 +364,6 @@ function CardsSection({ node, summary }: { node: Extract<Node, { type: "standard
         </ol>
       )}
     </Section>
-  );
-}
-
-function AutonomousSections({
-  node,
-  path,
-  update,
-}: {
-  node: Extract<Node, { type: "autonomous" }>;
-  path: string;
-  update: (fn: (n: Node) => Node) => void;
-}) {
-  const set = <K extends keyof typeof node>(key: K, value: (typeof node)[K]) =>
-    update((n) => (n.type === "autonomous" ? { ...n, [key]: value } : n));
-  return (
-    <>
-      <Section id="instructions" nodeType={node.type} title="Instructions">
-        <StringField
-          label="Instructions"
-          help="What the agent is for, what it must never do, and when to leave."
-          value={node.instructions}
-          check="text"
-          path={`${path}.instructions`}
-          node={node}
-          rows={8}
-          placeholder="Help the customer track an order…"
-          onCommit={(instructions) => set("instructions", instructions)}
-        />
-      </Section>
-      <Section id="advanced" nodeType={node.type} title="Advanced">
-        <ModelField
-          node={node}
-          onChange={(model) =>
-            update((n) => {
-              if (n.type !== "autonomous") return n;
-              const { model: _old, ...rest } = n;
-              return model ? { ...rest, model } : rest;
-            })
-          }
-        />
-        <label className="flex flex-col gap-3">
-          <span className="text-small font-medium text-primary">Temperature</span>
-          <span className="flex items-center gap-5">
-            <input
-              type="range"
-              min={0}
-              max={2}
-              step={0.1}
-              value={node.temperature}
-              onChange={(e) => set("temperature", Number(e.target.value))}
-              className="min-w-0 flex-1 accent-accent"
-            />
-            <output className="w-10 rounded-sm border border-hairline py-2 text-center text-body tabular-nums">
-              {node.temperature.toFixed(1)}
-            </output>
-          </span>
-          <span className="text-small text-tertiary">Lower is more predictable. 0.3 suits most support agents.</span>
-        </label>
-        <label className="flex flex-col gap-3">
-          <span className="text-small font-medium text-primary">Steps per turn</span>
-          <input
-            type="number"
-            min={1}
-            max={20}
-            value={node.maxIterations}
-            onChange={(e) => {
-              const v = Math.round(Number(e.target.value));
-              if (v >= 1 && v <= 20) set("maxIterations", v);
-            }}
-            className="h-control w-11 rounded-sm border border-hairline bg-surface px-4 text-body tabular-nums"
-          />
-          <span className="text-small text-tertiary">
-            How many tool calls the agent may make before it must answer.
-          </span>
-        </label>
-        <Switch
-          label="Talks with the user"
-          hint="Off: runs once and must leave through an exit."
-          checked={node.conversational}
-          onChange={(v) => set("conversational", v)}
-        />
-        <Switch
-          label="Can hand off to a person"
-          hint="Adds the built-in handoff exit."
-          checked={node.allowHandoff}
-          onChange={(v) => set("allowHandoff", v)}
-        />
-      </Section>
-    </>
   );
 }
 
