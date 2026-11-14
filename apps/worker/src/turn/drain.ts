@@ -78,6 +78,8 @@ export interface TurnDeps {
    * created deliveries. Optional: without it the janitor still finds them.
    */
   enqueueWebhook?(conversationId: string): Promise<void>;
+  /** Writes handoff summaries (task 5.4). Absent until the model layer exists: summaries are empty. */
+  summarizeHandoff?(input: { workspaceId: string; conversationId: string; reason: string }): Promise<string>;
 }
 
 /** The turn span's trigger for each inbound kind (ADR-026). */
@@ -256,9 +258,16 @@ class ConversationRun {
       conversationId: this.conversationId,
       turnId: turn.id,
     });
+    const summarize = this.deps.summarizeHandoff;
     const ports: EnginePorts = {
       ...sandbox,
       clock,
+      ...(summarize
+        ? {
+            handoffSummary: ({ reason }) =>
+              summarize({ workspaceId: this.workspaceId, conversationId: this.conversationId, reason }),
+          }
+        : {}),
       commitStep: (commit) => this.#commitStep(commit, conversation, turn.id),
       emitEphemeral: async (e) => {
         await this.#tx((tx) =>

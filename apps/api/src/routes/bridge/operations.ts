@@ -34,8 +34,9 @@ import { type BridgeDeps, ExternalId } from "./index";
 import { conversationView } from "./views";
 
 /**
- * The rest of the Bridge API (task 5.3, ADR-029): listConversationEvents, endConversation,
- * submitToolResult, listDeliveries, replayDelivery, getConnection and testWebhook.
+ * The rest of the Bridge API: listConversationEvents, endConversation, submitToolResult,
+ * listDeliveries, replayDelivery, getConnection and testWebhook (task 5.3, ADR-029), and
+ * releaseHandoff (task 5.4).
  */
 
 const PREFIX = "/v1/bridge";
@@ -52,6 +53,7 @@ const ToolResultBody = z.object({
   error: z.object({ message: z.string().max(4_000) }).optional(),
 });
 const EventIdParam = z.string().regex(/^evt_[0-9a-z]{26}$/);
+const ReleaseBody = z.object({ note: z.string().max(2_000).optional() }).default({});
 
 /** The test event's stand-in conversation and user (ADR-029 §4): it belongs to no real conversation. */
 export const TEST_CONVERSATION = { id: `conv_${"0".repeat(26)}`, externalId: "wakeel_test" } as const;
@@ -96,6 +98,30 @@ export async function bridgeOperationRoutes(
       return insertInbound(tx, { conversationId: conv.id, kind: "end", payload: { turnId: newId("turn") } });
     });
     // Through the inbox like every state change (ADR-029 §1); answer once the turn has run.
+    await waitForTurn(deps, ctx, event, API_LIMITS.waitSecondsMax);
+    return deps.db.withWorkspace(ctx.workspaceId, async (tx) => {
+      const conv = await findConversation(tx, ctx.connection.id, externalId);
+      if (!conv) throw new AppError("not_found");
+      return conversationView(conv, await getEndUserById(tx, conv.endUserId));
+    });
+  });
+
+  app.post(`${PREFIX}/conversations/:externalConversationId/handoff/release`, async (request) => {
+    const ctx = await auth(request);
+    const externalId = externalIdOf(request);
+    const body = ReleaseBody.parse(request.body ?? {});
+    const event = await deps.db.withWorkspace(ctx.workspaceId, async (tx) => {
+      const conv = await findConversation(tx, ctx.connection.id, externalId);
+      if (!conv) throw new AppError("not_found");
+      if (conv.status !== "handed_off") throw new AppError("not_handed_off");
+      // The agent's note reaches the bot as `event.payload.note` (OpenAPI releaseHandoff).
+      return insertInbound(tx, {
+        conversationId: conv.id,
+        kind: "handoff_release",
+        payload: { turnId: newId("turn"), ...(body.note ? { note: body.note } : {}) },
+      });
+    });
+    // Like endConversation: through the inbox, then answer once the turn has run (§9.4).
     await waitForTurn(deps, ctx, event, API_LIMITS.waitSecondsMax);
     return deps.db.withWorkspace(ctx.workspaceId, async (tx) => {
       const conv = await findConversation(tx, ctx.connection.id, externalId);

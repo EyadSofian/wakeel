@@ -16,12 +16,15 @@ import {
 import { type StartedTestDatabase, startTestDatabase, superuserQuery } from "@wakeel/db/testing";
 import type { CodeOutcome, CodePort, CodeRequest, SandboxPort } from "@wakeel/engine";
 import { createLogger } from "@wakeel/telemetry";
+import { FakeLlm } from "@wakeel/testing";
 import { Queue } from "bullmq";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   botMessageId,
   drainConversation,
+  modelHandoffSummary,
   runJanitor,
+  SUMMARY_SYSTEM,
   type TurnDeps,
   turnEnqueuer,
   turnProcessor,
@@ -271,6 +274,65 @@ describe("the conversation_started trigger (task 4.8, ADR-027)", () => {
     // so no span of their own, as in 4.7).
     const nodes = (await spansOf(c)).filter((s) => s.kind === "node").map((s) => s.name);
     expect(nodes).toEqual(["Welcome", "Reply", "Reply"]);
+  });
+});
+
+describe("handoff (task 5.4)", () => {
+  test("hands off with a model summary, stays silent while handed off, and resumes when released", async () => {
+    const c = await seed([
+      card({ type: "say", message: { type: "text", text: "أهلاً" } }),
+      card({ type: "handoff", reason: "طلب موظف", message: { type: "text", text: "هحولك لزميل" } }),
+    ]);
+    const llm = new FakeLlm().scriptText("العميل بيسأل عن طلب متأخر وعايز يكلم موظف");
+    const summarizeHandoff = modelHandoffSummary({ db, model: llm, modelName: "test-summary" });
+    const { d } = deps({ summarizeHandoff });
+
+    await send(c, "عايز أكلم حد من خدمة العملاء، طلبي اتأخر");
+    await drainConversation(d, c.conversationId);
+    expect(await botTexts(c)).toEqual(["أهلاً", "هحولك لزميل"]);
+    const [handedOff] = await query<{ status: string; handoff: Record<string, unknown> }>(
+      "select status, handoff from conversations where id = $1",
+      [c.conversationId],
+    );
+    expect(handedOff).toEqual({
+      status: "handed_off",
+      handoff: { reason: "طلب موظف", summary: "العميل بيسأل عن طلب متأخر وعايز يكلم موظف", variables: {} },
+    });
+    // The customer's words reach the model as messages; the system text is fixed (CLAUDE.md §9).
+    const request = llm.calls[0]?.request as { system: string; messages: { role: string; content: string }[] };
+    expect(request.system).toBe(SUMMARY_SYSTEM);
+    expect(request.messages).toEqual([
+      { role: "user", content: "عايز أكلم حد من خدمة العملاء، طلبي اتأخر" },
+      { role: "assistant", content: "أهلاً" },
+      // The card's own message is part of the same step, committed after the summary is written.
+      { role: "user", content: "Reason for the handoff: طلب موظف" },
+    ]);
+    expect(await outboxTypes(c)).toContain("handoff.requested");
+
+    // While handed off, messages are stored and get no reply.
+    await send(c, "فين الموظف؟");
+    await drainConversation(d, c.conversationId);
+    expect(await botTexts(c)).toEqual(["أهلاً", "هحولك لزميل"]);
+    const inbound = await query<{ n: number }>(
+      "select count(*)::int as n from messages where conversation_id = $1 and direction = 'in'",
+      [c.conversationId],
+    );
+    expect(inbound[0]?.n).toBe(2);
+
+    // Released: idle again, the handoff cleared, and the next message runs the bot from Start.
+    await db.withWorkspace(c.ws, (tx) =>
+      appendInboundEvent(tx, { conversationId: c.conversationId, kind: "handoff_release", payload: {} }),
+    );
+    await drainConversation(d, c.conversationId);
+    const [released] = await query<{ status: string; handoff: unknown }>(
+      "select status, handoff from conversations where id = $1",
+      [c.conversationId],
+    );
+    expect(released).toEqual({ status: "idle", handoff: null });
+    llm.scriptText("ملخص تاني");
+    await send(c, "شكراً");
+    await drainConversation(d, c.conversationId);
+    expect((await botTexts(c)).slice(2)).toEqual(["أهلاً", "هحولك لزميل"]);
   });
 });
 

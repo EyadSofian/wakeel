@@ -125,6 +125,8 @@ export interface CardContext<C extends Card = Card> {
   now: number;
   /** Epoch milliseconds at which the turn's wall-clock limit runs out. */
   deadline: number;
+  /** The handoff summary (task 5.4); resolves to "" when no summarizer is configured. */
+  summarizeHandoff(reason: string): Promise<string>;
 }
 
 /** Runs one card. Card executors live in `src/cards` (task 4.3). Throwing an `AppError` is a `fail`. */
@@ -229,6 +231,19 @@ export interface EnginePorts {
   emitEphemeral(event: EphemeralEvent): Promise<void>;
   /** Absent until the autonomy engine exists; reaching an Autonomous Node then fails the step. */
   autonomy?: AutonomyPort;
+  /**
+   * Writes the summary for a handoff with `summary: "auto"` (§9.4, task 5.4). The worker reads the
+   * transcript itself; the engine passes only ids and the rendered reason. Absent: the summary is
+   * empty.
+   */
+  handoffSummary?(input: HandoffSummaryRequest): Promise<string>;
+}
+
+/** What the engine asks the handoff summarizer for (task 5.4). */
+export interface HandoffSummaryRequest {
+  turnId: string;
+  /** The Handoff card's rendered reason. */
+  reason: string;
 }
 
 /** The inputs to one turn. Nothing here is mutated. */

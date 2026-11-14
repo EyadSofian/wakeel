@@ -25,9 +25,10 @@ import { standInWorker } from "./stand-in-worker";
 
 /**
  * Task 5.3 (ADR-029): listConversationEvents, endConversation, submitToolResult, listDeliveries,
- * replayDelivery, getConnection and testWebhook. Acceptance (build plan): contract tests for every
- * operation in the OpenAPI file now pass. releaseHandoff is task 5.4; receiveBridgeEvent is the
- * receiver's side.
+ * replayDelivery, getConnection and testWebhook; task 5.4: releaseHandoff. Acceptance (build plan):
+ * contract tests for every operation in the OpenAPI file pass (receiveBridgeEvent is the receiver's
+ * side); messages during a handoff are stored and unanswered; release resumes; a second release is
+ * `not_handed_off`.
  */
 
 let pg: StartedTestDatabase;
@@ -53,6 +54,7 @@ const BUILT = [
   "replayDelivery",
   "getConnection",
   "testWebhook",
+  "releaseHandoff",
 ] as const;
 
 beforeAll(async () => {
@@ -201,14 +203,24 @@ async function waitForTool(convId: string) {
   ]);
 }
 
+/** Puts a conversation in handed_off, as a Handoff card does (the worker's tests cover the card). */
+async function handOff(convId: string) {
+  const state = { v: 1, status: "handed_off", stack: [], conversationVars: {}, autonomy: {}, started: true };
+  await su("update conversations set state = $2::jsonb, status = 'handed_off', handoff = $3::jsonb where id = $1", [
+    convId,
+    JSON.stringify(state),
+    JSON.stringify({ reason: "طلب موظف", summary: "عميل متضايق", variables: {} }),
+  ]);
+}
+
 describe("contract: every operation in the OpenAPI file", () => {
-  test("is served, except releaseHandoff (task 5.4) and the receiver's webhook", () => {
+  test("is served, except the receiver's own webhook", () => {
     const all = Object.values(spec.paths).flatMap((item) =>
       Object.values(item)
         .map((op) => (typeof op === "object" && op && "operationId" in op ? op.operationId : undefined))
         .filter((id): id is string => typeof id === "string"),
     );
-    expect([...all].sort()).toEqual([...BUILT_IN_4_5, ...BUILT, "releaseHandoff"].sort());
+    expect([...all].sort()).toEqual([...BUILT_IN_4_5, ...BUILT].sort());
     const served: Record<(typeof BUILT)[number], string> = {
       listConversationEvents: "get /conversations/{externalConversationId}/events",
       endConversation: "post /conversations/{externalConversationId}/end",
@@ -217,6 +229,7 @@ describe("contract: every operation in the OpenAPI file", () => {
       replayDelivery: "post /deliveries/{eventId}/replay",
       getConnection: "get /connection",
       testWebhook: "post /connection/test",
+      releaseHandoff: "post /conversations/{externalConversationId}/handoff/release",
     };
     for (const id of BUILT) {
       const { method, path } = operation(id);
@@ -270,6 +283,14 @@ describe("contract: every operation in the OpenAPI file", () => {
         responses.push(await call(t.a.key, "GET", "/connection"));
         responses.push(await call("wk_bridge_nope_nope", "GET", "/connection"));
         break;
+      case "releaseHandoff": {
+        const conv = await converse(t.a.key);
+        await handOff(await conversationId(t.a.id, conv));
+        responses.push(await call(t.a.key, "POST", `/conversations/${conv}/handoff/release`, { note: "تم" }));
+        responses.push(await call(t.a.key, "POST", `/conversations/${conv}/handoff/release`, {}));
+        responses.push(await call(t.a.key, "POST", `/conversations/${ext()}/handoff/release`, {}));
+        break;
+      }
       case "testWebhook":
         responses.push(await call(t.a.key, "POST", "/connection/test"));
         answer = { kind: "response", status: 503 };
@@ -476,5 +497,53 @@ describe("testWebhook", () => {
     const res = await call(t.b.key, "POST", "/connection/test");
     expect(res.json()).toEqual({ delivered: false, durationMs: 0, error: "webhook_secret_missing" });
     expect(sent).toEqual([]);
+  });
+});
+
+describe("releaseHandoff (task 5.4)", () => {
+  test("messages while handed off are stored and unanswered; release resumes; a second release is refused", async () => {
+    const conv = await converse(t.a.key);
+    const convId = await conversationId(t.a.id, conv);
+    await handOff(convId);
+    expect((await call(t.a.key, "GET", `/conversations/${conv}`)).json()).toMatchObject({
+      status: "handed_off",
+      handoff: { reason: "طلب موظف", summary: "عميل متضايق" },
+    });
+
+    const during = await call(t.a.key, "POST", `/conversations/${conv}/messages?wait=5`, {
+      message: { type: "text", text: "لسه مستني" },
+    });
+    expect(during.statusCode).toBe(200);
+    expect(during.json()).toMatchObject({ status: "handed_off", messages: [] });
+    const stored = (await su(
+      "select payload->>'text' as text from messages where conversation_id = $1 and direction = 'in' order by seq",
+      [convId],
+    )) as { text: string }[];
+    expect(stored.map((m) => m.text)).toEqual(["عايز أعرف حالة الطلب", "لسه مستني"]);
+
+    const released = await call(t.a.key, "POST", `/conversations/${conv}/handoff/release`, { note: "رجعنا الفلوس" });
+    expect(released.statusCode).toBe(200);
+    expect(released.json()).toMatchObject({ status: "idle", handoff: null });
+    const [event] = (await su(
+      "select payload->>'note' as note from inbound_events where conversation_id = $1 and kind = 'handoff_release'",
+      [convId],
+    )) as { note: string }[];
+    expect(event?.note).toBe("رجعنا الفلوس");
+
+    const again = await call(t.a.key, "POST", `/conversations/${conv}/handoff/release`, {});
+    expect(again.statusCode).toBe(409);
+    expect(again.json().code).toBe("not_handed_off");
+
+    // Resumed: the bot answers again.
+    const after = await call(t.a.key, "POST", `/conversations/${conv}/messages?wait=5`, {
+      message: { type: "text", text: "شكراً" },
+    });
+    expect(after.json().messages).toHaveLength(1);
+  });
+
+  test("a key for connection B cannot release connection A's conversation", async () => {
+    const conv = await converse(t.a.key);
+    await handOff(await conversationId(t.a.id, conv));
+    expect((await call(t.b.key, "POST", `/conversations/${conv}/handoff/release`, {})).statusCode).toBe(404);
   });
 });
