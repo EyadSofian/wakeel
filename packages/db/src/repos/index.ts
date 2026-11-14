@@ -1,6 +1,7 @@
 export * from "./api-keys";
 export * from "./audit";
 export * from "./bots";
+export * from "./bridge";
 export * from "./invitations";
 export * from "./memberships";
 export * from "./runtime";

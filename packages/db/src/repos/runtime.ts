@@ -202,7 +202,15 @@ export async function runningTurnFor(tx: Tx, triggerEventId: string): Promise<Tu
  */
 export async function startTurn(
   tx: Tx,
-  input: { conversationId: string; botId: string; versionId: string | null; epoch: number; eventIds: string[] },
+  input: {
+    conversationId: string;
+    botId: string;
+    versionId: string | null;
+    epoch: number;
+    eventIds: string[];
+    /** The id the Bridge API promised in its 202 (task 4.5); a new one when absent. */
+    id?: string;
+  },
 ): Promise<TurnRecord> {
   await assertLease(tx, input.conversationId, input.epoch);
   const [triggerEventId] = input.eventIds;
@@ -210,7 +218,7 @@ export async function startTurn(
   const [row] = await tx
     .insert(turns)
     .values({
-      id: newId("turn"),
+      id: input.id ?? newId("turn"),
       workspaceId: currentWorkspace,
       conversationId: input.conversationId,
       botId: input.botId,
