@@ -120,8 +120,11 @@ describe("every Phase 1 mutation route writes one entry", () => {
     await expectOne("api_key.revoked", () => owner.send("DELETE", `/v1/workspaces/${ws}/api-keys/${keyId}`));
 
     // Every Phase 1 action was seen. Secrets get routes in 6.2; bot and workflow actions are
-    // checked in bots.test.ts.
-    expect([...seen].sort()).toEqual(AUDIT_ACTIONS.filter((a) => !/^(secret|bot|workflow)\./.test(a)).sort());
+    // checked in bots.test.ts; connection.disabled is written by the delivery worker and checked in
+    // apps/worker/test/webhook.test.ts.
+    expect([...seen].sort()).toEqual(
+      AUDIT_ACTIONS.filter((a) => !/^(secret|bot|workflow|connection)\./.test(a)).sort(),
+    );
   });
 
   test("a mutation that fails writes nothing", async () => {

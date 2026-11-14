@@ -246,6 +246,27 @@ export const ERRORS = {
     title: "This connection is turned off after repeated delivery failures",
     fix: "Fix the receiving endpoint, then turn the connection back on.",
   },
+  // Webhook delivery attempts (ADR-028). Stored on the attempt and shown in the Deliveries tab.
+  webhook_rejected: {
+    status: 502,
+    title: "The webhook endpoint did not accept the event",
+    fix: "Make the endpoint answer with a 2xx status within 10 seconds. The response status is shown with the attempt.",
+  },
+  webhook_redirected: {
+    status: 502,
+    title: "The webhook endpoint answered with a redirect",
+    fix: "Webhooks do not follow redirects. Set the connection's webhook URL to the final address.",
+  },
+  webhook_secret_missing: {
+    status: 409,
+    title: "This connection has no signing secret",
+    fix: "Generate a signing secret for the connection, then replay the event.",
+  },
+  webhook_stale: {
+    status: 410,
+    title: "A typing event was dropped because it was too old to send",
+    fix: "Nothing to do. Typing events are best-effort.",
+  },
 
   internal_error: {
     status: 500,

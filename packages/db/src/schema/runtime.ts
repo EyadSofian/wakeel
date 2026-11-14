@@ -122,6 +122,26 @@ export const outboxEvents = pgTable("outbox_events", {
   createdAt: at("created_at").notNull().defaultNow(),
 });
 
+/** Migration 0009 (task 5.2): one row per webhook delivery attempt (ADR-028). */
+export const webhookDeliveries = pgTable("webhook_deliveries", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull(),
+  connectionId: text("connection_id").notNull(),
+  conversationId: text("conversation_id").notNull(),
+  outboxEventId: text("outbox_event_id").notNull(),
+  seq: seq("seq"),
+  ephemeral: boolean("ephemeral").notNull(),
+  attempt: integer("attempt").notNull(),
+  status: text("status").notNull().default("pending"),
+  nextAttemptAt: at("next_attempt_at").notNull(),
+  leaseUntil: at("lease_until"),
+  attemptedAt: at("attempted_at"),
+  responseStatus: integer("response_status"),
+  error: jsonb("error"),
+  durationMs: integer("duration_ms"),
+  createdAt: at("created_at").notNull().defaultNow(),
+});
+
 /** Migration 0008 (task 4.7): span metadata, partitioned by month on started_at (ADR-009, ADR-026). */
 export const traceSpans = pgTable("trace_spans", {
   id: text("id").notNull(),

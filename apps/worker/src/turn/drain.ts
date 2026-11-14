@@ -73,6 +73,11 @@ export interface TurnDeps {
   heartbeatMs?: number;
   /** Writes trace spans; defaults to `upsertSpans`. Tests pass one that fails. */
   writeSpans?(workspaceId: string, spans: readonly Span[]): Promise<void>;
+  /**
+   * Adds a `webhook` job for the conversation (task 5.2, ADR-028 §4), called after a commit that
+   * created deliveries. Optional: without it the janitor still finds them.
+   */
+  enqueueWebhook?(conversationId: string): Promise<void>;
 }
 
 /** The turn span's trigger for each inbound kind (ADR-026). */
@@ -256,7 +261,7 @@ class ConversationRun {
       commitStep: (commit) => this.#commitStep(commit, conversation, turn.id),
       emitEphemeral: async (e) => {
         await this.#tx((tx) =>
-          appendOutbox(tx, this.#outboxAt(conversation), [
+          this.#appendOutbox(tx, conversation, [
             { type: e.type, payload: { turnId: turn.id, data: e.data } as Record<string, Json>, ephemeral: true },
           ]),
         );
@@ -292,7 +297,7 @@ class ConversationRun {
     if (result) {
       await this.#tx(async (tx) => {
         await writeConversation(tx, this.conversationId, this.epoch, { touchActivity: touch, timeoutMinutes: timeout });
-        await appendOutbox(tx, this.#outboxAt(conversation), [
+        await this.#appendOutbox(tx, conversation, [
           {
             type: "turn.completed",
             payload: {
@@ -315,7 +320,7 @@ class ConversationRun {
       log.error({ err: crash, code: error.code }, "turn crashed");
       await this.#tx(async (tx) => {
         await writeConversation(tx, this.conversationId, this.epoch, { touchActivity: touch });
-        await appendOutbox(tx, this.#outboxAt(conversation), [
+        await this.#appendOutbox(tx, conversation, [
           {
             type: "error",
             payload: { turnId: turn.id, data: { code: error.code, message: error.message, retryable: true } },
@@ -379,13 +384,32 @@ class ConversationRun {
 
   /** Best-effort: SSE readers also poll, so a lost notification only delays them. */
   async #notify(): Promise<void> {
+    await this.#wakeWebhooks();
     await this.deps
       .publish(conversationEventsChannel(this.conversationId), "")
       .catch((err: unknown) => this.#log.warn({ err }, "conversation-events publish failed"));
   }
 
-  #outboxAt(conversation: { connectionId: string }) {
-    return { conversationId: this.conversationId, connectionId: conversation.connectionId, epoch: this.epoch };
+  /** Deliveries created by commits whose `webhook` job is not enqueued yet. */
+  #deliveriesCreated = 0;
+
+  /** `appendOutbox` with this conversation's fence and clock, counting the deliveries it creates. */
+  async #appendOutbox(tx: Tx, conversation: { connectionId: string }, events: readonly NewOutboxEvent[]) {
+    const at = new Date((this.deps.clock ?? Date).now());
+    this.#deliveriesCreated += await appendOutbox(
+      tx,
+      { conversationId: this.conversationId, connectionId: conversation.connectionId, epoch: this.epoch, at },
+      events,
+    );
+  }
+
+  /** Best-effort, after the commit: the janitor finds deliveries whose job was never added. */
+  async #wakeWebhooks(): Promise<void> {
+    if (this.#deliveriesCreated === 0 || !this.deps.enqueueWebhook) return;
+    this.#deliveriesCreated = 0;
+    await this.deps
+      .enqueueWebhook(this.conversationId)
+      .catch((err: unknown) => this.#log.warn({ err }, "webhook enqueue failed"));
   }
 
   /** One step, one transaction (§4.4 "Persistence"): state, messages, outbox, user, step counter. */
@@ -439,7 +463,7 @@ class ConversationRun {
       }));
       for (const e of commit.events)
         outbox.push({ type: e.type, payload: { turnId, data: e.data as unknown as Json } });
-      await appendOutbox(tx, this.#outboxAt(conversation), outbox);
+      await this.#appendOutbox(tx, conversation, outbox);
       if (commit.user) await updateEndUser(tx, conversation.endUserId, commit.user);
       await recordTurnProgress(tx, turnId, commit.stepSeq);
     });

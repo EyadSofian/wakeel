@@ -118,7 +118,7 @@ All have `created_at`; mutable ones have `updated_at`. `W` = has `workspace_id` 
 - `turns W (id, conversation_id, bot_id, version_id, trigger_event_id, status, step_count, usage jsonb, error jsonb, started_at, ended_at)`
 - `messages W (id, conversation_id, seq bigint, direction, type, payload jsonb, citations jsonb, turn_id?, external_id?)` direction ∈ `in | out`
 - `outbox_events W (id, connection_id, conversation_id, seq bigint?, type, payload jsonb, ephemeral bool)` 
-- `webhook_deliveries W (id, outbox_event_id, attempt int, status, next_attempt_at, response_status?, error?, duration_ms?)` status ∈ `pending | delivered | failed | dead`
+- `webhook_deliveries W (id, connection_id, conversation_id, outbox_event_id, seq?, ephemeral, attempt int, status, next_attempt_at, lease_until?, attempted_at?, response_status?, error jsonb?, duration_ms?)` status ∈ `pending | delivered | failed | dead`; one row per attempt, created with the outbox row (ADR-028)
 
 **Knowledge and tables**
 - `knowledge_bases W (id, bot_id, name, description, embedding_model, embedding_dims, index_version int, settings jsonb)`
