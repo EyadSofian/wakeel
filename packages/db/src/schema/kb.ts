@@ -100,6 +100,9 @@ export const kbIngestionJobs = pgTable("kb_ingestion_jobs", {
   status: text("status").notNull().default("pending"),
   attempts: integer("attempts").notNull().default(0),
   error: jsonb("error"),
+  contentHash: text("content_hash"),
+  startedAt: at("started_at"),
+  finishedAt: at("finished_at"),
   createdAt: at("created_at").notNull().defaultNow(),
   updatedAt: at("updated_at").notNull().defaultNow(),
 });

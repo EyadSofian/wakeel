@@ -1,3 +1,4 @@
+/// <reference path="./turndown-plugin-gfm.d.ts" />
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
 import TurndownService from "turndown";

@@ -234,6 +234,9 @@ importers:
       '@wakeel/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@wakeel/retrieval':
+        specifier: workspace:*
+        version: link:../../packages/retrieval
       '@wakeel/sandbox-client':
         specifier: workspace:*
         version: link:../../packages/sandbox-client
