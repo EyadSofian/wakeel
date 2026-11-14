@@ -400,6 +400,12 @@ importers:
         specifier: workspace:*
         version: link:../testing
 
+  packages/retrieval:
+    devDependencies:
+      '@wakeel/testing':
+        specifier: workspace:*
+        version: link:../testing
+
   packages/sandbox-client:
     dependencies:
       '@wakeel/config':
