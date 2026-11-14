@@ -134,6 +134,8 @@ function CardRow({
   const overlay = useRunOverlay();
   const ran = overlay.cards.has(card.id);
   const ranFailed = overlay.failed.has(card.id);
+  // During a trace replay, the card it is on is tinted (§5.3 "Trace playback").
+  const active = overlay.active?.cardId === card.id;
   return (
     <div data-card={card.id} className={card.disabled ? "opacity-50" : ""}>
       {/* Clicking a card opens it in the inspector; the keyboard reaches cards with Enter (2.5). */}
@@ -142,8 +144,8 @@ function CardRow({
       <div
         onClick={onSelect}
         className={[
-          "group mx-4 flex h-row-card cursor-pointer items-center gap-3 rounded-sm border px-3",
-          dragging ? "bg-surface shadow-drag" : "bg-subtle",
+          "wk-card-row group mx-4 flex h-row-card cursor-pointer items-center gap-3 rounded-sm border px-3",
+          dragging ? "bg-surface shadow-drag" : active ? "bg-accent-subtle" : "bg-subtle",
           severity === "error"
             ? "border-error"
             : severity === "warning"
@@ -155,6 +157,7 @@ function CardRow({
                   : "border-transparent",
         ].join(" ")}
         {...(ran ? { "data-ran": "true" } : {})}
+        {...(active ? { "data-active": "true" } : {})}
       >
         <GripVertical
           className="size-icon-sm shrink-0 cursor-grab text-tertiary opacity-0 transition-opacity group-hover:opacity-100"

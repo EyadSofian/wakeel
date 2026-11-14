@@ -74,6 +74,50 @@ export interface AutonomyStepResult {
   /** The exit's name and data, shown downstream as `event.exit`. */
   exit?: { name: string; data: Json };
   memory: AutonomyMemory;
+  /** What happened in this iteration, for the trace (task 6.9). */
+  iteration?: IterationTrace;
+}
+
+/** One tool call from the run block, as the worker saw it (architecture §6.5 "records a span"). */
+export interface ToolCallTrace {
+  name: string;
+  toolId?: string;
+  toolType: "code" | "kb_search" | "table" | "workflow";
+  sideEffects: boolean;
+  input: Json;
+  output?: Json;
+  /** The error the model's code received, or that the call suspended the block. */
+  error?: string;
+  startedAt: string;
+  durationMs: number;
+}
+
+/** The model call of one iteration. `prompt` is what was sent; usage is the provider's count. */
+export interface LlmCallTrace {
+  model: string;
+  provider?: string;
+  usage?: { inputTokens: number; cachedInputTokens: number; outputTokens: number };
+  costMicroUsd?: number;
+  ttftMs?: number;
+  finishReason: string;
+  prompt: Json;
+  startedAt: string;
+  durationMs: number;
+}
+
+/** One iteration for the trace (04-contracts/trace.ts `autonomy.iteration`, task 6.9). */
+export interface IterationTrace {
+  index: number;
+  status: "exit" | "run_result" | "run_error" | "protocol_error" | "exit_invalid" | "suspended" | "recovered";
+  exit?: string;
+  /** The model's raw reply. */
+  response: string;
+  /** The `:::run` body. */
+  code?: string;
+  /** The run block's value, the error fed back, or the call that suspended it. */
+  result?: Json;
+  llm: LlmCallTrace;
+  tools: ToolCallTrace[];
 }
 
 /** The model, already resolved for this node and workspace by the worker (llm client `stream`). */
@@ -84,7 +128,19 @@ export interface AutonomyModel {
     stop: string[];
     temperature: number;
     purpose: "autonomy";
-  }): { textStream: AsyncIterable<string>; result: Promise<{ text: string; finishReason: string }> };
+  }): {
+    textStream: AsyncIterable<string>;
+    result: Promise<{
+      text: string;
+      finishReason: string;
+      /** The model that answered (a fallback, perhaps) and what it cost, for the trace. */
+      model?: string;
+      provider?: string;
+      usage?: { inputTokens: number; cachedInputTokens?: number; outputTokens: number };
+      costMicroUsd?: number;
+      ttftMs?: number;
+    }>;
+  };
 }
 
 export type RunOutcome =
@@ -96,13 +152,15 @@ export type RunOutcome =
       /** Writes by scope (`conversation`, `user`, `workflow`, `turn`, `memo`), by top-level name. */
       patches: Record<string, { set?: Record<string, Json>; unset?: string[] }>;
       logs?: { level: "debug" | "info" | "warn" | "error"; message: string }[];
+      tools?: ToolCallTrace[];
     }
-  | { ok: false; error: { message: string; line?: number } }
+  | { ok: false; error: { message: string; line?: number }; tools?: ToolCallTrace[] }
   /** A tool call ended the block at the call site (ADR-035): nothing after it ran, no patch exists. */
   | {
       ok: false;
       suspended: PendingToolCall & { reason?: string };
       logs?: { level: "debug" | "info" | "warn" | "error"; message: string }[];
+      tools?: ToolCallTrace[];
     };
 
 /**
@@ -134,6 +192,8 @@ export interface AutonomyDeps {
   code: AutonomyCode;
   context(input: AutonomyStepInput): Promise<AutonomyContext>;
   protocol?: AutonomyProtocol;
+  /** Milliseconds since the epoch, for the trace's timings. Tests pass a fake clock. */
+  now?(): number;
 }
 
 /** Feedback text is trimmed to this many characters: enough to act on, cheap to send again. */
@@ -143,6 +203,7 @@ export const MEMO_MAX_BYTES = 16 * 1024;
 
 export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepInput): Promise<AutonomyStepResult> } {
   const protocol = deps.protocol ?? protocolV1;
+  const now = deps.now ?? Date.now;
   return {
     async step(input) {
       const { node } = input;
@@ -180,6 +241,7 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
       });
       memory.feedback = [];
 
+      const llmStarted = now();
       const handle = deps.model(input).stream({
         system: prompt.system,
         messages: prompt.messages,
@@ -188,9 +250,42 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
         purpose: "autonomy",
       });
       const reader = protocol.createReader(contextFromNode(node));
-      for await (const chunk of handle.textStream) reader.push(chunk);
-      const { finishReason } = await handle.result;
+      let response = "";
+      for await (const chunk of handle.textStream) {
+        response += chunk;
+        reader.push(chunk);
+      }
+      const answered = await handle.result;
+      const { finishReason } = answered;
       const { result } = reader.end(asFinishReason(finishReason));
+      const trace: IterationTrace = {
+        index: memory.iteration,
+        status: result.recovered ? "recovered" : "run_result",
+        response,
+        llm: {
+          model: answered.model ?? node.model ?? "",
+          ...(answered.provider ? { provider: answered.provider } : {}),
+          ...(answered.usage
+            ? {
+                usage: {
+                  inputTokens: answered.usage.inputTokens,
+                  cachedInputTokens: answered.usage.cachedInputTokens ?? 0,
+                  outputTokens: answered.usage.outputTokens,
+                },
+              }
+            : {}),
+          ...(answered.costMicroUsd !== undefined ? { costMicroUsd: answered.costMicroUsd } : {}),
+          ...(answered.ttftMs !== undefined ? { ttftMs: answered.ttftMs } : {}),
+          finishReason,
+          prompt: {
+            system: prompt.system,
+            messages: prompt.messages.map((m) => ({ role: m.role, content: m.content })),
+          },
+          startedAt: new Date(llmStarted).toISOString(),
+          durationMs: Math.max(0, now() - llmStarted),
+        },
+        tools: [],
+      };
       // Citation tokens never reach the user (§6.5). Until kb_search exists there are no sources.
       // A text that was nothing but tokens is dropped rather than sent empty.
       const messages = result.messages
@@ -205,17 +300,21 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
         ...(logs.length > 0 ? { logs } : {}),
         ...extra,
         memory,
+        iteration: trace,
       });
 
       const issue = feedbackFor(result);
       if (issue) {
         memory.feedback.push(issue);
+        trace.status = issue.kind === "exit_invalid" ? "exit_invalid" : "protocol_error";
+        trace.result = issue.text;
         return iterate();
       }
 
       let writes: VariableWrite[] = [];
       let turn: Record<string, Json> | undefined;
       if (result.run) {
+        trace.code = result.run.code;
         const run = await deps.code.run({
           node,
           source: result.run.code,
@@ -223,11 +322,16 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
           idempotencyKey: `${input.idempotencyKey}:run`,
           deadline: input.deadline,
         });
+        trace.tools = run.tools ?? [];
         if (!run.ok && "suspended" in run) {
           for (const l of run.logs ?? []) logs.push(l);
+          trace.status = "suspended";
+          trace.result = { tool: run.suspended.name, toolCallId: run.suspended.toolCallId };
           return suspend(run.suspended);
         }
         if (!run.ok) {
+          trace.status = "run_error";
+          trace.result = { message: run.error.message, ...(run.error.line ? { line: run.error.line } : {}) };
           memory.feedback.push({
             kind: "run_error",
             text: `Your code failed${run.error.line ? ` on line ${run.error.line}` : ""}: ${run.error.message}. Nothing it changed was kept.`,
@@ -241,6 +345,7 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
         if (applied.rejected.length > 0)
           memory.feedback.push({ kind: "write_rejected", text: applied.rejected.join("\n") });
         const next = afterRun(result, { returned: run.returned });
+        if (run.returned) trace.result = run.value ?? null;
         if (next.action === "iterate") {
           if (run.returned) memory.feedback.push({ kind: "run_result", text: trim(JSON.stringify(run.value ?? null)) });
           return iterate({ ...(writes.length > 0 ? { writes } : {}), ...(turn ? { turn } : {}) });
@@ -284,18 +389,22 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
           ...(messages.length > 0 ? { messages } : {}),
           ...(logs.length > 0 ? { logs } : {}),
           memory,
+          iteration: trace,
         };
       }
 
       function leave(exit: ResolvedExit): AutonomyStepResult {
         // Leaving the node ends its turn: the next visit starts with a fresh budget.
         memory.iteration = 0;
+        if (trace.status !== "recovered") trace.status = "exit";
+        trace.exit = exit.kind === "exit" ? exit.name : exit.kind;
         const shared = {
           ...(messages.length > 0 ? { messages } : {}),
           ...(writes.length > 0 ? { writes } : {}),
           ...(turn ? { turn } : {}),
           ...(logs.length > 0 ? { logs } : {}),
           memory,
+          iteration: trace,
         };
         switch (exit.kind) {
           case "listen":

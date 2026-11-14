@@ -3,9 +3,12 @@ import { describe, expect, test } from "vitest";
 import {
   capture,
   cardId,
+  definition,
+  edge,
   harness,
   linearBot,
   message,
+  nodeId,
   outcome,
   run,
   say,
@@ -14,6 +17,7 @@ import {
   step,
   texts,
   varId,
+  workflow,
 } from "./harness";
 
 /** Architecture §4.4 "Persistence" and §4.3: one commit per step, and safe to run again. */
@@ -228,5 +232,38 @@ describe("a reply after the definition changed", () => {
       [moved, false],
       [ask, false],
     ]);
+  });
+});
+
+describe("the autonomous iteration's trace (task 6.9)", () => {
+  test("rides on the commit of the step that ran it, and only that one", async () => {
+    const start = nodeId();
+    const agent = nodeId();
+    const main = workflow({
+      nodes: [
+        { id: start, type: "start", name: "Start" },
+        { id: agent, type: "autonomous", name: "Assistant", instructions: "Help." },
+      ],
+      edges: [edge(start, "next", agent)],
+    });
+    const iteration = {
+      index: 1,
+      status: "exit" as const,
+      exit: "listen",
+      response: ":::exit listen\n:::end",
+      llm: { model: "m", finishReason: "stop", prompt: {}, startedAt: "2026-11-13T09:00:00.000Z", durationMs: 5 },
+      tools: [],
+    };
+    const h = harness({
+      autonomy: () => ({
+        outcome: { type: "wait", wait: { kind: "listen", nodeId: agent, since: "2026-11-13T09:00:00.000Z" } },
+        iteration,
+      }),
+    });
+    const { commits } = await run({ def: definition({ workflows: [main] }), h });
+    const traced = commits.filter((c) => c.iteration);
+    expect(traced).toHaveLength(1);
+    expect(traced[0]?.iteration).toEqual(iteration);
+    expect(traced[0]?.step).toMatchObject({ nodeId: agent, outcome: "wait" });
   });
 });

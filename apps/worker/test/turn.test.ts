@@ -740,6 +740,24 @@ describe("the Autonomous Node (task 6.6)", () => {
     expect(second.messages.at(-1)?.content).toContain('{"status":"shipped"}');
     expect(second.messages.at(-1)?.content).toContain('"looked"');
     llm.expectDone();
+
+    // The trace (task 6.9): two iterations, each with its model call; the tool call under the first.
+    const spans = await spansOf(c);
+    const kinds = spans.filter((s) => s.kind !== "turn").map((s) => s.kind);
+    expect(kinds).toEqual(["node", "autonomy.iteration", "llm.call", "tool.call", "autonomy.iteration", "llm.call"]);
+    const tool = spans.find((s) => s.kind === "tool.call");
+    expect(tool?.attrs).toMatchObject({
+      name: "lookupOrder",
+      toolType: "code",
+      input: { inline: true, value: { number: "5678" } },
+      output: { inline: true, value: { status: "shipped" } },
+    });
+    const iterations = spans.filter((s) => s.kind === "autonomy.iteration");
+    expect(iterations.map((s) => s.attrs["status"])).toEqual(["run_result", "exit"]);
+    expect(spans.find((s) => s.kind === "llm.call")?.attrs).toMatchObject({
+      purpose: "autonomy",
+      usage: { inputTokens: expect.any(Number) },
+    });
   });
 });
 

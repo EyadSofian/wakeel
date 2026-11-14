@@ -263,3 +263,65 @@ describe("the trace (task 4.7)", () => {
     });
   });
 });
+
+describe("trace playback (task 6.9)", () => {
+  const TURN = "turn_01m7a256m0a13warwhczsjhx9t";
+  async function finishedTurn() {
+    const { store } = fake({ spans: [traceSpan(0), traceSpan(1), traceSpan(2), traceSpan(3)] });
+    await store.getState().send("مرحبا");
+    return store;
+  }
+
+  test("play starts at the first step and advances until the last, then stops there", async () => {
+    const store = await finishedTurn();
+    store.getState().play();
+    expect(store.getState().playback).toEqual({ turnId: TURN, index: 0, playing: true });
+    store.getState().advance();
+    store.getState().advance();
+    expect(store.getState().playback).toEqual({ turnId: TURN, index: 2, playing: true });
+    store.getState().advance();
+    expect(store.getState().playback).toEqual({ turnId: TURN, index: 2, playing: false });
+  });
+
+  test("pause and resume keep the place; play after the end starts over", async () => {
+    const store = await finishedTurn();
+    store.getState().play();
+    store.getState().advance();
+    store.getState().pause();
+    store.getState().advance();
+    expect(store.getState().playback).toEqual({ turnId: TURN, index: 1, playing: false });
+    store.getState().play();
+    expect(store.getState().playback).toEqual({ turnId: TURN, index: 1, playing: true });
+    store.getState().advance();
+    store.getState().advance();
+    store.getState().play();
+    expect(store.getState().playback?.index).toBe(0);
+  });
+
+  test("the step button shows one step at a time and pauses; speed is kept across replays", async () => {
+    const store = await finishedTurn();
+    store.getState().stepForward();
+    expect(store.getState().playback).toEqual({ turnId: TURN, index: 0, playing: false });
+    store.getState().stepForward();
+    store.getState().stepForward();
+    store.getState().stepForward();
+    expect(store.getState().playback?.index).toBe(2);
+    store.getState().setSpeed(2);
+    store.getState().stopPlayback();
+    expect(store.getState().playback).toBeUndefined();
+    expect(store.getState().playbackSpeed).toBe(2);
+  });
+
+  test("an edit (clearOverlay), a reset or a new turn ends the replay; no trace, no replay", async () => {
+    const store = await finishedTurn();
+    store.getState().play();
+    store.getState().clearOverlay();
+    expect(store.getState().playback).toBeUndefined();
+    store.getState().play();
+    store.getState().reset();
+    expect(store.getState().playback).toBeUndefined();
+    store.getState().play();
+    store.getState().stepForward();
+    expect(store.getState().playback).toBeUndefined();
+  });
+});

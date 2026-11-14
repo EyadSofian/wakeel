@@ -4,7 +4,8 @@ import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
 import { useCanvas, useCanvasStore } from "../canvas/context";
 import { useEmulatorStoreOptional } from "../emulator/controller";
-import { EMPTY_OVERLAY, type RunOverlay, runOverlay } from "./model";
+import { EMPTY_OVERLAY, playbackOverlay, playbackSchedule, type RunOverlay, runOverlay } from "./model";
+import { PLAYBACK_TOTAL_MS } from "./playback";
 
 const RunOverlayContext = createContext<RunOverlay>(EMPTY_OVERLAY);
 
@@ -15,6 +16,7 @@ export const useRunOverlay = () => useContext(RunOverlayContext);
 const NONE = createStore(() => ({
   overlayTurn: undefined as string | undefined,
   traces: {} as Record<string, never[]>,
+  playback: undefined as { turnId: string; index: number } | undefined,
 }));
 
 /**
@@ -25,6 +27,9 @@ export function RunOverlayProvider({ children }: { children: ReactNode }) {
   const emulator = useEmulatorStoreOptional();
   const turn = useStore(emulator ?? NONE, (s) => s.overlayTurn);
   const spans = useStore(emulator ?? NONE, (s) => (s.overlayTurn ? s.traces[s.overlayTurn] : undefined));
+  // A replay (§5.3 "Trace playback") shows the path up to where it has got, and where it is now.
+  const playback = useStore(emulator ?? NONE, (s) => s.playback);
+  const played = useStore(emulator ?? NONE, (s) => (s.playback ? s.traces[s.playback.turnId] : undefined));
   const workflows = useCanvas((s) => s.workflows);
   const canvas = useCanvasStore();
 
@@ -41,12 +46,14 @@ export function RunOverlayProvider({ children }: { children: ReactNode }) {
     });
   }, [canvas, emulator]);
 
+  const schedule = useMemo(() => (played ? playbackSchedule(played, PLAYBACK_TOTAL_MS) : []), [played]);
   const overlay = useMemo(() => {
-    if (!turn || !spans) return EMPTY_OVERLAY;
     const docs: Record<string, Workflow> = {};
     for (const [id, w] of Object.entries(workflows)) docs[id] = w.doc;
+    if (playback && schedule.length > 0) return playbackOverlay(schedule, playback.index, docs);
+    if (!turn || !spans) return EMPTY_OVERLAY;
     return runOverlay(spans, docs);
-  }, [turn, spans, workflows]);
+  }, [turn, spans, workflows, playback, schedule]);
 
   return <RunOverlayContext.Provider value={overlay}>{children}</RunOverlayContext.Provider>;
 }

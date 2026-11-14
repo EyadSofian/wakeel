@@ -49,6 +49,7 @@ const EMULATOR_SCENARIO: Partial<Record<ScreenState, EmulatorScenario>> = {
   error: "error",
   rtl: "rtl",
   bubbles: "bubbles",
+  "trace-payload": "agent",
 };
 const emulatorScenario = (state: ScreenState): EmulatorScenario => EMULATOR_SCENARIO[state] ?? "conversation";
 
@@ -85,7 +86,8 @@ async function playEmulator(page: Page, state: ScreenState): Promise<void> {
     return;
   }
   const scenario = emulatorScenario(state);
-  const texts = state === "variables" || state === "trace" ? [...SENT.conversation, "5678"] : SENT[scenario];
+  const twoTurns = state === "variables" || state === "trace" || state === "trace-playback";
+  const texts = twoTurns ? [...SENT.conversation, "5678"] : SENT[scenario];
   const box = panel.getByRole("textbox", { name: "Message the bot" });
   for (const [i, text] of texts.entries()) {
     await box.fill(text);
@@ -102,6 +104,25 @@ async function playEmulator(page: Page, state: ScreenState): Promise<void> {
       .click();
     await expect(panel.getByRole("region", { name: "Step details" })).toBeVisible();
     // Park the pointer so no row shows its hover background in the shot.
+    await page.mouse.move(0, 0);
+  }
+  if (state === "trace-payload") {
+    // The agent's first model call: its prompt, tokens and cost in PayloadViewer (task 6.9).
+    await panel.getByTitle("Open this turn's trace").last().click();
+    await panel
+      .getByRole("list", { name: "Steps" })
+      .getByRole("button", { name: /Thinking/ })
+      .first()
+      .click();
+    await expect(panel.getByRole("tab", { name: "Prompt" })).toBeVisible();
+    await page.mouse.move(0, 0);
+  }
+  if (state === "trace-playback") {
+    // Two steps into a replay of the three-step turn: the branch card is the current one (task 6.9).
+    await panel.getByTitle("Open this turn's trace").last().click();
+    const next = panel.getByRole("button", { name: "Next step" });
+    for (let i = 0; i < 3; i++) await next.click();
+    await expect(page.locator("[data-active]")).toHaveCount(1);
     await page.mouse.move(0, 0);
   }
   if (state === "variables") {

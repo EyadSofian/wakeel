@@ -16,7 +16,9 @@ import {
  * its own, so the worker decides when to write and a failed write never touches the turn.
  *
  * Spans: `turn` (seq 0, the root), one `node` span per stretch of steps in a node, one `card` span
- * per card step, a `code.exec` span under each code card, and an `error` span per failure. Turn and
+ * per card step, a `code.exec` span under each code card, an `error` span per failure, and for an
+ * Autonomous Node one `autonomy.iteration` span per iteration with its `llm.call` and `tool.call`
+ * spans under it (task 6.9). Turn and
  * node spans are returned when they open and again, complete, when they close, so a live list can
  * show a row as soon as it starts.
  */
@@ -34,6 +36,40 @@ export interface TraceStep {
   }[];
   logs: readonly { level: string; message: string; data?: Json }[];
   step?: { workflowId: string; nodeId: string; cardId?: string; outcome: string };
+  /** An autonomous iteration (task 6.9); the engine's `IterationTrace` fits it as is. */
+  iteration?: IterationStep;
+}
+
+/** What the builder reads from an autonomous iteration. */
+export interface IterationStep {
+  index: number;
+  status: Extract<Span, { kind: "autonomy.iteration" }>["attrs"]["status"];
+  exit?: string;
+  response: string;
+  code?: string;
+  result?: Json;
+  llm: {
+    model: string;
+    provider?: string;
+    usage?: { inputTokens: number; cachedInputTokens: number; outputTokens: number };
+    costMicroUsd?: number;
+    ttftMs?: number;
+    finishReason: string;
+    prompt: Json;
+    startedAt: string;
+    durationMs: number;
+  };
+  tools: readonly {
+    name: string;
+    toolId?: string;
+    toolType: "code" | "kb_search" | "table" | "workflow";
+    sideEffects: boolean;
+    input: Json;
+    output?: Json;
+    error?: string;
+    startedAt: string;
+    durationMs: number;
+  }[];
 }
 
 export interface TraceContext {
@@ -138,6 +174,12 @@ export class TraceBuilder {
       this.#lastOutcome = outcome;
       parent = this.#node.id;
 
+      if (!cardId && step.iteration) {
+        const spans = this.#iteration(step.iteration, { workflowId, nodeId }, this.#node.id, start, at);
+        out.push(...spans);
+        parent = spans[0]?.id ?? parent;
+      }
+
       if (cardId) {
         const card = this.#card(workflowId, nodeId, cardId);
         const failed = step.failures.some((f) => f.location.cardId === cardId);
@@ -199,6 +241,77 @@ export class TraceBuilder {
     };
     out.push(this.#turn);
     return out;
+  }
+
+  /** The iteration, then its model call and its tool calls, timed as the worker measured them. */
+  #iteration(
+    it: IterationStep,
+    location: { workflowId: string; nodeId: string },
+    parentId: Span["id"],
+    start: Date,
+    end: Date,
+  ): Span[] {
+    const failed = it.status === "run_error" || it.status === "protocol_error" || it.status === "exit_invalid";
+    const iteration: Span = {
+      ...this.#base(this.#seq++, `Iteration ${it.index}`, start, end),
+      parentId,
+      status: failed ? "error" : "ok",
+      location,
+      kind: "autonomy.iteration",
+      attrs: {
+        index: Math.max(1, it.index),
+        status: it.status,
+        ...(it.exit ? { exit: it.exit } : {}),
+        response: inlinePayload(it.response),
+        ...(it.code !== undefined ? { code: inlinePayload(it.code) } : {}),
+        ...(it.result !== undefined ? { result: inlinePayload(it.result) } : {}),
+      },
+    };
+    const llmStart = new Date(it.llm.startedAt);
+    const call: Span = {
+      ...this.#base(this.#seq++, it.llm.model || "Model", llmStart, new Date(llmStart.getTime() + it.llm.durationMs)),
+      parentId: iteration.id,
+      location,
+      kind: "llm.call",
+      attrs: {
+        purpose: "autonomy",
+        model: it.llm.model,
+        provider: it.llm.provider ?? "unknown",
+        usage: {
+          inputTokens: it.llm.usage?.inputTokens ?? 0,
+          cachedInputTokens: it.llm.usage?.cachedInputTokens ?? 0,
+          outputTokens: it.llm.usage?.outputTokens ?? 0,
+          costMicroUsd: it.llm.costMicroUsd ?? 0,
+        },
+        ...(it.llm.ttftMs !== undefined ? { ttftMs: Math.max(0, Math.round(it.llm.ttftMs)) } : {}),
+        finishReason: it.llm.finishReason,
+        attempt: 1,
+        prompt: inlinePayload(it.llm.prompt),
+        completion: inlinePayload(it.response),
+      },
+    };
+    const tools: Span[] = it.tools.map((t) => {
+      const begun = new Date(t.startedAt);
+      return {
+        ...this.#base(this.#seq++, t.name, begun, new Date(begun.getTime() + t.durationMs)),
+        parentId: iteration.id,
+        status: t.error ? "error" : "ok",
+        location: { ...location, ...(t.toolId ? { toolId: t.toolId } : {}) },
+        kind: "tool.call",
+        attrs: {
+          name: t.name,
+          toolType: t.toolType,
+          sideEffects: t.sideEffects,
+          input: inlinePayload(t.input),
+          ...(t.error !== undefined
+            ? { output: inlinePayload({ error: t.error }) }
+            : t.output !== undefined
+              ? { output: inlinePayload(t.output) }
+              : {}),
+        },
+      };
+    });
+    return [iteration, call, ...tools];
   }
 
   #closeNode(at: Date): NodeSpan {

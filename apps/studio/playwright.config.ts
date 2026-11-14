@@ -21,6 +21,8 @@ export default defineConfig({
   projects: [
     { name: "shots", testMatch: /(shots|content)\.spec\.ts/, use: { contextOptions: { reducedMotion: "reduce" } } },
     { name: "motion", testMatch: /motion(-canvas|-emulator)?\.spec\.ts/ },
+    // Flows on the mock API that need no dev stack: trace playback of a recorded turn (task 6.9).
+    { name: "flows", testMatch: /playback\.spec\.ts/, use: { deviceScaleFactor: 1 } },
     // Canvas performance budget (design system §5.1), `pnpm studio:perf`. Device scale 1: a
     // mid-range laptop, not a retina review shot.
     { name: "perf", testMatch: /perf\.spec\.ts/, use: { deviceScaleFactor: 1 } },

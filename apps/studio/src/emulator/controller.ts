@@ -64,6 +64,13 @@ export interface EmulatorState {
   selectedStep: string | undefined;
   /** The trace and variables area under the transcript. */
   area: { open: boolean; tab: "trace" | "variables" };
+  /**
+   * A replay of a finished turn (§5.3 "Trace playback"): how far it has got in the turn's steps,
+   * whether it is running, and at what speed. The trace list and the canvas show that point.
+   */
+  playback: Playback | undefined;
+  /** 0.5, 1 or 2 (motion `playback.speeds`); kept across replays. */
+  playbackSpeed: number;
   setOpen(open: boolean): void;
   send(text: string): Promise<void>;
   postback(value: string, label: string): Promise<void>;
@@ -75,6 +82,22 @@ export interface EmulatorState {
   selectStep(stepId: string | undefined): void;
   setArea(area: Partial<EmulatorState["area"]>): void;
   clearOverlay(): void;
+  /** Plays the shown turn from its first step, or resumes a paused replay. */
+  play(): void;
+  pause(): void;
+  /** Shows the next step and pauses; at the last step, nothing happens. */
+  stepForward(): void;
+  /** Called by the replay's clock when the next step is due. */
+  advance(): void;
+  setSpeed(speed: number): void;
+  stopPlayback(): void;
+}
+
+export interface Playback {
+  turnId: string;
+  /** Index into the turn's playback schedule (`playbackSchedule`) of the step it has reached. */
+  index: number;
+  playing: boolean;
 }
 
 export type EmulatorStore = StoreApi<EmulatorState>;
@@ -124,6 +147,7 @@ export function createEmulatorStore(options: {
         set((s) => ({
           traces: { ...s.traces, [span.turnId]: mergeSpan(s.traces[span.turnId] ?? [], span) },
           traceTurn: span.turnId,
+          playback: undefined,
         }));
       };
       try {
@@ -170,6 +194,8 @@ export function createEmulatorStore(options: {
       overlayTurn: undefined,
       selectedStep: undefined,
       area: { open: false, tab: "trace" },
+      playback: undefined,
+      playbackSpeed: 1,
       setOpen: (open) => set({ open }),
       async send(text) {
         set((s) => ({ transcript: userMessage(s.transcript, text) }));
@@ -191,6 +217,7 @@ export function createEmulatorStore(options: {
           traceTurn: undefined,
           overlayTurn: undefined,
           selectedStep: undefined,
+          playback: undefined,
         });
       },
       async runFrom(workflowId, nodeId, nodeName) {
@@ -218,7 +245,39 @@ export function createEmulatorStore(options: {
       },
       selectStep: (stepId) => set({ selectedStep: stepId }),
       setArea: (area) => set((s) => ({ area: { ...s.area, ...area } })),
-      clearOverlay: () => set({ overlayTurn: undefined }),
+      clearOverlay: () => set({ overlayTurn: undefined, playback: undefined }),
+      play() {
+        const { playback, traceTurn, traces } = get();
+        if (!traceTurn || !traces[traceTurn]?.length) return;
+        const steps = traces[traceTurn].filter((s) => s.kind !== "turn").length;
+        // A paused replay of this turn resumes; a finished one, or another turn's, starts over.
+        const resume = playback && playback.turnId === traceTurn && playback.index < steps - 1;
+        set({
+          playback: { turnId: traceTurn, index: resume ? playback.index : 0, playing: true },
+        });
+      },
+      pause: () => set((s) => (s.playback ? { playback: { ...s.playback, playing: false } } : {})),
+      stepForward() {
+        const { playback, traceTurn, traces } = get();
+        if (!traceTurn) return;
+        const steps = (traces[traceTurn] ?? []).filter((s) => s.kind !== "turn").length;
+        if (steps === 0) return;
+        if (!playback || playback.turnId !== traceTurn) {
+          set({ playback: { turnId: traceTurn, index: 0, playing: false } });
+          return;
+        }
+        set({ playback: { ...playback, index: Math.min(steps - 1, playback.index + 1), playing: false } });
+      },
+      advance() {
+        const { playback, traces } = get();
+        if (!playback?.playing) return;
+        const steps = (traces[playback.turnId] ?? []).filter((s) => s.kind !== "turn").length;
+        // The last step is held for its own duration; the next tick ends the replay there.
+        if (playback.index >= steps - 1) set({ playback: { ...playback, playing: false } });
+        else set({ playback: { ...playback, index: playback.index + 1 } });
+      },
+      setSpeed: (speed) => set({ playbackSpeed: speed }),
+      stopPlayback: () => set({ playback: undefined }),
       async refreshVariables() {
         const conversation = get().conversation;
         try {

@@ -26,6 +26,7 @@ import type {
   EndReason,
   EngineEvent,
   EnginePorts,
+  IterationTrace,
   StepCommit,
   StepError,
   StepFailure,
@@ -107,6 +108,8 @@ class TurnRun {
   #events: EngineEvent[] = [];
   #failures: StepFailure[] = [];
   #logs: StepLog[] = [];
+  /** The trace of the autonomous iteration in the open step, if one ran (task 6.9). */
+  #iteration: IterationTrace | undefined;
   #userVarsChanged = false;
   #attributesChanged = false;
   #dirty = false;
@@ -599,6 +602,7 @@ class TurnRun {
     snapshot: Snapshot,
     via: { from: "card" | "autonomy"; failurePort: string | undefined },
   ): void {
+    if (result.iteration) this.#iteration = result.iteration;
     const parsed = StepOutcome.safeParse(result.outcome);
     if (!parsed.success) {
       this.#lastStep = { ...location, outcome: "fail" };
@@ -926,7 +930,9 @@ class TurnRun {
       logs: this.#logs,
       ...(user.vars || user.attributes ? { user } : {}),
       ...(this.#lastStep ? { step: this.#lastStep } : {}),
+      ...(this.#iteration ? { iteration: this.#iteration } : {}),
     };
+    this.#iteration = undefined;
     this.#messages = [];
     this.#events = [];
     this.#failures = [];

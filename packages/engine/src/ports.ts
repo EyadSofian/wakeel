@@ -86,6 +86,43 @@ export interface StepCommit {
   logs: StepLog[];
   /** The card or node that ran; absent when the commit holds only the effects of the inbound event. */
   step?: StepLocation & { outcome: StepOutcome["type"] };
+  /** An autonomous iteration's model call, code and tool calls, for its trace spans (task 6.9). */
+  iteration?: IterationTrace;
+}
+
+/**
+ * One autonomous iteration as the trace records it (04-contracts/trace.ts `autonomy.iteration`,
+ * `llm.call`, `tool.call`). `@wakeel/autonomy` produces it; the engine only carries it to the commit.
+ */
+export interface IterationTrace {
+  index: number;
+  status: "exit" | "run_result" | "run_error" | "protocol_error" | "exit_invalid" | "suspended" | "recovered";
+  exit?: string;
+  response: string;
+  code?: string;
+  result?: Json;
+  llm: {
+    model: string;
+    provider?: string;
+    usage?: { inputTokens: number; cachedInputTokens: number; outputTokens: number };
+    costMicroUsd?: number;
+    ttftMs?: number;
+    finishReason: string;
+    prompt: Json;
+    startedAt: string;
+    durationMs: number;
+  };
+  tools: {
+    name: string;
+    toolId?: string;
+    toolType: "code" | "kb_search" | "table" | "workflow";
+    sideEffects: boolean;
+    input: Json;
+    output?: Json;
+    error?: string;
+    startedAt: string;
+    durationMs: number;
+  }[];
 }
 
 /** A line for the conversation log and the trace (Log card, `log.*` in code). */
@@ -108,6 +145,8 @@ export interface StepResult {
   inactivityTimeoutMinutes?: number;
   /** An Autonomous Node left through an exit: its name and data, read downstream as `event.exit`. */
   exit?: { name: string; data: Json };
+  /** An autonomous iteration's trace (task 6.9). */
+  iteration?: IterationTrace;
 }
 
 /** What a card executor receives. */
