@@ -388,7 +388,7 @@ Each stage writes its candidates and scores into the retrieval span so the trace
 Contract: `04-contracts/bridge-api.openapi.yaml`. Summary of semantics:
 
 ### 9.1 Inbound
-Authenticated by a bridge key (`Authorization: Bearer wk_bridge_…`). Messages and events address a conversation by the caller's own id; conversation and user are created on first use. `user` data in the request body is merged into `end_users.attributes`. `Idempotency-Key` is honoured for 24 h.
+Authenticated by a bridge key (`Authorization: Bearer wk_bridge_…`). Messages and events address a conversation by the caller's own id; conversation and user are created on first use, and a conversation keeps the user that started it. `user` data in the request body, including `name`, `email`, `phone` and `locale`, is merged into `end_users.attributes`. `Idempotency-Key` is honoured for at least 24 h; without one, a message's `externalMessageId` de-duplicates it within its conversation. The `turnId` in a `202` is minted when the event is accepted. A `paused` connection still answers inbound calls but holds webhook deliveries; a `disabled` one refuses inbound calls. Details: ADR-024.
 
 ### 9.2 Outbound webhooks
 - Transactional outbox: events are rows written in the same transaction as the state change.
