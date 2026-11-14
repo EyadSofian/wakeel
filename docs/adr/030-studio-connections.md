@@ -38,6 +38,8 @@ Task 5.5 builds the Connections screens (design system §5.11): a list with stat
 
 ## Consequences
 
+- The bot's rail gains Connections, after Conversations (design system §5.1 lists the rail's destinations; §5.11 did not place the screen).
+
 - New audit actions: `connection.created`, `connection.updated`, `connection.secret_rotated`.
 - `bridge_connections` gains no columns: the last four characters of a secret are read by opening it.
 - The Bridge API's `testWebhook`, delivery list and replay move into a shared module used by both route sets.

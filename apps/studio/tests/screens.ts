@@ -35,7 +35,9 @@ export type ScreenState =
   | "user-form"
   | "run-from"
   // Task 4.7: the trace tab with a step selected, and the run overlay on the canvas.
-  | "trace";
+  | "trace"
+  // Task 5.5: the Connections test tab after a test event and a message.
+  | "tested";
 
 export interface Screen {
   id: string;
@@ -201,6 +203,52 @@ SCREENS.push({
   mock: true,
   interactions: [],
 });
+
+// Connections (task 5.5, design system §5.11): the list, one connection's three tabs, and a
+// connection turned off after repeated failures.
+const CONNECTIONS = `/w/${WS}/b/bot_01m7a256m0a13warwhczsjhx9b/connections`;
+SCREENS.push(
+  {
+    id: "connections",
+    route: CONNECTIONS,
+    states: ["default", "focus", "empty", "loading", "error", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "connection",
+    route: `${CONNECTIONS}/conn_01m7a256m0a13warwhczsjhx01`,
+    states: ["default", "focus", "empty", "loading", "error", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "connection-disabled",
+    route: `${CONNECTIONS}/conn_01m7a256m0a13warwhczsjhx03`,
+    states: ["default", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "connection-deliveries",
+    route: `${CONNECTIONS}/conn_01m7a256m0a13warwhczsjhx01/deliveries`,
+    states: ["default", "empty", "loading", "error", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "connection-test",
+    route: `${CONNECTIONS}/conn_01m7a256m0a13warwhczsjhx01/test`,
+    states: ["default", "tested", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+);
 
 export const THEMES = ["light", "dark"] as const;
 

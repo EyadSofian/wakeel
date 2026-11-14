@@ -1,4 +1,12 @@
-import { createRootRoute, createRoute, createRouter, Navigate, Outlet, redirect } from "@tanstack/react-router";
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Navigate,
+  Outlet,
+  redirect,
+  useParams,
+} from "@tanstack/react-router";
 import { z } from "zod";
 import { useSession, useWorkspaces } from "./api/queries";
 import { AcceptInvite } from "./routes/auth/AcceptInvite";
@@ -6,6 +14,8 @@ import { NewWorkspace } from "./routes/auth/NewWorkspace";
 import { SignIn, SignUp } from "./routes/auth/SignIn";
 import { BotCanvas } from "./routes/bot/BotCanvas";
 import { BotLayout } from "./routes/bot/BotLayout";
+import { ConnectionDetail, type ConnectionTab } from "./routes/connections/ConnectionDetail";
+import { ConnectionsScreen } from "./routes/connections/ConnectionsScreen";
 import { Gallery } from "./routes/Gallery";
 import { VariablesScreen } from "./routes/variables/VariablesScreen";
 import { ApiKeys } from "./routes/workspace/ApiKeys";
@@ -117,6 +127,47 @@ const botVariablesRoute = createRoute({
   },
 });
 
+/** Connections (task 5.5, design system §5.11): the list, and one connection's tabs as addresses. */
+const botConnectionsRoute = createRoute({
+  getParentRoute: () => botRoute,
+  path: "/connections",
+  component: function BotConnectionsRoute() {
+    const { workspaceId } = workspaceRoute.useParams();
+    const { botId } = botRoute.useParams();
+    return <ConnectionsScreen workspaceId={workspaceId} botId={botId} />;
+  },
+});
+
+function ConnectionRoute({ tab }: { tab: ConnectionTab }) {
+  const { workspaceId } = workspaceRoute.useParams();
+  const { botId } = botRoute.useParams();
+  const { connectionId } = useParams({ strict: false }) as { connectionId: string };
+  return (
+    <ConnectionDetail
+      key={connectionId}
+      workspaceId={workspaceId}
+      botId={botId}
+      connectionId={connectionId}
+      tab={tab}
+    />
+  );
+}
+const connectionSetupRoute = createRoute({
+  getParentRoute: () => botRoute,
+  path: "/connections/$connectionId",
+  component: () => <ConnectionRoute tab="setup" />,
+});
+const connectionDeliveriesRoute = createRoute({
+  getParentRoute: () => botRoute,
+  path: "/connections/$connectionId/deliveries",
+  component: () => <ConnectionRoute tab="deliveries" />,
+});
+const connectionTestRoute = createRoute({
+  getParentRoute: () => botRoute,
+  path: "/connections/$connectionId/test",
+  component: () => <ConnectionRoute tab="test" />,
+});
+
 const settingsIndexRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: "/settings",
@@ -180,7 +231,14 @@ export const router = createRouter({
     inviteRoute,
     workspaceRoute.addChildren([
       homeRoute,
-      botRoute.addChildren([botCanvasRoute, botVariablesRoute]),
+      botRoute.addChildren([
+        botCanvasRoute,
+        botVariablesRoute,
+        botConnectionsRoute,
+        connectionSetupRoute,
+        connectionDeliveriesRoute,
+        connectionTestRoute,
+      ]),
       settingsIndexRoute,
       generalRoute,
       membersRoute,

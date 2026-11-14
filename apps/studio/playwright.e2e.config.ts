@@ -13,8 +13,16 @@ export default defineConfig({
   reporter: [["list"]],
   use: { ...devices["Desktop Chrome"], baseURL: "http://127.0.0.1:5173", viewport: { width: 1440, height: 900 } },
   webServer: [
+    // Test-only egress stand-in and webhook receiver (ADR-030 §5): the Connections test sends to it.
     {
-      command: "node --import tsx --env-file=../../.env ../api/src/main.ts",
+      command: "node --import tsx --env-file=../../.env e2e/egress-stand-in.ts",
+      url: "http://127.0.0.1:4498/health",
+      reuseExistingServer: true,
+      timeout: 30_000,
+    },
+    {
+      // EGRESS_URL set here wins over the .env file: the api's test event goes to the stand-in.
+      command: "EGRESS_URL=http://127.0.0.1:4498 node --import tsx --env-file=../../.env ../api/src/main.ts",
       url: "http://127.0.0.1:3000/health/live",
       reuseExistingServer: true,
       timeout: 60_000,

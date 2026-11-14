@@ -1,4 +1,5 @@
 export * from "./common";
+export * from "./connections";
 export * from "./variable";
 export * from "./message";
 export * from "./table";

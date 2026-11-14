@@ -28,6 +28,10 @@ export const AUDIT_ACTIONS = [
   "workflow.deleted",
   // Task 5.2 (ADR-028 §8): written by the delivery worker as the system actor.
   "connection.disabled",
+  // Task 5.5 (ADR-030): the Studio's Connections screens.
+  "connection.created",
+  "connection.updated",
+  "connection.secret_rotated",
 ] as const;
 export type AuditActionName = (typeof AUDIT_ACTIONS)[number];
 
