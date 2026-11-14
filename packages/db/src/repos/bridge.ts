@@ -1,5 +1,5 @@
 import { AppError, type Json, newId } from "@wakeel/contracts";
-import { and, asc, eq, gt, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNotNull, sql } from "drizzle-orm";
 import type { Tx } from "../client";
 import {
   bridgeConnections,
@@ -348,6 +348,17 @@ const toTranscript = (row: typeof messages.$inferSelect): TranscriptRow => ({
 });
 
 /** The transcript in ascending seq, after `afterSeq` (cursor pagination). */
+/** The last `limit` transcript rows of a conversation, oldest first (the handoff summary, task 5.4). */
+export async function recentTranscript(tx: Tx, conversationId: string, limit: number): Promise<TranscriptRow[]> {
+  const rows = await tx
+    .select()
+    .from(messages)
+    .where(eq(messages.conversationId, conversationId))
+    .orderBy(desc(messages.seq))
+    .limit(limit);
+  return rows.reverse().map(toTranscript);
+}
+
 export async function listTranscript(
   tx: Tx,
   conversationId: string,

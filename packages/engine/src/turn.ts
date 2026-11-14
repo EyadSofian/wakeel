@@ -492,6 +492,8 @@ class TurnRun {
         idempotencyKey: `${this.#input.turnId}:${this.#stepSeq}`,
         now: this.#ports.clock.now(),
         deadline: this.#deadline,
+        summarizeHandoff: async (reason) =>
+          this.#ports.handoffSummary ? this.#ports.handoffSummary({ turnId: this.#input.turnId, reason }) : "",
       });
     } catch (error) {
       this.#lastStep = { ...location, outcome: "fail" };

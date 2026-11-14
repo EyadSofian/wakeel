@@ -5,6 +5,7 @@ import { type JanitorDeps, runJanitor } from "./janitor";
 
 export * from "./drain";
 export * from "./event-scope";
+export * from "./handoff-summary";
 export * from "./janitor";
 export * from "./message-id";
 

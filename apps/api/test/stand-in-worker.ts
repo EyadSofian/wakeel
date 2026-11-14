@@ -39,6 +39,19 @@ export function standInWorker(db: Database, publisher: Redis) {
           eventIds: [ev.id],
           id: ev.payload["turnId"] as string,
         });
+        if (ev.kind === "handoff_release" || (ev.kind === "message" && conv.status === "handed_off")) {
+          // As the engine: a release goes idle and clears the handoff; a message while handed off is
+          // only recorded (§9.4).
+          const released = ev.kind === "handoff_release";
+          if (released)
+            await writeConversation(tx, conversationId, epoch, { state: { ...emptyState() }, handoff: null });
+          const status = released ? "completed" : "handed_off";
+          await appendOutbox(tx, { conversationId, connectionId: ev.connectionId, epoch }, [
+            { type: "turn.completed", payload: { turnId: turn.id, data: { status, messageCount: 0, durationMs: 1 } } },
+          ]);
+          await finishTurn(tx, { turnId: turn.id, status, stepCount: released ? 1 : 0 });
+          return ev.seq;
+        }
         if (ev.kind === "end") {
           // endConversation (ADR-029 §1), as the engine does it: state cleared, conversation.ended.
           await writeConversation(tx, conversationId, epoch, {

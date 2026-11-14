@@ -23,6 +23,7 @@ import type {
   CodeRequest,
   EnginePorts,
   EphemeralEvent,
+  HandoffSummaryRequest,
   StepCommit,
   StepResult,
   TurnInput,
@@ -245,6 +246,8 @@ export interface HarnessOptions {
   sandboxAnswers?: SandboxAnswers;
   ephemeralFails?: boolean;
   code?: (request: CodeRequest) => CodeOutcome | Promise<CodeOutcome>;
+  /** The handoff summary port (task 5.4); absent means no summarizer is configured. */
+  handoffSummary?: (input: HandoffSummaryRequest) => Promise<string>;
 }
 
 export function harness(options: HarnessOptions = {}) {
@@ -282,6 +285,7 @@ export function harness(options: HarnessOptions = {}) {
       ephemeral.push(e);
     },
     ...(autonomy ? { autonomy } : {}),
+    ...(options.handoffSummary ? { handoffSummary: options.handoffSummary } : {}),
   };
   return { clock, commits, ephemeral, ports, autonomyCalls, batches: box.batches, codeRuns };
 }
