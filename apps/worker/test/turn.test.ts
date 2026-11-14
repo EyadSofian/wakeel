@@ -11,8 +11,10 @@ import {
   createWorkspace,
   type Database,
   getDraftDoc,
+  type Keyring,
   listDraftDocs,
   publishDraft,
+  putConfigValue,
   saveDraftDoc,
   sql,
 } from "@wakeel/db";
@@ -1196,5 +1198,54 @@ describe("published versions (task 7.2)", () => {
     ]);
     expect(conv?.version_id).toBeNull();
     expect((await spansOf(c)).some((s) => s.kind === "version.migrated")).toBe(false);
+  });
+});
+
+describe("config variables (task 7.3, ADR-037)", () => {
+  const ring: Keyring = { current: { version: 1, key: new Uint8Array(randomBytes(32)) } };
+  const CANARY = "canary-worker-5b8e2d91";
+
+  test("the draft runs with draft values, and a secret that reaches the trace is scrubbed from every span", async () => {
+    const c = await seed([card({ type: "code", source: "log.info(env.SHOP_TOKEN)" })]);
+    await db.withWorkspace(c.ws, async (tx) => {
+      const m = await getDraftDoc(tx, c.botId, "manifest", "manifest");
+      await saveDraftDoc(tx, {
+        botId: c.botId,
+        kind: "manifest",
+        docId: "manifest",
+        expectedRev: m.rev,
+        userId: null,
+        doc: { ...(m.doc as object), configVars: [{ key: "SHOP_TOKEN", secret: true }] },
+      });
+      const put = (env: "draft" | "production", value: string) =>
+        putConfigValue(tx, ring, {
+          workspaceId: c.ws,
+          botId: c.botId,
+          env,
+          key: "SHOP_TOKEN",
+          value,
+          isSecret: true,
+          userId: null,
+        });
+      await put("draft", CANARY);
+      await put("production", "production-only-value");
+    });
+    const seen: unknown[] = [];
+    // A guest that leaks the secret into its logs (the real sandbox redacts by key; this one does not).
+    const code: CodePort = {
+      run: async (req: CodeRequest) => {
+        seen.push((req.scopes as { env?: unknown }).env);
+        return { ...ok(), logs: [{ level: "info", args: [`token is ${CANARY}`] }] };
+      },
+    };
+    await send(c, "أهلاً");
+    await drainConversation(deps({ code, keyring: ring }).d, c.conversationId);
+    expect(seen).toEqual([{ SHOP_TOKEN: CANARY }]);
+    const raw = await query<{ attrs: unknown }>("select attrs from trace_spans where conversation_id = $1", [
+      c.conversationId,
+    ]);
+    expect(raw.length).toBeGreaterThan(0);
+    expect(JSON.stringify(raw)).not.toContain(CANARY);
+    expect(JSON.stringify(raw)).toContain("[redacted]");
   });
 });

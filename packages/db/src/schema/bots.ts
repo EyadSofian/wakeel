@@ -1,8 +1,9 @@
 import { sql } from "drizzle-orm";
-import { integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, customType, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
 
 /** Drizzle mirrors of migrations 0004 and 0012 (tasks 2.1, 7.1). The SQL files are the source of truth. */
 const at = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
 
 export const bots = pgTable("bots", {
   id: text("id").primaryKey(),
@@ -48,4 +49,22 @@ export const botVersions = pgTable("bot_versions", {
   publishedAt: at("published_at").notNull().defaultNow(),
 });
 
-export const botTables = { bots, botDraftDocs, botVersions } as const;
+/** Mirror of migration 0014 (task 7.3): sealed config variable values per environment. */
+export const botConfigVars = pgTable(
+  "bot_config_vars",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    botId: text("bot_id").notNull(),
+    env: text("env").notNull(),
+    key: text("key").notNull(),
+    ciphertext: bytea("ciphertext").notNull(),
+    keyVersion: integer("key_version").notNull(),
+    isSecret: boolean("is_secret").notNull(),
+    updatedBy: text("updated_by"),
+    createdAt: at("created_at").notNull().defaultNow(),
+    updatedAt: at("updated_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.botId, t.env, t.key] })],
+);
+
+export const botTables = { bots, botDraftDocs, botVersions, botConfigVars } as const;
