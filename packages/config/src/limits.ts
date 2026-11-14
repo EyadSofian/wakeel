@@ -14,7 +14,7 @@ export {
   TABLE_LIMITS,
 } from "@wakeel/contracts";
 
-import { RETRY_SCHEDULE_SECONDS } from "@wakeel/contracts";
+import { LIMITS, RETRY_SCHEDULE_SECONDS } from "@wakeel/contracts";
 
 /** Studio and Bridge API (architecture §9.1, ADR-012). */
 export const API_LIMITS = {
@@ -53,4 +53,18 @@ export const WORKER_LIMITS = {
   janitorIntervalSeconds: 30,
   /** I/O-bound turns one worker process handles at once; size workers by this. */
   concurrentTurnsPerProcess: 50,
+} as const;
+
+/**
+ * Egress proxy (architecture §5.2, §5.3; ADR-020). The response, time and redirect values are the
+ * guest `fetch` limits; callers may ask for less, never more.
+ */
+export const EGRESS_LIMITS = {
+  timeoutMs: LIMITS.fetchTimeoutMs,
+  responseBytes: LIMITS.fetchResponseBytes,
+  redirects: LIMITS.fetchRedirects,
+  /** Decoded request body a caller may send out. */
+  requestBodyBytes: LIMITS.fetchResponseBytes,
+  /** Header bytes in either direction; Node's own default. */
+  headerBytes: 16 * 1024,
 } as const;

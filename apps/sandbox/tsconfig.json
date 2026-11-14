@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // Runner files are loaded by Node's own type stripping, which needs real file extensions.
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src", "test", "tests", "vitest.config.ts"]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@wakeel/sandbox-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./protocol": "./src/protocol.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@wakeel/config": "workspace:*",
+    "@wakeel/contracts": "workspace:*",
+    "zod": "4.6.7"
+  }
+}

@@ -1,5 +1,6 @@
 export * from "./app-error";
 export * from "./bot-definition";
+export * from "./capability";
 export * from "./card";
 export * from "./common";
 export * from "./errors";
