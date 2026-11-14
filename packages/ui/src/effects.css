@@ -9,7 +9,7 @@
 /* The app backdrop: two faint accent tints that give glass something to show. Never moves. */
 .wk-ambient {
   background-color: var(--bg-canvas);
-  background-image: var(--ambient);
+  background-image: var(--ambient-a), var(--ambient-b), var(--ambient-c);
   background-attachment: fixed;
 }
 

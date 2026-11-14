@@ -40,7 +40,7 @@ measured against a known colour. `@media (prefers-reduced-transparency: reduce)`
 (`--scrim-blur`).
 
 **Ambient backdrop.** The app background gets two very low-chroma accent radial tints
-(`--ambient`), so glass has something to show and dark mode is not flat black. It is the one gradient
+(`--ambient-a/b/c`), so glass has something to show and dark mode is not flat black. It is the one gradient
 allowed, it is never behind text inside a surface, and it does not move.
 
 **Depth on cards.** Canvas nodes lift on hover (`--lift` translate and `--shadow-lift`); the selected

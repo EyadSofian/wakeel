@@ -139,7 +139,7 @@ Panels docked to the window edge have radius 0.
 
 Dark theme: same offsets with alpha 0.4 / 0.5 / 0.6 and `--border-strong` instead of the hairline. Overlay scrim: `oklch(0 0 0 / 0.32)` light, `/ 0.5` dark, with a light `--scrim-blur` (ADR-033).
 
-ADR-033 adds: `--glass-surface` / `--glass-surface-strong` with `--glass-blur` for floating surfaces (`.wk-glass`, `.wk-glass-strong`, `.wk-glass-bar`, `.wk-panel` in `packages/ui/src/effects.css`), `--shadow-lift` for a card under the pointer, `--shadow-halo` for the selected node, and the `--ambient` app backdrop. Docked panels with editable content stay opaque. `prefers-reduced-transparency` makes every glass surface opaque.
+ADR-033 adds: `--glass-surface` / `--glass-surface-strong` with `--glass-blur` for floating surfaces (`.wk-glass`, `.wk-glass-strong`, `.wk-glass-bar`, `.wk-panel` in `packages/ui/src/effects.css`), `--shadow-lift` for a card under the pointer, `--shadow-halo` for the selected node, and the `--ambient-a/b/c` app backdrop. Docked panels with editable content stay opaque. `prefers-reduced-transparency` makes every glass surface opaque.
 
 ### 2.6 Motion
 
