@@ -199,6 +199,11 @@ export const ERRORS = {
     title: "The conversation no longer fits in {model}'s context",
     fix: "Lower the transcript budget or shorten the instructions.",
   },
+  model_key_missing: {
+    status: 409,
+    title: "No key is set for {provider}",
+    fix: "Add a {provider} key in Settings → Models, or choose a model from a provider that has one.",
+  },
   model_not_configured: {
     status: 422,
     title: "No model is set for this step",
