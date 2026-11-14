@@ -9,13 +9,15 @@ import {
   nextUnprocessedEvent,
   releaseConversationLease,
   startTurn,
+  upsertSpans,
 } from "@wakeel/db";
 import type { Redis } from "ioredis";
 
 /**
  * A stand-in for apps/worker (apps never import each other, CLAUDE.md §4), built from the same
  * repository calls the real worker makes. Each turn answers "رد: <text>" (or the event's name, or
- * the node of a run_from), with typing, message.created and turn.completed, then signals.
+ * the node of a run_from), writes a turn span, emits typing, message.created and turn.completed,
+ * then signals.
  */
 export function standInWorker(db: Database, publisher: Redis) {
   return async function work(conversationId: string): Promise<void> {
@@ -46,6 +48,24 @@ export function standInWorker(db: Database, publisher: Redis) {
           { id: newId("msg"), type: "text", payload: reply, turnId: turn.id },
         ]);
         if (!stored) throw new Error("no message stored");
+        // The trace, as apps/worker writes it (task 4.7): here just the turn span.
+        await upsertSpans(tx, [
+          {
+            id: newId("span"),
+            workspaceId: ws,
+            botId: conv.botId,
+            conversationId,
+            turnId: turn.id,
+            seq: 0,
+            name: "Turn",
+            status: "ok",
+            startedAt: new Date().toISOString(),
+            durationMs: 5,
+            location: {},
+            kind: "turn",
+            attrs: { trigger: "message", mode: conv.mode as "live" | "emulator" | "eval", outcome: "completed" },
+          },
+        ]);
         const at = { conversationId, connectionId: ev.connectionId, epoch };
         await appendOutbox(tx, at, [
           { type: "typing", payload: { turnId: turn.id, data: { state: "on" } }, ephemeral: true },
