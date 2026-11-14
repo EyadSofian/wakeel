@@ -68,13 +68,13 @@ describe("config variables", () => {
     expect(list.statusCode).toBe(200);
     expect(list.body).not.toContain(CANARY);
     const byKey = Object.fromEntries(list.json().data.map((v: { key: string }) => [v.key, v]));
-    expect(byKey.SHOP_URL).toMatchObject({
+    expect(byKey["SHOP_URL"]).toMatchObject({
       secret: false,
       description: "عنوان المتجر",
       draft: { set: true, value: "https://staging.shop.example" },
       production: { set: true, value: "https://shop.example" },
     });
-    expect(byKey.SHOP_TOKEN).toMatchObject({
+    expect(byKey["SHOP_TOKEN"]).toMatchObject({
       secret: true,
       draft: { set: false, value: null },
       production: { set: true, value: null },
