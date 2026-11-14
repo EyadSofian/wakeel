@@ -11,13 +11,13 @@ import {
   TypingIndicator,
   tabClasses,
 } from "@wakeel/ui";
-import { ChevronDown, Play, RotateCcw } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, Play, RotateCcw } from "lucide-react";
+import { useCallback, useContext, useMemo, useState } from "react";
 import { useCanvas } from "../canvas/context";
-import { useEmulator } from "./controller";
+import { TraceArea } from "../trace/TraceArea";
+import { EmulatorStoreContext, useEmulator } from "./controller";
 import type { TranscriptEntry } from "./model";
 import { TestUserForm } from "./TestUserForm";
-import { VariablesTab } from "./VariablesTab";
 
 /**
  * The emulator panel (design system §5.3, task 4.6): it shares the end side with the inspector,
@@ -33,6 +33,18 @@ export function EmulatorPanel({ onShowInspector }: { onShowInspector: () => void
   const reset = useEmulator((s) => s.reset);
   const botName = useCanvas((s) => s.manifest?.doc.name ?? "Bot");
   const [editingUser, setEditingUser] = useState(false);
+  const openTrace = useEmulator((s) => s.openTrace);
+  const store = useContext(EmulatorStoreContext);
+  /** Opens a turn's trace; for an error, with its step selected (§5.3 "Show in trace"). */
+  const showTrace = useCallback(
+    async (turnId: string, code?: string) => {
+      await openTrace(turnId);
+      if (!code) return;
+      const failed = store?.getState().traces[turnId]?.find((s) => s.kind === "error" && s.attrs.code === code);
+      if (failed) store?.getState().selectStep(failed.id);
+    },
+    [openTrace, store],
+  );
 
   const items = useMemo<TranscriptItem[]>(
     () =>
@@ -45,10 +57,11 @@ export function EmulatorPanel({ onShowInspector }: { onShowInspector: () => void
             botName={botName}
             onAction={(a) => void (a.type === "say" ? send(a.text) : postback(a.value, a.label))}
             onReset={reset}
+            onTrace={(turnId, code) => void showTrace(turnId, code)}
           />
         ),
       })),
-    [transcript.items, botName, send, postback, reset],
+    [transcript.items, botName, send, postback, reset, showTrace],
   );
 
   return (
@@ -118,7 +131,7 @@ export function EmulatorPanel({ onShowInspector }: { onShowInspector: () => void
           />
         }
       />
-      <VariablesTab />
+      <TraceArea />
       <Composer onSend={(text) => void send(text)} placeholder="Message…" label="Message the bot" />
     </aside>
   );
@@ -135,11 +148,13 @@ function Entry({
   botName,
   onAction,
   onReset,
+  onTrace,
 }: {
   entry: TranscriptEntry;
   botName: string;
   onAction: Parameters<typeof MessageBubble>[0]["onAction"];
   onReset: () => void;
+  onTrace: (turnId: string, code?: string) => void;
 }) {
   switch (entry.kind) {
     case "message":
@@ -153,7 +168,19 @@ function Entry({
         />
       );
     case "error":
-      return <TranscriptError title={entry.title} fix={entry.fix} />;
+      return (
+        <TranscriptError
+          title={entry.title}
+          fix={entry.fix}
+          action={
+            entry.turnId ? (
+              <Button size="compact" onClick={() => onTrace(entry.turnId as string, entry.code)}>
+                Show in trace
+              </Button>
+            ) : undefined
+          }
+        />
+      );
     case "problem":
       return <TranscriptError title={entry.title} fix={entry.fix} />;
     case "handoff":
@@ -167,9 +194,9 @@ function Entry({
           </Button>
         </div>
       );
-    case "footer":
-      return (
-        <TurnFooter>
+    case "footer": {
+      const content = (
+        <>
           <span dir="auto">{botName}</span>
           <span aria-hidden="true">·</span>
           <span className="tabular-nums">{(entry.durationMs / 1000).toFixed(1)} s</span>
@@ -179,8 +206,25 @@ function Entry({
               <span>Waiting for the user</span>
             </>
           ) : null}
-        </TurnFooter>
+        </>
       );
+      // The footer opens the turn's trace (§5.3 "click opens the trace").
+      return entry.turnId ? (
+        <TurnFooter>
+          <button
+            type="button"
+            title="Open this turn's trace"
+            onClick={() => onTrace(entry.turnId as string)}
+            className="inline-flex items-center gap-2 rounded-xs hover:text-primary"
+          >
+            {content}
+            <ChevronRight className="size-icon-sm" strokeWidth={1.75} aria-hidden="true" />
+          </button>
+        </TurnFooter>
+      ) : (
+        <TurnFooter>{content}</TurnFooter>
+      );
+    }
   }
 }
 

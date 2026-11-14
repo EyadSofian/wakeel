@@ -45,6 +45,14 @@
 .wk-arrow-fill-selected {
   fill: var(--accent);
 }
+/* The run overlay (design system §5.1): transitions the last emulator turn followed. */
+.wk-edge-ran {
+  stroke: var(--accent-border);
+  stroke-width: 2;
+}
+.wk-arrow-fill-ran {
+  fill: var(--accent-border);
+}
 
 /*
  * Ports (ADR-017): a 10 px dot in the node's category colour with a surface ring, on the node's end

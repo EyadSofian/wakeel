@@ -1,8 +1,9 @@
-import type { BridgeEvent, EmulatorStateResponse, Json } from "@wakeel/contracts";
+import type { BridgeEvent, EmulatorStateResponse, Json, Span, Trace } from "@wakeel/contracts";
 import { createContext, useContext } from "react";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { ApiError } from "../api/client";
+import { mergeSpan } from "../trace/model";
 import {
   applyEvent,
   changedVariables,
@@ -16,10 +17,20 @@ import {
 
 /** The network side of the emulator; `api.ts` implements it over fetch, tests over a script. */
 export interface EmulatorTransport {
-  /** POST with `Accept: text/event-stream`; calls `onEvent` per Bridge event; throws `ApiError`. */
-  stream(path: string, body: unknown, onEvent: (event: BridgeEvent) => void): Promise<void>;
+  /**
+   * POST with `Accept: text/event-stream`; calls `onEvent` per Bridge event and `onSpan` per
+   * `trace.span` frame (ADR-026); throws `ApiError`.
+   */
+  stream(
+    path: string,
+    body: unknown,
+    onEvent: (event: BridgeEvent) => void,
+    onSpan: (span: Span) => void,
+  ): Promise<void>;
   put(path: string, body: unknown): Promise<unknown>;
   get(path: string): Promise<EmulatorStateResponse>;
+  /** A turn's trace from `GET /v1/workspaces/{ws}/turns/{turnId}/trace`. */
+  trace(turnId: string): Promise<Trace>;
 }
 
 /** The emulator's end user: the data the "as Test user" form edits (§5.3). */
@@ -43,6 +54,16 @@ export interface EmulatorState {
   variables: EmulatorStateResponse | undefined;
   /** Variable ids whose value changed in the last turn. */
   changed: ReadonlySet<string>;
+  /** Spans by turn id, in seq order (task 4.7). */
+  traces: Readonly<Record<string, Span[]>>;
+  /** The turn the trace list shows: the latest, or one the builder opened. */
+  traceTurn: string | undefined;
+  /** The turn whose path the canvas tints; cleared by the next edit (§5.1 "Run overlay"). */
+  overlayTurn: string | undefined;
+  /** The step selected in the trace list. */
+  selectedStep: string | undefined;
+  /** The trace and variables area under the transcript. */
+  area: { open: boolean; tab: "trace" | "variables" };
   setOpen(open: boolean): void;
   send(text: string): Promise<void>;
   postback(value: string, label: string): Promise<void>;
@@ -50,6 +71,10 @@ export interface EmulatorState {
   runFrom(workflowId: string, nodeId: string, nodeName: string): Promise<void>;
   saveUser(user: TestUser): Promise<void>;
   refreshVariables(): Promise<void>;
+  openTrace(turnId: string, stepId?: string): Promise<void>;
+  selectStep(stepId: string | undefined): void;
+  setArea(area: Partial<EmulatorState["area"]>): void;
+  clearOverlay(): void;
 }
 
 export type EmulatorStore = StoreApi<EmulatorState>;
@@ -90,10 +115,19 @@ export function createEmulatorStore(options: {
       await options.beforeTurn?.();
       // Events of a conversation that was reset meanwhile are dropped.
       const apply = (e: BridgeEvent) => {
-        if (get().conversation === conversation) set((s) => ({ transcript: applyEvent(s.transcript, e) }));
+        if (get().conversation !== conversation) return;
+        set((s) => ({ transcript: applyEvent(s.transcript, e) }));
+        if (e.type === "turn.completed" && e.turnId) set({ overlayTurn: e.turnId });
+      };
+      const applySpan = (span: Span) => {
+        if (get().conversation !== conversation) return;
+        set((s) => ({
+          traces: { ...s.traces, [span.turnId]: mergeSpan(s.traces[span.turnId] ?? [], span) },
+          traceTurn: span.turnId,
+        }));
       };
       try {
-        await transport.stream(path, body, apply);
+        await transport.stream(path, body, apply, applySpan);
       } catch (error) {
         if (get().conversation !== conversation) return;
         const problem =
@@ -131,6 +165,11 @@ export function createEmulatorStore(options: {
       startedAt: undefined,
       variables: undefined,
       changed: new Set(),
+      traces: {},
+      traceTurn: undefined,
+      overlayTurn: undefined,
+      selectedStep: undefined,
+      area: { open: false, tab: "trace" },
       setOpen: (open) => set({ open }),
       async send(text) {
         set((s) => ({ transcript: userMessage(s.transcript, text) }));
@@ -148,6 +187,10 @@ export function createEmulatorStore(options: {
           startedAt: undefined,
           variables: undefined,
           changed: new Set(),
+          traces: {},
+          traceTurn: undefined,
+          overlayTurn: undefined,
+          selectedStep: undefined,
         });
       },
       async runFrom(workflowId, nodeId, nodeName) {
@@ -162,6 +205,20 @@ export function createEmulatorStore(options: {
         await transport.put(`${base}/users/${TEST_USER_ID}`, userData(user));
         await get().refreshVariables();
       },
+      async openTrace(turnId, stepId) {
+        set((s) => ({ traceTurn: turnId, selectedStep: stepId, area: { ...s.area, open: true, tab: "trace" } }));
+        if (get().traces[turnId]) return;
+        try {
+          const trace = await transport.trace(turnId);
+          set((s) => ({ traces: { ...s.traces, [turnId]: trace.spans } }));
+        } catch {
+          // The list says the trace could not be loaded; nothing else depends on it.
+          set((s) => ({ traces: { ...s.traces, [turnId]: s.traces[turnId] ?? [] } }));
+        }
+      },
+      selectStep: (stepId) => set({ selectedStep: stepId }),
+      setArea: (area) => set((s) => ({ area: { ...s.area, ...area } })),
+      clearOverlay: () => set({ overlayTurn: undefined }),
       async refreshVariables() {
         const conversation = get().conversation;
         try {

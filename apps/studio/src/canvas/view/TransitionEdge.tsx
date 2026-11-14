@@ -1,5 +1,6 @@
 import { BaseEdge, type Edge, type EdgeProps, getBezierPath } from "@xyflow/react";
 import { memo } from "react";
+import { useRunOverlay } from "../../trace/overlay";
 
 /**
  * A transition (design system §4 TransitionPath, ADR-017): a bezier curve, 1.5 px, with an arrowhead. Selected
@@ -16,12 +17,15 @@ function TransitionEdgeView(props: EdgeProps<TransitionRFEdge>) {
     targetY: props.targetY,
     targetPosition: props.targetPosition,
   });
+  // Selection wins over the run overlay, which tints the transitions the last test followed.
+  const ran = useRunOverlay().edges.has(props.id);
+  const look = props.selected ? "selected" : ran ? "ran" : undefined;
   return (
     <BaseEdge
       id={props.id}
       path={path}
-      markerEnd={props.selected ? "url(#wk-arrow-selected)" : "url(#wk-arrow)"}
-      className={props.selected ? "wk-edge wk-edge-selected" : "wk-edge"}
+      markerEnd={look ? `url(#wk-arrow-${look})` : "url(#wk-arrow)"}
+      className={look ? `wk-edge wk-edge-${look}` : "wk-edge"}
       interactionWidth={16}
     />
   );
@@ -37,6 +41,7 @@ export function TransitionMarkers() {
         {[
           ["wk-arrow", "wk-arrow-fill"],
           ["wk-arrow-selected", "wk-arrow-fill-selected"],
+          ["wk-arrow-ran", "wk-arrow-fill-ran"],
         ].map(([id, cls]) => (
           <marker
             key={id}
