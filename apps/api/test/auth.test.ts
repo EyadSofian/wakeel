@@ -1,7 +1,7 @@
 import { RedisContainer, type StartedRedisContainer } from "@testcontainers/redis";
 import { createAuthService } from "@wakeel/auth";
 import { API_LIMITS as limits } from "@wakeel/config";
-import { createDatabase, type Database } from "@wakeel/db";
+import { createDatabase, type Database, memoryObjectStore } from "@wakeel/db";
 import { type StartedTestDatabase, startTestDatabase, superuserQuery } from "@wakeel/db/testing";
 import { createLogger } from "@wakeel/telemetry";
 import { Redis } from "ioredis";
@@ -38,7 +38,13 @@ beforeAll(async () => {
   app = buildApp({
     role: "all",
     logger: createLogger({ service: "api", level: "silent" }),
-    studio: { auth: service, studioOrigin: STUDIO, db, keyring: { current: { version: 1, key: new Uint8Array(32) } } },
+    studio: {
+      auth: service,
+      studioOrigin: STUDIO,
+      db,
+      keyring: { current: { version: 1, key: new Uint8Array(32) } },
+      objectStore: memoryObjectStore(),
+    },
   });
   await app.ready();
 });

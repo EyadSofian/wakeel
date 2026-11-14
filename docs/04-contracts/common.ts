@@ -20,6 +20,10 @@ export const TurnId = entityId("turn");
 export const OutboxEventId = entityId("out");
 export const SpanId = entityId("span");
 export const KnowledgeBaseId = entityId("kb");
+/** ADR-039: a knowledge base source, an ingestion job, an uploaded file. */
+export const KbSourceId = entityId("src");
+export const IngestionJobId = entityId("ijob");
+export const FileId = entityId("file");
 export const DocumentId = entityId("doc");
 export const ChunkId = entityId("chk");
 export const TableId = entityId("tbl");

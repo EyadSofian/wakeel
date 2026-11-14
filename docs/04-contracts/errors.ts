@@ -80,6 +80,7 @@ export const ERRORS = {
   model_not_configured: { status: 422, title: "No model is set for this step", fix: "Choose a default model in bot settings." },
   ai_extraction_invalid: { status: 500, title: "The model's answer did not match the extraction schema: {message}", fix: "Describe the fields more clearly in the instructions, or make fields the text may not give optional." },
   // Knowledge and tables
+  upload_incomplete: { status: 409, title: "The file has not finished uploading", fix: "Upload the file again, then try once it has finished." },
   kb_not_ready: { status: 409, title: "\"{kb}\" is still being indexed", fix: "Wait for indexing to finish." },
   document_parse_failed: { status: 422, title: "We could not read \"{document}\"", fix: "If it is a scan, upload a clearer copy; otherwise try exporting it again as PDF." },
   source_fetch_failed: { status: 502, title: "We could not fetch {url}: {message}", fix: "Check that the page is public." },

@@ -3,7 +3,7 @@ import { RedisContainer, type StartedRedisContainer } from "@testcontainers/redi
 import { createAuthService } from "@wakeel/auth";
 import type { SendResult, WebhookRequest } from "@wakeel/bridge";
 import { API_LIMITS } from "@wakeel/config";
-import { createDatabase, type Database, type Keyring } from "@wakeel/db";
+import { createDatabase, type Database, type Keyring, memoryObjectStore } from "@wakeel/db";
 import { type StartedTestDatabase, startTestDatabase } from "@wakeel/db/testing";
 import { createLogger } from "@wakeel/telemetry";
 import { Redis } from "ioredis";
@@ -31,6 +31,8 @@ export interface Stack {
   webhook: { sent: WebhookRequest[]; answer: SendResult; jobs: string[] };
   /** The keyring the API seals signing secrets with. */
   keyring: Keyring;
+  /** The in-memory object store uploads are presigned against. */
+  objectStore: ReturnType<typeof memoryObjectStore>;
   stop(): Promise<void>;
 }
 
@@ -52,7 +54,15 @@ export async function startStack(
     signInFailuresPerMinute: API_LIMITS.signInFailuresPerMinute,
   });
   const keyring: Keyring = { current: { version: 1, key: new Uint8Array(randomBytes(32)) } };
-  const deps: StudioDeps = { auth, studioOrigin: STUDIO, db, now: options.now ?? (() => new Date()), keyring };
+  const objectStore = memoryObjectStore();
+  const deps: StudioDeps = {
+    auth,
+    studioOrigin: STUDIO,
+    db,
+    now: options.now ?? (() => new Date()),
+    keyring,
+    objectStore,
+  };
   const jobs: string[] = [];
   const autoWork = { on: false };
   const webhook: Stack["webhook"] = { sent: [], answer: { kind: "response", status: 200 }, jobs: [] };
@@ -99,6 +109,7 @@ export async function startStack(
     autoWork,
     webhook,
     keyring,
+    objectStore,
     async stop() {
       await app.close();
       await Promise.allSettled([db.close(), redis.quit(), publisher?.quit(), subscriber?.quit()]);

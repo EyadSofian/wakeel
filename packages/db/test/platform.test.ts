@@ -21,6 +21,7 @@ import {
   getSecret,
   getWorkspace,
   insertApiKey,
+  kbTables,
   listApiKeys,
   listAudit,
   listMembers,
@@ -513,7 +514,7 @@ describe("repositories", () => {
 });
 
 describe("Drizzle schema agrees with the migrations", () => {
-  test.each(Object.values({ ...platformTables, ...botTables }).map((t) => [getTableName(t), t] as const))(
+  test.each(Object.values({ ...platformTables, ...botTables, ...kbTables }).map((t) => [getTableName(t), t] as const))(
     "%s",
     async (name, table) => {
       const { rows } = await query(

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Json, NodeId, VariableId, WorkflowId } from "./common";
+import { BotId, FileId, Json, NodeId, VariableId, WorkflowId } from "./common";
 import { UserData } from "./event";
 import { VariableScope, VariableType } from "./variable";
 
@@ -350,3 +350,44 @@ export const EmulatorStateResponse = z.object({
   limitBytes: z.number().int().positive(),
 });
 export type EmulatorStateResponse = z.infer<typeof EmulatorStateResponse>;
+
+/* ------------------------------------------------------------------ */
+/* Files (task 8.1, ADR-039)                                           */
+/* ------------------------------------------------------------------ */
+
+export const FilePurpose = z.enum(["kb_source"]);
+export type FilePurpose = z.infer<typeof FilePurpose>;
+
+/** `POST …/files`: announce an upload. Type and size are checked against `FILE_LIMITS`. */
+export const CreateFileRequest = z.strictObject({
+  purpose: FilePurpose,
+  name: z.string().trim().min(1, "Enter a file name").max(255, "Use 255 characters or fewer"),
+  mime: z.string().min(3).max(255),
+  size: z.number().int().positive(),
+  botId: BotId.optional(),
+});
+export type CreateFileRequest = z.infer<typeof CreateFileRequest>;
+
+export const FileResponse = z.object({
+  id: FileId,
+  botId: BotId.nullable(),
+  purpose: FilePurpose,
+  name: z.string(),
+  mime: z.string(),
+  size: z.number().int().positive(),
+  status: z.enum(["pending", "ready"]),
+  createdAt: isoDate,
+});
+export type FileResponse = z.infer<typeof FileResponse>;
+
+/** A presigned request the browser sends the bytes with; the api never proxies them (ADR-039 §2). */
+export const PresignedRequest = z.object({
+  url: z.string(),
+  method: z.enum(["PUT", "GET"]),
+  headers: z.record(z.string(), z.string()),
+  expiresAt: isoDate,
+});
+export type PresignedRequest = z.infer<typeof PresignedRequest>;
+
+export const CreateFileResponse = z.object({ file: FileResponse, upload: PresignedRequest });
+export type CreateFileResponse = z.infer<typeof CreateFileResponse>;

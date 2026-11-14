@@ -68,3 +68,25 @@ export const EGRESS_LIMITS = {
   /** Header bytes in either direction; Node's own default. */
   headerBytes: 16 * 1024,
 } as const;
+
+/** Uploaded files (ADR-039). */
+export const FILE_LIMITS = {
+  /** Knowledge base source files: the types the parser reads (8.2). */
+  kbSource: {
+    maxBytes: 50 * 1024 * 1024,
+    mimes: [
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "text/html",
+      "text/markdown",
+      "text/plain",
+      "text/csv",
+      "image/png",
+      "image/jpeg",
+    ],
+  },
+  uploadUrlSeconds: 15 * 60,
+  downloadUrlSeconds: 5 * 60,
+} as const;

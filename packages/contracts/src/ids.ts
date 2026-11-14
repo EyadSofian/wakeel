@@ -25,6 +25,10 @@ export const ENTITY_PREFIXES = [
   "kb",
   "doc",
   "chk",
+  // ADR-039: knowledge base sources, ingestion jobs, uploaded files.
+  "src",
+  "ijob",
+  "file",
   "tbl",
   "row",
   "usr",
