@@ -84,8 +84,15 @@ function deps(overrides: Partial<TurnDeps> & { code?: CodePort } = {}) {
 
 const card = (extra: Record<string, unknown>) => ({ id: newElementId("card"), ...extra });
 
-/** A workspace with a bot whose Main is Start → one node with `cards`, and one idle conversation. */
-async function seed(cards: unknown[], settings: Record<string, unknown> = {}) {
+/**
+ * A workspace with a bot whose Main is Start → one node with `cards` (plus any `extra` nodes and
+ * edges), and one new, idle conversation.
+ */
+async function seed(
+  cards: unknown[],
+  settings: Record<string, unknown> = {},
+  extra: { nodes?: unknown[]; edges?: unknown[] } = {},
+) {
   const userId = newId("usr");
   await su("insert into users (id, email, name) values ($1, $2, 'Builder')", [userId, `${userId}@example.test`]);
   const { workspace } = await createWorkspace(db, {
@@ -115,8 +122,12 @@ async function seed(cards: unknown[], settings: Record<string, unknown> = {}) {
         nodes: [
           { id: start, type: "start", name: "Start" },
           { id: node, type: "standard", name: "Reply", cards },
+          ...(extra.nodes ?? []),
         ],
-        edges: [{ id: newElementId("edge"), from: { nodeId: start, port: "next" }, to: { nodeId: node } }],
+        edges: [
+          { id: newElementId("edge"), from: { nodeId: start, port: "next" }, to: { nodeId: node } },
+          ...(extra.edges ?? []),
+        ],
       },
     });
     const m = manifest.doc as { settings: Record<string, unknown> };
@@ -221,6 +232,45 @@ describe("traces (task 4.7)", () => {
     expect(await drainConversation(d, c.conversationId)).toEqual({ turns: 1, stopped: "drained" });
     expect(await botTexts(c)).toEqual(["أهلاً"]);
     expect(await spansOf(c)).toEqual([]);
+  });
+});
+
+describe("the conversation_started trigger (task 4.8, ADR-027)", () => {
+  test("runs before Start on a new conversation's first message, and not on the next", async () => {
+    const trigger = newElementId("node");
+    const welcome = newElementId("node");
+    const c = await seed(
+      [card({ type: "say", message: { type: "text", text: "إزاي أقدر أساعدك؟" } })],
+      {},
+      {
+        nodes: [
+          { id: trigger, type: "trigger", name: "Started", on: { kind: "conversation_started" } },
+          {
+            id: welcome,
+            type: "standard",
+            name: "Welcome",
+            cards: [card({ type: "say", message: { type: "text", text: "أهلاً بيك في النور" } })],
+          },
+        ],
+        edges: [{ id: newElementId("edge"), from: { nodeId: trigger, port: "next" }, to: { nodeId: welcome } }],
+      },
+    );
+    const { d } = deps();
+    await send(c, "السلام عليكم");
+    await drainConversation(d, c.conversationId);
+    expect(await botTexts(c)).toEqual(["أهلاً بيك في النور", "إزاي أقدر أساعدك؟"]);
+    const [conv] = await query<{ state: { started?: boolean } }>("select state from conversations where id = $1", [
+      c.conversationId,
+    ]);
+    expect(conv?.state.started).toBe(true);
+
+    await send(c, "عندي سؤال");
+    await drainConversation(d, c.conversationId);
+    expect(await botTexts(c)).toEqual(["أهلاً بيك في النور", "إزاي أقدر أساعدك؟", "إزاي أقدر أساعدك؟"]);
+    // The trigger's path comes first in the trace. Trigger and Start pass straight through (no step,
+    // so no span of their own, as in 4.7).
+    const nodes = (await spansOf(c)).filter((s) => s.kind === "node").map((s) => s.name);
+    expect(nodes).toEqual(["Welcome", "Reply", "Reply"]);
   });
 });
 

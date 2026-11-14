@@ -435,7 +435,7 @@ describe("end", () => {
     });
     const { result, commits } = await run({ def: bot.def, executors: s.executors });
     expect(events(commits)).toEqual([{ type: "conversation.ended", data }]);
-    expect(result).toMatchObject({ status: "ended", state: state({ status: "ended" }) });
+    expect(result).toMatchObject({ status: "ended", state: state({ status: "ended", started: undefined }) });
     // User variables outlive the conversation.
     expect(commits.at(-1)?.user).toEqual({ vars: { [u]: "gold" } });
   });

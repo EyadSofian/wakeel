@@ -200,6 +200,7 @@ Applying the inbound event:
 | Event | State | Effect |
 |---|---|---|
 | `user_update` | any | merge `end_users.attributes`; no steps run |
+| `message` or custom `event` | session not started (`state.started` absent: a new conversation, or after `ended`) | after the row below applies, set `started` and, if Main has a Trigger with `on.kind = "conversation_started"`, push it on top so its path runs first (ADR-027) |
 | `message` | `handed_off` | record only |
 | `message` | `ended` | start a new session: reset state to `idle`, then as below |
 | `message` | `idle` | push Main workflow at Start |

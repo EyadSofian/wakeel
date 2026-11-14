@@ -151,9 +151,21 @@ export const CONVERSATION_ID = newId("conv");
 export const USER_ID = newId("eu");
 export const TURN_ID = newId("turn");
 
+/**
+ * A conversation whose session has started (ADR-027), so a message does not run the
+ * `conversation_started` trigger. Pass `started: undefined`, or use `freshState`, for a new one.
+ */
 export function state(patch: Partial<ConversationState> = {}): ConversationState {
-  return ConversationStateSchema.parse({ ...emptyState(), ...patch });
+  const parsed = ConversationStateSchema.parse({ ...emptyState(), started: true, ...patch });
+  // A key patched to `undefined` means "absent", as in a stored state.
+  for (const [key, value] of Object.entries(parsed)) {
+    if (value === undefined) delete (parsed as Record<string, unknown>)[key];
+  }
+  return parsed;
 }
+
+/** A brand-new conversation: exactly what the worker stores before the first turn. */
+export const freshState = (): ConversationState => ConversationStateSchema.parse(emptyState());
 
 export function event(kind: EventScope["kind"], patch: Partial<EventScope> = {}): EventScope {
   return {
