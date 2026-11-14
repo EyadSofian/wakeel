@@ -3,6 +3,7 @@ export * from "./bot-definition";
 export * from "./capability";
 export * from "./card";
 export * from "./common";
+export * from "./diff";
 export * from "./errors";
 export * from "./eval";
 export * from "./event";
