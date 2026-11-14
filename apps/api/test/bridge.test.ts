@@ -28,6 +28,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest"
 import { type App, buildApp } from "../src/app";
 import { Signals } from "../src/routes/bridge/signals";
 import { expectConforms, operation } from "./contract";
+import { publishSeeded } from "./publish";
 import { REDIS_IMAGE } from "./stack";
 import { standInWorker } from "./stand-in-worker";
 
@@ -114,6 +115,8 @@ async function tenant() {
   });
   const ws = workspace.id;
   const bot = await db.withWorkspace(ws, (tx) => createBot(tx, { name: "النور", slug: "noor", createdBy: userId }));
+  // Production connections only run a published version (ADR-036).
+  const versionId = await db.withWorkspace(ws, (tx) => publishSeeded(tx, bot.id, userId));
   const connection = async (name: string, target: "production" | "draft" = "production") => {
     const conn = await db.withWorkspace(ws, (tx) => createBridgeConnection(tx, { botId: bot.id, name, target }));
     const { key, prefix, secretHash } = generateKey("bridge");
@@ -122,7 +125,7 @@ async function tenant() {
     );
     return { id: conn.id, key, keyId: record.id };
   };
-  return { ws, botId: bot.id, a: await connection("Chatwoot"), b: await connection("WhatsApp") };
+  return { ws, botId: bot.id, versionId, a: await connection("Chatwoot"), b: await connection("WhatsApp") };
 }
 
 let shared: Awaited<ReturnType<typeof tenant>>;
@@ -584,5 +587,67 @@ describe("keys and connections", () => {
     );
     const res = await send(t.a.key, ext(), hello());
     expect(res.json()).toMatchObject({ status: 409, code: "connection_disabled" });
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Versions (task 7.2, ADR-036)                                        */
+/* ------------------------------------------------------------------ */
+
+describe("published versions", () => {
+  test("a new conversation on a production connection starts on the live version", async () => {
+    const conv = ext();
+    const res = await send(shared.a.key, conv, hello());
+    expect(res.statusCode, res.body).toBe(202);
+    const row = await db.withWorkspace(shared.ws, (tx) =>
+      tx.execute(sql`select version_id from conversations where id = ${res.json().conversationId}`),
+    );
+    expect((row.rows[0] as { version_id: string }).version_id).toBe(shared.versionId);
+  });
+
+  test("before the first publish, a production connection refuses messages and stores nothing", async () => {
+    const userId = newId("usr");
+    await superuserQuery(pg.urls, "insert into users (id, email, name) values ($1, $2, 'Builder')", [
+      userId,
+      `${userId}@example.test`,
+    ]);
+    const { workspace } = await createWorkspace(db, {
+      name: "Unpublished",
+      slug: `u-${randomBytes(4).toString("hex")}`,
+      ownerUserId: userId,
+    });
+    const bot = await db.withWorkspace(workspace.id, (tx) =>
+      createBot(tx, { name: "مسودة", slug: "draft-only", createdBy: userId }),
+    );
+    const keyFor = async (target: "production" | "draft") => {
+      const conn = await db.withWorkspace(workspace.id, (tx) =>
+        createBridgeConnection(tx, { botId: bot.id, name: target, target }),
+      );
+      const { key, prefix, secretHash } = generateKey("bridge");
+      await db.withWorkspace(workspace.id, (tx) =>
+        insertApiKey(tx, {
+          kind: "bridge",
+          name: target,
+          prefix,
+          secretHash,
+          scopes: [],
+          botId: bot.id,
+          connectionId: conn.id,
+        }),
+      );
+      return key;
+    };
+    const refused = await send(await keyFor("production"), ext(), hello());
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json()).toMatchObject({
+      code: "bot_not_published",
+      fix: "Publish the bot in the Studio, or use a connection with target draft.",
+    });
+    const stored = await db.withWorkspace(workspace.id, (tx) =>
+      tx.execute(sql`select count(*)::int as n from conversations where bot_id = ${bot.id}`),
+    );
+    expect((stored.rows[0] as { n: number }).n).toBe(0);
+    // A draft connection runs the draft and needs no publish.
+    expect((await send(await keyFor("draft"), ext(), hello())).statusCode).toBe(202);
   });
 });

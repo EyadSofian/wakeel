@@ -10,7 +10,9 @@ import {
   createWorkflowDoc,
   createWorkspace,
   type Database,
+  getDraftDoc,
   listDraftDocs,
+  publishDraft,
   saveDraftDoc,
   sql,
 } from "@wakeel/db";
@@ -1044,5 +1046,155 @@ describe("AI cards (task 6.7)", () => {
     expect(request.system).not.toContain("محتاج مساعدة");
     expect(request.context.mode).toBe("emulator");
     llm.expectDone();
+  });
+});
+
+describe("published versions (task 7.2)", () => {
+  const TOPIC = "var_topic00001";
+
+  /** Replaces Main's one node with `node` (same id or a new one) and the manifest's variables. */
+  async function edit(c: Seeded, node: Record<string, unknown>, variables: unknown[]) {
+    await db.withWorkspace(c.ws, async (tx) => {
+      const docs = await listDraftDocs(tx, c.botId);
+      const main = docs.find((d) => d.kind === "workflow");
+      if (!main) throw new Error("no main");
+      const wf = main.doc as { nodes: { id: string; type: string }[]; edges: { to: { nodeId: string } }[] };
+      const start = wf.nodes.find((n) => n.type === "start");
+      await saveDraftDoc(tx, {
+        botId: c.botId,
+        kind: "workflow",
+        docId: main.docId,
+        expectedRev: main.rev,
+        userId: null,
+        doc: {
+          ...wf,
+          nodes: [start, node],
+          edges: [{ id: newElementId("edge"), from: { nodeId: start?.id, port: "next" }, to: { nodeId: node["id"] } }],
+        },
+      });
+      const m = await getDraftDoc(tx, c.botId, "manifest", "manifest");
+      await saveDraftDoc(tx, {
+        botId: c.botId,
+        kind: "manifest",
+        docId: "manifest",
+        expectedRev: m.rev,
+        userId: null,
+        doc: { ...(m.doc as object), variables },
+      });
+    });
+  }
+  const publish = (c: Seeded, label: string) =>
+    db.withWorkspace(c.ws, async (tx) => (await publishDraft(tx, { botId: c.botId, label, userId: null })).version.id);
+
+  /** Makes the seeded conversation live on a production connection, pinned to `versionId`. */
+  async function goLive(c: Seeded, versionId: string, state: Record<string, unknown>) {
+    await su("update bridge_connections set target = 'production' where id = $1", [c.connectionId]);
+    await su("update conversations set mode = 'live', version_id = $2, state = $3::jsonb, status = $4 where id = $1", [
+      c.conversationId,
+      versionId,
+      JSON.stringify(state),
+      state["status"],
+    ]);
+  }
+
+  test("a stack position that still exists is kept; the turn runs the new version", async () => {
+    const c = await seed([card({ type: "say", message: { type: "text", text: "النسخة الأولى" } })]);
+    const v1 = await publish(c, "v1");
+    const [node] = await query<{ id: string }>(
+      "select n->>'id' as id from bot_versions, jsonb_array_elements(definition->'workflows'->0->'nodes') n where id = $1 and n->>'type' = 'standard'",
+      [v1],
+    );
+    await edit(
+      c,
+      {
+        id: node?.id,
+        type: "standard",
+        name: "Reply",
+        cards: [card({ type: "say", message: { type: "text", text: "النسخة التانية" } })],
+      },
+      [],
+    );
+    const v2 = await publish(c, "v2");
+    await goLive(c, v1, emptyState());
+    await send(c, "أهلاً");
+    expect(await drainConversation(deps().d, c.conversationId)).toEqual({ turns: 1, stopped: "drained" });
+    expect(await botTexts(c)).toEqual(["النسخة التانية"]);
+    const [conv] = await query<{ version_id: string }>("select version_id from conversations where id = $1", [
+      c.conversationId,
+    ]);
+    expect(conv?.version_id).toBe(v2);
+    const migrated = (await spansOf(c)).filter((s) => s.kind === "version.migrated");
+    expect(migrated).toHaveLength(1);
+    expect(migrated[0]).toMatchObject({
+      parent_seq: 0,
+      attrs: { fromVersionId: v1, toVersionId: v2, positionKept: true, dropped: [] },
+    });
+  });
+
+  test("a stack position that is gone resets the stack, keeps variables that still fit, and lists the drops", async () => {
+    const c = await seed([card({ type: "say", message: { type: "text", text: "أهلاً" } })]);
+    await edit(
+      c,
+      {
+        id: newElementId("node"),
+        type: "standard",
+        name: "Old",
+        cards: [card({ type: "say", message: { type: "text", text: "قديم" } })],
+      },
+      [{ id: TOPIC, name: "topic", scope: "conversation", type: "string", sensitive: false }],
+    );
+    const v1 = await publish(c, "v1");
+    const [old] = await query<{ id: string; wf: string }>(
+      "select n->>'id' as id, definition->'workflows'->0->>'id' as wf from bot_versions, jsonb_array_elements(definition->'workflows'->0->'nodes') n where id = $1 and n->>'type' = 'standard'",
+      [v1],
+    );
+    // v2 replaces the node and makes `topic` a number, so the stored text no longer fits.
+    await edit(
+      c,
+      {
+        id: newElementId("node"),
+        type: "standard",
+        name: "New",
+        cards: [card({ type: "say", message: { type: "text", text: "جديد" } })],
+      },
+      [{ id: TOPIC, name: "topic", scope: "conversation", type: "number", sensitive: false }],
+    );
+    const v2 = await publish(c, "v2");
+    await goLive(c, v1, {
+      ...emptyState(),
+      status: "waiting_input",
+      stack: [{ workflowId: old?.wf, nodeId: old?.id, cardIndex: 1, vars: {}, inputs: {} }],
+      wait: { kind: "listen", nodeId: old?.id, since: "2026-11-14T10:00:00.000Z" },
+      conversationVars: { [TOPIC]: "طلب" },
+    });
+    await send(c, "أنا رجعت");
+    expect(await drainConversation(deps().d, c.conversationId)).toEqual({ turns: 1, stopped: "drained" });
+    // The stack was cleared, so the message started the new version from Start.
+    expect(await botTexts(c)).toEqual(["جديد"]);
+    const [conv] = await query<{ version_id: string; state: { conversationVars: Record<string, unknown> } }>(
+      "select version_id, state from conversations where id = $1",
+      [c.conversationId],
+    );
+    expect(conv?.version_id).toBe(v2);
+    expect(conv?.state.conversationVars).toEqual({});
+    const [migrated] = (await spansOf(c)).filter((s) => s.kind === "version.migrated");
+    expect(migrated?.attrs).toEqual({
+      fromVersionId: v1,
+      toVersionId: v2,
+      positionKept: false,
+      dropped: [{ scope: "conversation", id: TOPIC, name: "topic" }],
+    });
+  });
+
+  test("an emulator conversation keeps running the draft", async () => {
+    const c = await seed([card({ type: "say", message: { type: "text", text: "مسودة" } })]);
+    await publish(c, "v1");
+    await send(c, "أهلاً");
+    await drainConversation(deps().d, c.conversationId);
+    const [conv] = await query<{ version_id: string | null }>("select version_id from conversations where id = $1", [
+      c.conversationId,
+    ]);
+    expect(conv?.version_id).toBeNull();
+    expect((await spansOf(c)).some((s) => s.kind === "version.migrated")).toBe(false);
   });
 });

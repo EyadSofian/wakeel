@@ -12,6 +12,7 @@ export const SpanKind = z.enum([
   "kb.search",
   "table.op",
   "webhook.delivery",
+  "version.migrated",
   "error",
 ]);
 export type SpanKind = z.infer<typeof SpanKind>;
@@ -114,6 +115,14 @@ const attrs = {
     attempt: z.number().int().positive(),
     statusCode: z.number().int().optional(),
   }),
+  /** The conversation moved to a newly published version at the start of this turn (§3.2, task 7.2). */
+  "version.migrated": z.object({
+    fromVersionId: z.string().nullable(),
+    toVersionId: z.string(),
+    /** Every stack position existed in the new version, so the conversation carried on. */
+    positionKept: z.boolean(),
+    dropped: z.array(z.object({ scope: z.enum(["conversation", "user"]), id: z.string(), name: z.string() })),
+  }),
   error: z.object({ code: z.string(), message: z.string(), fix: z.string(), handledBy: z.string().optional() }),
 } as const;
 
@@ -147,6 +156,7 @@ export const Span = z.discriminatedUnion("kind", [
   span("kb.search"),
   span("table.op"),
   span("webhook.delivery"),
+  span("version.migrated"),
   span("error"),
 ]);
 export type Span = z.infer<typeof Span>;
