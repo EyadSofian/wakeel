@@ -32,6 +32,10 @@ export const AUDIT_ACTIONS = [
   "connection.created",
   "connection.updated",
   "connection.secret_rotated",
+  // Task 7.1 (ADR-036): versions.
+  "bot.published",
+  "bot.rolled_back",
+  "bot.restored",
 ] as const;
 export type AuditActionName = (typeof AUDIT_ACTIONS)[number];
 
