@@ -55,6 +55,7 @@ export function Inspector({ issues, summary }: { issues: readonly DefinitionIssu
   return (
     <IssuesContext.Provider value={issues}>
       <aside
+        data-inspector
         aria-label={`Inspector: ${card ? CARD_NAMES[card.type] : node.name}`}
         onKeyDown={onKeyDown}
         className="flex w-inspector shrink-0 flex-col overflow-hidden border-s border-hairline bg-surface"
@@ -103,7 +104,8 @@ function Header({
 }: {
   icon: ReactNode;
   title: string;
-  subtitle: string;
+  /** Text, or spans that each truncate in their own direction (a name and an Arabic summary). */
+  subtitle: ReactNode;
   onBack?: () => void;
   onClose: () => void;
 }) {
@@ -125,9 +127,13 @@ function Header({
         <h2 dir="auto" className="truncate text-title text-primary">
           {title}
         </h2>
-        <p dir="auto" className="truncate text-small text-secondary">
-          {subtitle}
-        </p>
+        {typeof subtitle === "string" ? (
+          <p dir="auto" className="truncate text-small text-secondary">
+            {subtitle}
+          </p>
+        ) : (
+          <p className="flex min-w-0 gap-2 text-small text-secondary">{subtitle}</p>
+        )}
       </div>
       <button
         type="button"
@@ -438,7 +444,17 @@ function CardView({
       <Header
         icon={<IconTile category={CARD_CATEGORY[card.type]} icon={CARD_ICONS[card.type]} size="lg" />}
         title={CARD_NAMES[card.type]}
-        subtitle={`${node.name} · ${summarizeCard(card, summary)}`}
+        subtitle={
+          <>
+            <span dir="auto" className="min-w-0 truncate">
+              {node.name}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span dir="auto" className="min-w-0 truncate">
+              {summarizeCard(card, summary)}
+            </span>
+          </>
+        }
         onBack={onBack}
         onClose={() => store.getState().clearSelection()}
       />

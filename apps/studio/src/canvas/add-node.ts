@@ -13,6 +13,9 @@ const snap = (v: number) => Math.round(v / SNAP) * SNAP;
 /** Size assumed for a node not measured yet: the node width token and a short standard node. */
 const NEW_NODE = { width: 288, height: 136 };
 const GAP = 32;
+/** Frames the canvas size must hold before panning to a new node, and the most frames to wait. */
+const SETTLED_FRAMES = 2;
+const MAX_FRAMES = 60;
 
 interface Box {
   x: number;
@@ -60,6 +63,47 @@ const boxOf = (n: FlowNode): Box => ({
 });
 
 /**
+ * Pans so a node just added at `position` is in view, once the inspector has opened for it. The
+ * inspector mounts a few frames after the selection and narrows the canvas, so this waits for the
+ * width to change (when no inspector was open) and then hold, and reads the canvas size from the
+ * DOM rather than from xyflow, which learns it later from a ResizeObserver.
+ */
+function revealAfterInspector(
+  flow: ReturnType<typeof useReactFlow>,
+  position: { x: number; y: number },
+  duration: number,
+) {
+  const canvas = () => document.querySelector(".wk-canvas")?.getBoundingClientRect();
+  const start = canvas()?.width;
+  let narrowed = document.querySelector("[data-inspector]") !== null;
+  let last = start;
+  let still = 0;
+  let frames = 0;
+  const step = () => {
+    const box = canvas();
+    if (!box) return;
+    frames++;
+    if (box.width !== start) narrowed = true;
+    still = box.width === last ? still + 1 : 0;
+    last = box.width;
+    if ((!narrowed || still < SETTLED_FRAMES) && frames < MAX_FRAMES) {
+      requestAnimationFrame(step);
+      return;
+    }
+    const { x, y, zoom } = flow.getViewport();
+    const left = position.x * zoom + x;
+    const top = position.y * zoom + y;
+    const inside =
+      left >= 0 && top >= 0 && left + NEW_NODE.width * zoom <= box.width && top + NEW_NODE.height * zoom <= box.height;
+    if (inside) return;
+    const cx = position.x + NEW_NODE.width / 2;
+    const cy = position.y + NEW_NODE.height / 2;
+    void flow.setViewport({ x: box.width / 2 - cx * zoom, y: box.height / 2 - cy * zoom, zoom }, { duration });
+  };
+  requestAnimationFrame(step);
+}
+
+/**
  * Adds a node of `type` with its top-left at a screen point (the pointer, a drop, the add-node
  * menu) or, without one, in free space near the centre of the canvas, and selects it so the
  * inspector opens on it. Without a screen point the canvas then pans to the new node, since the
@@ -87,18 +131,7 @@ export function useAddNode() {
       if (result.ok) {
         ui.getState().markFresh([node.id]);
         store.getState().select({ nodeIds: [node.id], edgeIds: [] });
-        // Two frames: one for the node to mount, one for the inspector to take its width.
-        if (!screen) {
-          requestAnimationFrame(() =>
-            requestAnimationFrame(() => {
-              const { zoom } = flow.getViewport();
-              void flow.setCenter(position.x + NEW_NODE.width / 2, position.y + NEW_NODE.height / 2, {
-                zoom,
-                duration: tokens.reduced ? 0 : tokens.duration.slower * 1000,
-              });
-            }),
-          );
-        }
+        if (!screen) revealAfterInspector(flow, position, tokens.reduced ? 0 : tokens.duration.slower * 1000);
       }
       return result;
     },

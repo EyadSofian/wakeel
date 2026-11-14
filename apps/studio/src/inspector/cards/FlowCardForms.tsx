@@ -2,6 +2,7 @@ import type { IoField } from "@wakeel/contracts";
 import { Select, Switch, VariablePicker } from "@wakeel/ui";
 import { useMemo } from "react";
 import { useCanvas } from "../../canvas/context";
+import { TYPE_LABELS } from "../../routes/variables/model";
 import { FieldShell, StringField, useIssueAt, useVariables } from "../fields";
 import { ListEditor, MessageEditor } from "../message/MessageEditor";
 import { type CardFormProps, VariableSelect } from "./CardForms";
@@ -48,7 +49,6 @@ export function HandoffForm({ card, node, path, commit }: CardFormProps<"handoff
           message={card.message}
           node={node}
           path={`${path}.message`}
-          types={["text"]}
           onCommit={(message) => commit({ ...card, message })}
         />
       ) : null}
@@ -168,9 +168,7 @@ export function RunWorkflowForm({ card, node, path, commit }: CardFormProps<"cal
                   label={field.name}
                   help={
                     field.description ??
-                    (field.required
-                      ? `Required. An expression of type ${field.type}.`
-                      : `Optional. An expression of type ${field.type}.`)
+                    (field.required ? `Required · ${TYPE_LABELS[field.type]}` : `Optional · ${TYPE_LABELS[field.type]}`)
                   }
                   value={card.inputs[field.name] ?? ""}
                   check={field.required ? "expression" : "optional-expression"}
