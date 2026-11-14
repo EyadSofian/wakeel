@@ -2,6 +2,7 @@ import { BotDefinition, validateDefinition } from "@wakeel/contracts";
 import { describe, expect, it } from "vitest";
 import { usageCounts } from "../src/routes/variables/model";
 import {
+  aiDraft,
   type CanvasFixture,
   canvasDraft,
   codeDraft,
@@ -83,5 +84,16 @@ describe("canvas review fixtures", () => {
       workflows: d.workflows,
     });
     expect(validateDefinition(def)).toEqual([]);
+  });
+
+  it.each([false, true])("ai cards (rtl %s) parse with no errors", (rtl) => {
+    const d = aiDraft(rtl);
+    const def = BotDefinition.parse({
+      schemaVersion: DRAFT_SCHEMA_VERSION,
+      manifest: d.manifest,
+      workflows: d.workflows,
+    });
+    // The AI condition's outputs are left unconnected on purpose, which is a warning only.
+    expect(validateDefinition(def).filter((i) => i.severity === "error")).toEqual([]);
   });
 });

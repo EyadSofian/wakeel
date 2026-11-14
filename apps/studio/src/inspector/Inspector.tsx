@@ -446,7 +446,7 @@ function CardView({
         title={CARD_NAMES[card.type]}
         subtitle={
           <>
-            <span dir="auto" className="min-w-0 truncate">
+            <span dir="auto" className="max-w-1/2 shrink-0 truncate">
               {node.name}
             </span>
             <span aria-hidden="true">·</span>

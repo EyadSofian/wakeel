@@ -477,3 +477,84 @@ export function codeDraft(rtl: boolean, empty = false): { manifest: BotManifest;
     workflows: [withCode, ...base.workflows.slice(1)],
   };
 }
+
+/**
+ * The AI and handoff card forms: the Variables draft (Greeting already runs Track order) with AI
+ * condition, Generate text, Extract data and Hand off appended to Greeting, in rows 4 to 7. The
+ * RTL variant writes the instructions and option descriptions in Arabic.
+ */
+export function aiDraft(rtl: boolean): { manifest: BotManifest; workflows: Workflow[] } {
+  const base = variablesDraft(rtl ? "rtl" : "default");
+  const main = base.workflows[0] as Workflow;
+  const cards: Card[] = [
+    {
+      id: id("card", 960),
+      type: "ai_branch",
+      disabled: false,
+      input: "{{event.text}}",
+      branches: [
+        {
+          id: id("br", 960),
+          label: rtl ? "استرجاع" : "Refund",
+          description: rtl
+            ? "العميل عايز يرجع منتج أو يسترد فلوسه."
+            : "The customer wants to return an item or get money back.",
+        },
+        {
+          id: id("br", 961),
+          label: rtl ? "شكوى" : "Complaint",
+          description: rtl ? "العميل زعلان من التوصيل أو الخدمة." : "The customer is unhappy with delivery or service.",
+        },
+      ],
+    },
+    {
+      id: id("card", 961),
+      type: "ai_generate",
+      disabled: false,
+      instructions: rtl
+        ? "اكتب رد قصير ومهذب بالعامية المصرية، واذكر رقم الطلب {{conversation.orderNumber}}."
+        : "Write a short, friendly reply that names order {{conversation.orderNumber}}.",
+      input: "{{event.text}}",
+      into: id("var", 10),
+      send: true,
+      maxOutputTokens: 800,
+    },
+    {
+      id: id("card", 962),
+      type: "ai_extract",
+      disabled: false,
+      input: "{{event.text}}",
+      schema: {
+        type: "object",
+        properties: { items: { type: "array", items: { type: "string" } }, total: { type: "number" } },
+      },
+      instructions: rtl ? "الأسعار بالجنيه المصري." : "Prices are in Egyptian pounds.",
+      into: id("var", 11),
+    },
+    {
+      id: id("card", 963),
+      type: "handoff",
+      disabled: false,
+      reason: rtl ? "طلب استرجاع" : "Refund request",
+      summary: "auto",
+      include: [id("var", 6)],
+      message: {
+        type: "text",
+        text: rtl ? "حد من فريقنا هيرد عليك هنا." : "A person from our team will reply here.",
+        format: "markdown",
+      },
+    },
+  ];
+  return {
+    manifest: base.manifest,
+    workflows: [
+      {
+        ...main,
+        nodes: main.nodes.map((n) =>
+          n.type === "standard" && n.id === id("node", 2) ? { ...n, cards: [...n.cards, ...cards] } : n,
+        ),
+      },
+      ...base.workflows.slice(1),
+    ],
+  };
+}
