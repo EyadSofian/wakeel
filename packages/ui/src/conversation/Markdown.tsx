@@ -44,17 +44,22 @@ function inline(n: MdInline, i: number): ReactNode {
       );
     case "em":
       return <em key={i}>{n.c.map(inline)}</em>;
-    case "link":
+    case "link": {
+      // A bare URL is its own left-to-right run (dir isolates it), so inside Arabic text it stays in
+      // one piece and in order instead of being reordered around the line break.
+      const bare = n.c.length === 1 && n.c[0]?.t === "text" && n.c[0].v === n.href;
       return (
         <a
           key={i}
           href={n.href}
+          {...(bare ? { dir: "ltr" } : {})}
           target="_blank"
           rel="noopener noreferrer nofollow"
-          className="break-all text-accent-text underline underline-offset-2"
+          className="break-words text-accent-text underline underline-offset-2"
         >
           {n.c.map(inline)}
         </a>
       );
+    }
   }
 }

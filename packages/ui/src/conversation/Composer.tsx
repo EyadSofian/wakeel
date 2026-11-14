@@ -46,14 +46,14 @@ export function Composer({
         placeholder={placeholder}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
-        className="max-h-tile-lg min-h-control flex-1 resize-none rounded-md border border-hairline bg-surface px-4 py-3 text-content text-primary placeholder:text-tertiary focus-visible:border-accent-border focus-visible:outline-none field-sizing-content"
+        className="max-h-tile-lg min-h-control flex-1 resize-none rounded-sm border border-hairline bg-surface px-4 py-3 text-content text-primary placeholder:text-tertiary focus-visible:border-accent-border focus-visible:outline-none field-sizing-content"
       />
       <button
         type="submit"
         aria-label="Send"
         title="Send (Enter)"
         disabled={disabled || text.trim() === ""}
-        className="flex size-control shrink-0 items-center justify-center rounded-md bg-accent text-on-accent hover:bg-accent-hover disabled:bg-muted disabled:text-tertiary"
+        className="flex size-control shrink-0 items-center justify-center rounded-sm bg-accent text-on-accent hover:bg-accent-hover disabled:bg-muted disabled:text-tertiary"
       >
         <CornerDownLeft className="size-icon" strokeWidth={1.75} aria-hidden="true" />
       </button>

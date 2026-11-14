@@ -28,7 +28,12 @@ export type ScreenState =
   | "usages"
   | "edit"
   | "delete-blocked"
-  | "picker";
+  | "picker"
+  // Task 4.6: the emulator beside the canvas.
+  | "bubbles"
+  | "variables"
+  | "user-form"
+  | "run-from";
 
 export interface Screen {
   id: string;
@@ -167,6 +172,17 @@ SCREENS.push({
   id: "variables",
   route: `/w/${WS}/b/bot_01m7a256m0a13warwhczsjhx9b/variables`,
   states: ["default", "focus", "empty", "loading", "error", "rtl", "usages", "edit", "delete-blocked"],
+  sizes: DESKTOP,
+  mock: true,
+  interactions: [],
+});
+
+// Task 4.6: the emulator (design system §5.3), open beside the canvas. "loading" is a turn still
+// running; "error" an error event in the transcript; "rtl" the RTL fixtures as messages.
+SCREENS.push({
+  id: "emulator",
+  route: `/w/${WS}/b/bot_01m7a256m0a13warwhczsjhx9b`,
+  states: ["default", "focus", "empty", "loading", "error", "rtl", "bubbles", "variables", "user-form", "run-from"],
   sizes: DESKTOP,
   mock: true,
   interactions: [],

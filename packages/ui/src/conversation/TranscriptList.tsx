@@ -19,10 +19,13 @@ export function TranscriptList({
   items,
   footer,
   label,
+  empty,
 }: {
   items: TranscriptItem[];
   footer?: ReactNode;
   label: string;
+  /** Shown while there is nothing yet. The list stays mounted, so the first message still enters. */
+  empty?: ReactNode;
 }) {
   const tokens = useMotionTokens();
   const scroller = useRef<HTMLDivElement>(null);
@@ -50,6 +53,18 @@ export function TranscriptList({
   useEffect(() => {
     if (count === 0) setUnseen(false);
   }, [count]);
+
+  // The list shrinks when something opens below it (the Variables tab, a form): a reader who was at
+  // the bottom stays there.
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (atBottom.current) el.scrollTop = el.scrollHeight;
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const toBottom = () => {
     const el = scroller.current;
@@ -81,7 +96,10 @@ export function TranscriptList({
               transition={{
                 layout: tokens.spring.smooth,
                 y: tokens.spring.snappy,
-                opacity: { duration: tokens.duration.fast, ease: tokens.ease.out },
+                opacity: {
+                  duration: tokens.reduced ? tokens.duration.instant : tokens.duration.fast,
+                  ease: tokens.ease.out,
+                },
               }}
             >
               {item.node}
@@ -89,6 +107,7 @@ export function TranscriptList({
           ))}
         </AnimatePresence>
         {footer}
+        {count === 0 && !footer && empty ? <div className="my-auto">{empty}</div> : null}
       </div>
       {unseen ? (
         <button

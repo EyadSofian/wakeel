@@ -16,7 +16,11 @@ export function TypingIndicator({ label = "Typing…" }: { label?: string }) {
       className="flex h-control items-center self-start rounded-lg border border-hairline bg-surface px-5"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ delay: tokens.typing.appearAfter, duration: tokens.duration.fast, ease: tokens.ease.out }}
+      transition={{
+        delay: tokens.typing.appearAfter,
+        duration: tokens.reduced ? tokens.duration.instant : tokens.duration.fast,
+        ease: tokens.ease.out,
+      }}
     >
       {loop === null ? (
         <span className="text-small text-secondary">{label}</span>

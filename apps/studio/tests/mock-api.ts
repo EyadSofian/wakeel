@@ -11,6 +11,7 @@ import type {
 } from "@wakeel/contracts";
 import { SCREENSHOT_FIXTURES } from "@wakeel/testing/fixtures/rtl";
 import { BOT, type CanvasFixture, canvasDraft, variablesDraft } from "./canvas-fixtures";
+import { type EmulatorScenario, emulatorState, sseBody, turnEvents } from "./emulator-fixtures";
 
 /**
  * The mock API layer for the screenshot review (design system §8.1): every `/v1` call is answered
@@ -194,7 +195,9 @@ export async function mockApi(
   page: Page,
   state: MockState,
   canvas: CanvasFixture | "variables" = "typical",
+  emulator: EmulatorScenario = "conversation",
 ): Promise<void> {
+  let turns = 0;
   const d = data(state);
   const draft =
     canvas === "variables"
@@ -225,6 +228,27 @@ export async function mockApi(
       });
     }
     if (path === "/v1/workspaces") return json(route, 200, { data: d.workspaces, nextCursor: null });
+    // The emulator (task 4.6): each message gets the scenario's next turn as an SSE body.
+    if (path === "/v1/__mock/product.svg") {
+      return route.fulfill({
+        status: 200,
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="#d9dde3"/><circle cx="160" cy="90" r="44" fill="#9aa3ae"/></svg>',
+      });
+    }
+    const emulatorBase = `/v1/workspaces/${WS}/bots/${BOT}/emulator/`;
+    if (path.startsWith(emulatorBase)) {
+      const method = route.request().method();
+      if (method === "POST") {
+        if (emulator === "running") return; // left pending: the turn is still running
+        const sent = JSON.parse(route.request().postData() ?? "{}")?.message?.text ?? "";
+        const body = sseBody(turnEvents(emulator, turns, sent));
+        turns += 1;
+        return route.fulfill({ status: 200, contentType: "text/event-stream", body });
+      }
+      if (method === "PUT") return json(route, 200, {});
+      if (path.endsWith("/state")) return json(route, 200, emulatorState(Math.max(0, turns - 1)));
+    }
     // Screen data: never answers while loading, fails on error, empty lists on empty.
     if (state === "loading") return; // left pending on purpose
     if (state === "error") return json(route, 500, internal);

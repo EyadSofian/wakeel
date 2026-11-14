@@ -185,8 +185,24 @@ function Body({
   }
 }
 
+/** URLs in plain text are isolated as left-to-right runs, as in markdown, but stay plain text. */
+const URL_IN_TEXT = /(https?:\/\/[^\s<>]+)/;
+
 function PlainText({ text }: { text: string }) {
-  return <p className="whitespace-pre-wrap break-words">{text}</p>;
+  return (
+    <p className="whitespace-pre-wrap break-words">
+      {text.split(URL_IN_TEXT).map((part, i) =>
+        i % 2 === 1 ? (
+          // biome-ignore lint/suspicious/noArrayIndexKey: split parts are positional.
+          <span key={i} dir="ltr" className="break-words">
+            {part}
+          </span>
+        ) : (
+          part
+        ),
+      )}
+    </p>
+  );
 }
 
 function Dropdown({

@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
 import type { CanvasFixture } from "./canvas-fixtures";
+import { type EmulatorScenario, SENT } from "./emulator-fixtures";
 import { type MockState, mockApi } from "./mock-api";
 import { type Screen, type ScreenState, selectedScreens, THEMES } from "./screens";
 
@@ -11,12 +12,16 @@ import { type Screen, type ScreenState, selectedScreens, THEMES } from "./screen
  * committed baseline (0.1% threshold). Reduced motion is on so frames are stable.
  */
 const SHOTS_DIR = fileURLToPath(new URL("../.shots", import.meta.url));
+/** The moment every shot is taken at: the mock bots then read "10 hours ago", "yesterday", "3 days ago". */
+const SHOT_TIME = new Date("2026-11-13T18:40:00.000Z");
 
 const MOCK_STATES: readonly MockState[] = ["default", "empty", "loading", "error", "rtl", "signed-out"];
 
 /** Screen states that only change what is on screen use the default data. */
 const mockStateFor = (screen: Screen, state: ScreenState): MockState => {
   if (screen.id === "sign-in") return "signed-out";
+  // The emulator's states are its own; the canvas behind it always loads.
+  if (screen.id === "emulator") return "default";
   if (state === "empty" && screen.id === "canvas") return "default";
   if (state === "card-rtl") return "rtl";
   return MOCK_STATES.find((m) => m === state) ?? "default";
@@ -39,7 +44,70 @@ const CARD_ROW: Partial<Record<ScreenState, number>> = {
   picker: 1,
 };
 
+const EMULATOR_SCENARIO: Partial<Record<ScreenState, EmulatorScenario>> = {
+  loading: "running",
+  error: "error",
+  rtl: "rtl",
+  bubbles: "bubbles",
+};
+const emulatorScenario = (state: ScreenState): EmulatorScenario => EMULATOR_SCENARIO[state] ?? "conversation";
+
+/** Opens the emulator and plays the state's scenario (task 4.6), then lets entrances finish. */
+async function prepareEmulator(page: Page, state: ScreenState): Promise<void> {
+  await playEmulator(page, state);
+  // Choice buttons fade in and the typing dots appear after 300 ms (§5.3): shoot the settled frame.
+  // The typing loop never settles, so it is left out.
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every((a) => a.playState !== "running" || (a.effect?.getTiming().iterations ?? 1) === Number.POSITIVE_INFINITY),
+  );
+}
+
+async function playEmulator(page: Page, state: ScreenState): Promise<void> {
+  await expect(page.locator(".react-flow__node").first()).toBeVisible();
+  const panel = page.getByRole("complementary", { name: "Emulator" });
+  if (state === "run-from") {
+    await page
+      .getByRole("button", { name: /^Actions for / })
+      .nth(1)
+      .click();
+    await page.getByRole("menuitem", { name: /Run from here/ }).click();
+    await expect(panel.getByText("Waiting for the user")).toBeVisible();
+    return;
+  }
+  await page.getByRole("button", { name: "Test", exact: true }).click();
+  await expect(panel).toBeVisible();
+  if (state === "empty") return;
+  if (state === "user-form") {
+    await panel.getByRole("button", { name: /Test user/ }).click();
+    await expect(panel.getByRole("form", { name: "Test user" })).toBeVisible();
+    return;
+  }
+  const scenario = emulatorScenario(state);
+  const texts = state === "variables" ? [...SENT.conversation, "5678"] : SENT[scenario];
+  const box = panel.getByRole("textbox", { name: "Message the bot" });
+  for (const [i, text] of texts.entries()) {
+    await box.fill(text);
+    await box.press("Enter");
+    if (scenario === "running") await expect(panel.getByRole("status", { name: "Typing…" })).toBeVisible();
+    else await expect(panel.locator("p", { hasText: / s$|Waiting for the user/ })).toHaveCount(i + 1);
+  }
+  if (state === "variables") {
+    await panel.getByRole("button", { name: /Variables/ }).click();
+    await expect(panel.getByText("2 changed")).toBeVisible();
+  }
+  if (state === "focus") {
+    // Keyboard focus on a choice button, to review the focus ring (checklist 18).
+    await box.focus();
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(page.locator(":focus-visible")).toHaveCount(1);
+  }
+}
+
 async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<void> {
+  if (screen.id === "emulator") return prepareEmulator(page, state);
   if (screen.id === "sign-in" && state === "error") {
     // A rejected sign-in: the banner shows what happened and how to fix it.
     await page.getByLabel("Email").fill("eyad@engosoft.test");
@@ -148,7 +216,11 @@ for (const screen of selectedScreens()) {
         test(`${screen.id} ${name}`, async ({ page }) => {
           await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
           await page.setViewportSize({ width, height });
-          if (screen.mock) await mockApi(page, mockStateFor(screen, state), canvasFor(screen, state));
+          if (screen.mock) {
+            await mockApi(page, mockStateFor(screen, state), canvasFor(screen, state), emulatorScenario(state));
+          }
+          // Relative dates ("3 days ago") follow the clock; a fixed one keeps shots the same every day.
+          await page.clock.setFixedTime(SHOT_TIME);
           await page.goto(screen.route);
           if (screen.mock && state !== "loading") await page.waitForLoadState("networkidle");
           await page.evaluate(() => document.fonts.ready);

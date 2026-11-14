@@ -24,7 +24,7 @@ export function QuickReplies({
       className="flex max-w-4/5 flex-wrap gap-2"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: tokens.duration.fast, ease: tokens.ease.out }}
+      transition={{ duration: tokens.reduced ? tokens.duration.instant : tokens.duration.fast, ease: tokens.ease.out }}
     >
       {options.map((o) => (
         <button
