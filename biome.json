@@ -8,7 +8,15 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!docs", "!**/*.md", "!**/.turbo", "!**/coverage", "!**/dist"]
+    "includes": [
+      "**",
+      "!docs",
+      "!**/*.md",
+      "!**/.turbo",
+      "!**/coverage",
+      "!**/dist",
+      "!examples/bridge-receiver-node/src/verify.mjs"
+    ]
   },
   "css": {
     "parser": {
