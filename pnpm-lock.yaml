@@ -245,6 +245,8 @@ importers:
         specifier: 12.2.1
         version: 12.2.1(bare-buffer@3.7.2)
 
+  examples/bridge-receiver-node: {}
+
   packages/auth:
     dependencies:
       '@wakeel/config':

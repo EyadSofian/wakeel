@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { GenericContainer } from "testcontainers";
@@ -120,5 +120,15 @@ describe("curlExample", () => {
     expect(curl).toContain('"https://api.example.com/v1/bridge/conversations/chat-1/messages?wait=20"');
     expect(curl).toContain("Bearer $WAKEEL_BRIDGE_KEY");
     expect(curl).not.toContain("wk_bridge_");
+  });
+});
+
+describe("the reference receiver (examples/bridge-receiver-node, task 5.6)", () => {
+  test("verifies with exactly the Node check the Setup tab shows", () => {
+    const example = readFileSync(
+      new URL("../../../examples/bridge-receiver-node/src/verify.mjs", import.meta.url),
+      "utf8",
+    );
+    expect(example).toBe(SIGNATURE_CHECK_NODE);
   });
 });

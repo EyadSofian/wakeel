@@ -17,6 +17,7 @@ import { type StartedTestDatabase, startTestDatabase, superuserQuery } from "@wa
 import { createLogger } from "@wakeel/telemetry";
 import { FakeClock } from "@wakeel/testing";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { createReceiver } from "../../../examples/bridge-receiver-node/src/server.mjs";
 import { runJanitor } from "../src/turn/index";
 import { deliverConversation, type SendResult, type WebhookDeps, type WebhookSender } from "../src/webhook/index";
 
@@ -279,6 +280,74 @@ describe("one stream", () => {
     expect(all.filter((x) => x.seq === "2")).toMatchObject([{ attempt: 1, status: "delivered" }]);
     // One dead event, then a delivery: the run of dead events is broken.
     expect(await connection(c)).toEqual({ status: "active", consecutive_dead: 0 });
+  });
+});
+
+describe("the reference receiver (examples/bridge-receiver-node, task 5.6)", () => {
+  /** Sends straight to a local URL. Production goes through egress, which refuses loopback. */
+  const directSender: WebhookSender = {
+    send: async (req) => {
+      const res = await fetch(req.url, { method: "POST", headers: req.headers, body: req.body });
+      return { kind: "response", status: res.status };
+    },
+  };
+
+  async function receiverAt(secrets: string[]) {
+    const events: { type: string; seq?: number }[] = [];
+    const server = createReceiver({ secrets, onEvent: (e) => void events.push(e as { type: string; seq?: number }) });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as { port: number };
+    return { events, server, url: `http://127.0.0.1:${port}/hook` };
+  }
+
+  test("verifies every signed delivery, takes them in seq order, and ignores a repeat", async () => {
+    const clock = new FakeClock(new Date());
+    const r = await receiverAt([SECRETS[1] as string]);
+    try {
+      const c = await conversation();
+      await su("update bridge_connections set webhook_url = $2 where id = $1", [c.conn, r.url]);
+      await events(c, clock, 3);
+      const { d } = deps(clock, directSender);
+      expect(await deliverConversation(d, c.conv)).toEqual({ sent: 3, stopped: "drained" });
+      // The receiver holds only the previous secret: the second v1 of the rotation is what it checks.
+      expect(r.events.map((e) => [e.type, e.seq])).toEqual([
+        ["message.created", 1],
+        ["message.created", 2],
+        ["message.created", 3],
+      ]);
+      // A replay of event 1 (as if its delivery had been lost) is acknowledged but not processed again.
+      await su("update webhook_deliveries set status = 'failed' where conversation_id = $1 and seq = 1", [c.conv]);
+      const [first] = (await su("select id from outbox_events where conversation_id = $1 and seq = 1", [c.conv])) as {
+        id: string;
+      }[];
+      await db.withWorkspace(c.ws, (tx) =>
+        replayDelivery(tx, { connectionId: c.conn, outboxEventId: first?.id as string, at: clock.date() }),
+      );
+      expect(await deliverConversation(d, c.conv)).toMatchObject({ sent: 1 });
+      expect(r.events).toHaveLength(3);
+      expect((await rows(c)).filter((x) => x.seq === "1").at(-1)).toMatchObject({
+        status: "delivered",
+        response_status: 200,
+      });
+    } finally {
+      r.server.close();
+    }
+  });
+
+  test("refuses a delivery signed with another secret; the attempt is recorded as rejected", async () => {
+    const clock = new FakeClock(new Date());
+    const r = await receiverAt(["whsec_someone_else_DDDDDDDDDDDDDDDDDDDDDDDD"]);
+    try {
+      const c = await conversation();
+      await su("update bridge_connections set webhook_url = $2 where id = $1", [c.conn, r.url]);
+      await events(c, clock, 1);
+      const { d } = deps(clock, directSender);
+      await deliverConversation(d, c.conv);
+      expect(r.events).toEqual([]);
+      expect((await rows(c))[0]).toMatchObject({ status: "failed", response_status: 401, code: "webhook_rejected" });
+    } finally {
+      r.server.close();
+    }
   });
 });
 
