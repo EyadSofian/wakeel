@@ -7,6 +7,7 @@ import { auditRoutes } from "./routes/audit";
 import { authRoutes } from "./routes/auth";
 import { botRoutes } from "./routes/bots";
 import { type BridgeDeps, bridgeRoutes } from "./routes/bridge/index";
+import { connectionRoutes } from "./routes/connections";
 import { emulatorRoutes } from "./routes/emulator";
 import { invitationRoutes } from "./routes/invitations";
 import { memberRoutes } from "./routes/members";
@@ -113,8 +114,13 @@ export function buildApp(options: AppOptions) {
     void app.register(traceRoutes, deps);
   }
 
-  // The Studio emulator runs the Bridge inbound path for the builder's session (ADR-025).
+  // The Studio emulator runs the Bridge inbound path for the builder's session (ADR-025), and the
+  // Connections screens share the Bridge's webhook tools and Test-tab path (ADR-030).
   if (options.studio && options.bridge && options.role !== "bridge") {
+    void app.register(connectionRoutes, {
+      studio: { ...options.studio, now: options.studio.now ?? (() => new Date()) },
+      bridge: { ...options.bridge, now: options.bridge.now ?? (() => new Date()) },
+    });
     void app.register(emulatorRoutes, {
       studio: { ...options.studio, now: options.studio.now ?? (() => new Date()) },
       bridge: { ...options.bridge, now: options.bridge.now ?? (() => new Date()) },

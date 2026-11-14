@@ -1,5 +1,5 @@
 import { AppError, type Json, newId } from "@wakeel/contracts";
-import { and, asc, desc, eq, gt, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import type { Tx } from "../client";
 import {
   bridgeConnections,
@@ -9,6 +9,7 @@ import {
   messages,
   outboxEvents,
   turns,
+  webhookDeliveries,
 } from "../schema/runtime";
 import { currentWorkspace } from "./scope";
 import type { StoredSigningSecret } from "./webhooks";
@@ -29,7 +30,13 @@ export interface ConnectionRecord {
 
 export async function createBridgeConnection(
   tx: Tx,
-  input: { botId: string; name: string; target: "production" | "draft"; webhookUrl?: string },
+  input: {
+    botId: string;
+    name: string;
+    target: "production" | "draft";
+    webhookUrl?: string;
+    subscribedEvents?: readonly string[];
+  },
 ): Promise<ConnectionRecord> {
   const [row] = await tx
     .insert(bridgeConnections)
@@ -40,6 +47,7 @@ export async function createBridgeConnection(
       name: input.name,
       target: input.target,
       webhookUrl: input.webhookUrl ?? null,
+      ...(input.subscribedEvents ? { subscribedEvents: [...input.subscribedEvents] } : {}),
     })
     .returning();
   if (!row) throw new Error("insert returned no row");
@@ -503,4 +511,105 @@ export async function getConnectionDetail(tx: Tx, connectionId: string): Promise
         signingSecrets: row.signingSecrets as StoredSigningSecret[],
       }
     : undefined;
+}
+
+/** A connection in the Studio's list and detail (task 5.5, ADR-030). */
+export interface StudioConnectionRecord extends ConnectionDetail {
+  consecutiveDead: number;
+  lastDelivery: { status: "delivered" | "failed" | "dead"; at: Date } | null;
+  createdAt: Date;
+}
+
+/**
+ * A bot's connections, newest first, each with its latest finished delivery attempt. The emulator's
+ * per-session connections (ADR-025) are not listed.
+ */
+export async function listBotConnections(
+  tx: Tx,
+  botId: string,
+  connectionId?: string,
+): Promise<StudioConnectionRecord[]> {
+  const rows = await tx
+    .select()
+    .from(bridgeConnections)
+    .where(
+      and(
+        eq(bridgeConnections.botId, botId),
+        isNull(bridgeConnections.emulatorSessionId),
+        connectionId ? eq(bridgeConnections.id, connectionId) : undefined,
+      ),
+    )
+    .orderBy(sql`${bridgeConnections.createdAt} desc`, sql`${bridgeConnections.id} desc`);
+  if (rows.length === 0) return [];
+  const last = await tx
+    .selectDistinctOn([webhookDeliveries.connectionId], {
+      connectionId: webhookDeliveries.connectionId,
+      status: webhookDeliveries.status,
+      attemptedAt: webhookDeliveries.attemptedAt,
+    })
+    .from(webhookDeliveries)
+    .where(
+      and(
+        inArray(
+          webhookDeliveries.connectionId,
+          rows.map((r) => r.id),
+        ),
+        ne(webhookDeliveries.status, "pending"),
+      ),
+    )
+    .orderBy(webhookDeliveries.connectionId, desc(webhookDeliveries.attemptedAt));
+  const byConnection = new Map(
+    last.map((r) => [
+      r.connectionId,
+      { status: r.status as "delivered" | "failed" | "dead", at: r.attemptedAt as Date },
+    ]),
+  );
+  return rows.map((row) => ({
+    ...toConnection(row),
+    webhookUrl: row.webhookUrl,
+    subscribedEvents: row.subscribedEvents,
+    signingSecrets: row.signingSecrets as StoredSigningSecret[],
+    consecutiveDead: row.consecutiveDead,
+    lastDelivery: byConnection.get(row.id) ?? null,
+    createdAt: row.createdAt,
+  }));
+}
+
+export interface ConnectionPatch {
+  name?: string;
+  target?: "production" | "draft";
+  webhookUrl?: string | null;
+  subscribedEvents?: readonly string[];
+  status?: "active" | "paused";
+}
+
+/**
+ * Changes a bot's connection (not the emulator's). Setting `active` also turns a disabled
+ * connection back on and clears its run of dead events (ADR-030 §1). `not_found` if it is not there.
+ */
+export async function updateBridgeConnection(
+  tx: Tx,
+  input: { botId: string; connectionId: string; patch: ConnectionPatch },
+): Promise<void> {
+  const { patch } = input;
+  const rows = await tx
+    .update(bridgeConnections)
+    .set({
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.target !== undefined ? { target: patch.target } : {}),
+      ...(patch.webhookUrl !== undefined ? { webhookUrl: patch.webhookUrl } : {}),
+      ...(patch.subscribedEvents !== undefined ? { subscribedEvents: [...patch.subscribedEvents] } : {}),
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
+      ...(patch.status === "active" ? { consecutiveDead: 0 } : {}),
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        eq(bridgeConnections.id, input.connectionId),
+        eq(bridgeConnections.botId, input.botId),
+        isNull(bridgeConnections.emulatorSessionId),
+      ),
+    )
+    .returning({ id: bridgeConnections.id });
+  if (rows.length === 0) throw new AppError("not_found");
 }

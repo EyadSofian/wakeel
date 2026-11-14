@@ -210,6 +210,10 @@ export interface InboundInput {
   streamSpans?: boolean;
   payload: Record<string, Json>;
   message?: { payload: Record<string, Json>; type: string; externalId: string | undefined };
+  /** Forces the conversation's mode: the Studio's Test tab is builder traffic (ADR-030 §3). */
+  mode?: "emulator";
+  /** The conversation id, when it is not in the path (the Studio's Test tab). */
+  externalConversationId?: string;
 }
 
 /**
@@ -224,7 +228,9 @@ export async function inbound(
   reply: FastifyReply,
   input: InboundInput,
 ) {
-  const externalId = ExternalId.parse((request.params as { externalConversationId: string }).externalConversationId);
+  const externalId = ExternalId.parse(
+    input.externalConversationId ?? (request.params as { externalConversationId: string }).externalConversationId,
+  );
   const { wait } = WaitQuery.parse(request.query);
   const keyHeader = request.headers["idempotency-key"];
   // An explicit key wins; without one, `externalMessageId` de-duplicates the message (ADR-024).
@@ -283,7 +289,7 @@ export async function inbound(
         endUserId: user.id,
         externalId,
         // Draft connections run the draft and are not live traffic (§3.2, §13).
-        mode: ctx.connection.target === "draft" ? "emulator" : "live",
+        mode: input.mode ?? (ctx.connection.target === "draft" ? "emulator" : "live"),
         state: emptyState() as unknown as Record<string, Json>,
         stateBytes: bytes(emptyState()),
       });

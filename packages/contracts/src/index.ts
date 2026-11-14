@@ -4,6 +4,7 @@ export * from "./bridge";
 export * from "./capability";
 export * from "./card";
 export * from "./common";
+export * from "./connections";
 export * from "./errors";
 export * from "./eval";
 export * from "./event";

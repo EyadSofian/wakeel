@@ -1,7 +1,9 @@
+import { randomBytes } from "node:crypto";
 import { RedisContainer, type StartedRedisContainer } from "@testcontainers/redis";
 import { createAuthService } from "@wakeel/auth";
+import type { SendResult, WebhookRequest } from "@wakeel/bridge";
 import { API_LIMITS } from "@wakeel/config";
-import { createDatabase, type Database } from "@wakeel/db";
+import { createDatabase, type Database, type Keyring } from "@wakeel/db";
 import { type StartedTestDatabase, startTestDatabase } from "@wakeel/db/testing";
 import { createLogger } from "@wakeel/telemetry";
 import { Redis } from "ioredis";
@@ -25,6 +27,10 @@ export interface Stack {
   jobs: string[];
   /** With `bridge: true`: run the stand-in worker for each enqueued conversation at once. */
   autoWork: { on: boolean };
+  /** With `bridge: true`: what the webhook sender was asked to send, and what it answers. */
+  webhook: { sent: WebhookRequest[]; answer: SendResult; jobs: string[] };
+  /** The keyring the API seals signing secrets with. */
+  keyring: Keyring;
   stop(): Promise<void>;
 }
 
@@ -48,6 +54,8 @@ export async function startStack(
   const deps: StudioDeps = { auth, studioOrigin: STUDIO, db, now: options.now ?? (() => new Date()) };
   const jobs: string[] = [];
   const autoWork = { on: false };
+  const webhook: Stack["webhook"] = { sent: [], answer: { kind: "response", status: 200 }, jobs: [] };
+  const keyring: Keyring = { current: { version: 1, key: new Uint8Array(randomBytes(32)) } };
   // The Bridge deps, for routes that run the inbound path (the Studio emulator, ADR-025).
   const publisher = options.bridge ? new Redis(redisContainer.getConnectionUrl()) : undefined;
   const subscriber = options.bridge ? new Redis(redisContainer.getConnectionUrl()) : undefined;
@@ -67,9 +75,16 @@ export async function startStack(
             },
             // A wait ends only by the turn-done signal while the stand-in runs; at once otherwise.
             sleep: () => (autoWork.on ? new Promise<void>(() => {}) : Promise.resolve()),
-            enqueueWebhook: async () => undefined,
-            sender: { send: async () => ({ kind: "refused", code: "fetch_failed", detail: "no egress in tests" }) },
-            keyring: { current: { version: 1, key: new Uint8Array(32) } },
+            enqueueWebhook: async (conversationId: string) => {
+              webhook.jobs.push(conversationId);
+            },
+            sender: {
+              send: async (request: WebhookRequest) => {
+                webhook.sent.push(request);
+                return webhook.answer;
+              },
+            },
+            keyring,
           },
         }
       : {}),
@@ -82,6 +97,8 @@ export async function startStack(
     pg,
     jobs,
     autoWork,
+    webhook,
+    keyring,
     async stop() {
       await app.close();
       await Promise.allSettled([db.close(), redis.quit(), publisher?.quit(), subscriber?.quit()]);

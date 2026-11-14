@@ -86,6 +86,16 @@ export async function listApiKeys(tx: Tx, kind: ApiKeyKind): Promise<ApiKeyRecor
   return rows.map(toRecord);
 }
 
+/** One connection's bridge keys, newest first (task 5.5). */
+export async function listConnectionKeys(tx: Tx, connectionId: string): Promise<ApiKeyRecord[]> {
+  const rows = await tx
+    .select()
+    .from(apiKeys)
+    .where(and(eq(apiKeys.kind, "bridge"), eq(apiKeys.connectionId, connectionId)))
+    .orderBy(desc(apiKeys.createdAt), desc(apiKeys.id));
+  return rows.map(toRecord);
+}
+
 /** Revokes a key. Revoking twice or an unknown key is `not_found`. */
 export async function revokeApiKey(tx: Tx, keyId: string, now: Date): Promise<ApiKeyRecord> {
   const [row] = await tx
