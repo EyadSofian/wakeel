@@ -11,6 +11,7 @@ import type { InboundEventRecord } from "@wakeel/db";
  *   tool_result      { toolCallId, ... }
  *   handoff_release  {}
  *   timeout          {}
+ *   run_from         { workflowId, nodeId }   (Studio emulator only, ADR-025)
  *
  * Several text messages coalesced into one turn become one message whose text is theirs joined by
  * line breaks, in order.
