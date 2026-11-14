@@ -37,7 +37,12 @@ export type ScreenState =
   // Task 4.7: the trace tab with a step selected, and the run overlay on the canvas.
   | "trace"
   // Task 5.5: the Connections test tab after a test event and a message.
-  | "tested";
+  | "tested"
+  // Task 6.8: the Autonomous Node's inspector, a new code tool's sub-view and an exit's.
+  | "agent"
+  | "agent-rtl"
+  | "agent-tool"
+  | "agent-exit";
 
 export interface Screen {
   id: string;
@@ -165,6 +170,10 @@ SCREENS.push({
     "card-invalid",
     "card-rtl",
     "picker",
+    "agent",
+    "agent-rtl",
+    "agent-tool",
+    "agent-exit",
   ],
   sizes: DESKTOP,
   mock: true,

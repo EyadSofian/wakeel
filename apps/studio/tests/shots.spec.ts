@@ -23,7 +23,7 @@ const mockStateFor = (screen: Screen, state: ScreenState): MockState => {
   // The emulator's states are its own; the canvas behind it always loads.
   if (screen.id === "emulator") return "default";
   if (state === "empty" && screen.id === "canvas") return "default";
-  if (state === "card-rtl") return "rtl";
+  if (state === "card-rtl" || state === "agent-rtl") return "rtl";
   return MOCK_STATES.find((m) => m === state) ?? "default";
 };
 
@@ -165,6 +165,22 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
     for (let i = 0; i < 4; i++) await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
     await page.keyboard.press("ArrowRight");
+  }
+  if (state.startsWith("agent")) {
+    // Select the Autonomous Node by its header (task 6.8).
+    await page
+      .locator(".react-flow__node")
+      .filter({ hasText: state === "agent-rtl" ? "مساعد الطلبات" : "Order assistant" })
+      .locator("header")
+      .click();
+    const inspector = page.getByRole("complementary", { name: /^Inspector: / });
+    await expect(inspector).toBeVisible();
+    if (state === "agent-tool") {
+      await inspector.getByRole("button", { name: "Add a code tool" }).click();
+      // The new tool is saved at once; shoot after the save state settles.
+      await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+    }
+    if (state === "agent-exit") await inspector.getByRole("button", { name: /^resolved/ }).click();
   }
   const index = CARD_ROW[state];
   if (index !== undefined) {
