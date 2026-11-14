@@ -154,7 +154,7 @@ export function VariablePicker({
         <ChevronDown className="size-icon shrink-0 text-tertiary" strokeWidth={1.75} aria-hidden="true" />
       </button>
       {open ? (
-        <div className="absolute inset-x-0 top-full z-20 mt-1 flex flex-col rounded-md border border-hairline bg-surface shadow-pop">
+        <div className="absolute inset-x-0 top-full z-20 mt-1 flex flex-col wk-glass rounded-md border border-hairline bg-surface">
           <label htmlFor={searchId} className="sr-only">
             Search variables
           </label>

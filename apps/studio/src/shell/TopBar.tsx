@@ -17,7 +17,7 @@ export function TopBar({
   workspaceId?: string;
 }) {
   return (
-    <header className="flex h-topbar shrink-0 items-center gap-6 border-b border-hairline bg-surface pe-6 ps-5">
+    <header className="flex h-topbar shrink-0 items-center gap-6 wk-glass-bar border-b border-hairline pe-6 ps-5">
       {workspaceId === undefined ? (
         <Brand name={BRAND.name} />
       ) : (

@@ -65,7 +65,7 @@ export function CanvasToolbar({
   const undo = useCanvas((s) => s.undo);
   const redo = useCanvas((s) => s.redo);
   const icon = "size-icon";
-  const bar = "flex items-center gap-1 rounded-md border border-hairline bg-surface p-2 shadow-pop";
+  const bar = "flex items-center gap-1 wk-glass rounded-md border border-hairline bg-surface p-2";
   const divider = <span aria-hidden="true" className="mx-2 h-6 border-s border-hairline" />;
   return (
     <>

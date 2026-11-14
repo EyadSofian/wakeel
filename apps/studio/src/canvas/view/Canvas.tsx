@@ -377,7 +377,7 @@ export function Canvas({ issues }: { issues: ReturnType<typeof groupIssues> }) {
       <ShortcutSheet />
       {notice ? (
         <div className="pointer-events-none absolute inset-x-0 top-6 flex justify-center">
-          <p className="rounded-md border border-hairline bg-surface px-5 py-3 text-body text-primary shadow-pop">
+          <p className="wk-glass rounded-md border border-hairline bg-surface px-5 py-3 text-body text-primary">
             {notice}
           </p>
         </div>

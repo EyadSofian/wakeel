@@ -14,7 +14,7 @@ Botpress Studio is the functional reference. Its branding, colours, icons and la
 6. **Content is bilingual.** Chrome is English and left-to-right. Anything written by a builder, a user or a model renders with `dir="auto"` and must look right in Arabic, English and both mixed.
 7. **Words are plain.** Names say what a thing does. Errors say what happened and what to do.
 
-Never: gradients, glows, blurred glass, decorative colour, emoji as icons, ALL-CAPS labels, letter-spaced eyebrow text, pulsing dots, identical rounded-card grids, a second accent colour, category colours outside nodes and the node library, drop shadows on things that do not float.
+Never: gradients, glows, blurred glass (except the bounded uses in ADR-033: the ambient backdrop, glass on floating surfaces, the selection halo and the run sweep), decorative colour, emoji as icons, ALL-CAPS labels, letter-spaced eyebrow text, pulsing dots, identical rounded-card grids, a second accent colour, category colours outside nodes and the node library, drop shadows on things that do not float.
 
 ## 2. Tokens
 
@@ -137,7 +137,9 @@ Panels docked to the window edge have radius 0.
 | 2 | `--shadow-drag` | `0 10px 24px -6px oklch(0 0 0 / 0.14)` | A node or card while it is being dragged |
 | 3 | `--shadow-modal` | `0 20px 48px -12px oklch(0 0 0 / 0.20)` + hairline | Dialogs, command palette |
 
-Dark theme: same offsets with alpha 0.4 / 0.5 / 0.6 and `--border-strong` instead of the hairline. Overlay scrim: `oklch(0 0 0 / 0.32)` light, `/ 0.5` dark; no blur.
+Dark theme: same offsets with alpha 0.4 / 0.5 / 0.6 and `--border-strong` instead of the hairline. Overlay scrim: `oklch(0 0 0 / 0.32)` light, `/ 0.5` dark, with a light `--scrim-blur` (ADR-033).
+
+ADR-033 adds: `--glass-surface` / `--glass-surface-strong` with `--glass-blur` for floating surfaces (`.wk-glass`, `.wk-glass-strong`, `.wk-glass-bar`, `.wk-panel` in `packages/ui/src/effects.css`), `--shadow-lift` for a card under the pointer, `--shadow-halo` for the selected node, and the `--ambient-a/b/c` app backdrop. Docked panels with editable content stay opaque. `prefers-reduced-transparency` makes every glass surface opaque.
 
 ### 2.6 Motion
 
@@ -160,7 +162,8 @@ Rules:
 - Bounce never exceeds 0.10. Nothing overshoots visibly.
 - Enter = fade + 4–8 px travel from the direction it came from. Exit = fade only, at 0.75× the enter duration.
 - Only `transform` and `opacity` animate. Layout animation uses Motion `layout` on the smallest subtree that changed.
-- No animation runs during canvas pan or zoom. No looping animation anywhere except the three-dot typing indicator and a determinate progress bar.
+- No animation runs during canvas pan or zoom. No looping animation anywhere except the three-dot typing indicator, a determinate progress bar and the run path's flowing dash (ADR-033).
+- ADR-033 interaction motion: buttons and clickable tiles shrink to `press.scale` while held; dialogs enter from `pop.scale`; cards lift by `lift.y` on hover; bot tiles tilt up to `tilt.max` degrees toward a mouse pointer; pages and table rows rise in with `stagger.list`. All values are in `motion.ts` and mirrored in `tokens.css`.
 - `prefers-reduced-motion: reduce`: all springs and travel are replaced by an 80 ms opacity change; pan inertia is off; trace playback jumps step to step; the typing indicator is static text "Typing…". `useMotionTokens()` returns the reduced set; components do not check the media query themselves.
 
 ### 2.7 Focus
@@ -532,7 +535,7 @@ Mandatory for every task that changes anything visible. A task is not done until
 
 Colour
 1. Is the accent used only for selection, focus, the single primary action, active tab, active rail item or links? Are category colours used only on nodes, ports, the minimap and the node library?
-2. Is there any gradient, glow, blur, or colour used as decoration?
+2. Is there any gradient, glow, blur, or colour used as decoration, beyond what ADR-033 allows (ambient backdrop, glass on floating surfaces, selection halo, run sweep)?
 3. Do status colours appear only where there is a status?
 4. Does the dark theme have the same hierarchy as the light one (not just inverted)?
 
@@ -543,7 +546,7 @@ Type
 
 Shape and space
 8. Do radii follow the hierarchy (controls 8, toolbars and popovers 10, nodes and tables 14, dialogs 18)?
-9. Is any shadow on something that does not float?
+9. Is any shadow on something that does not float (a card lifting under the pointer and the selection halo count as floating, ADR-033)?
 10. Is all spacing on the 4 px grid, and are similar things spaced identically?
 11. Is anything laid out as a grid of identical rounded cards where a table or list would be denser?
 12. Are all icons from the one set, same stroke, same size within a context? Any emoji?

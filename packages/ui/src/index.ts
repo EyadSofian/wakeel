@@ -10,3 +10,4 @@ export * from "./conversation";
 export * from "./editors";
 export * from "./motion";
 export * from "./use-motion-tokens";
+export * from "./use-tilt";

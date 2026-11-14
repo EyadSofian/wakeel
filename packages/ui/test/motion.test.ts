@@ -41,6 +41,11 @@ describe("reduced motion", () => {
     expect(reduced.panInertia).toBe(false);
   });
 
+  test("no pop scale and no tilt (ADR-033)", () => {
+    expect(reduced.popScale).toBe(1);
+    expect(reduced.tiltMax).toBe(0);
+  });
+
   test("full motion keeps springs and travel", () => {
     const full = motionTokens(false);
     expect(full.spring.gentle).toBe(spring.gentle);
@@ -57,6 +62,17 @@ describe("CSS motion tokens", () => {
     const ms = (name: string) => Number(new RegExp(`--duration-${name}:\\s*(\\d+)ms`).exec(root)?.[1]) / 1000;
     for (const [name, seconds] of Object.entries(duration)) expect(ms(name)).toBe(seconds);
     expect(root).toContain(`--ease-out: cubic-bezier(${ease.out.join(", ")});`);
+  });
+
+  test("ADR-033 press, lift and run values equal motion.ts", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { press, lift, run } = await import("../src/motion");
+    const css = readFileSync(new URL("../src/tokens.css", import.meta.url), "utf8");
+    const root = css.slice(0, css.indexOf("}"));
+    expect(root).toContain(`--press-scale: ${press.scale};`);
+    expect(root).toContain(`--lift: ${lift.y}px;`);
+    expect(root).toContain(`--run-loop: ${run.loop}s;`);
+    expect(root).toContain(`--sweep-duration: ${run.sweep}s;`);
   });
 });
 

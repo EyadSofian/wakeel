@@ -14,7 +14,7 @@ export function ShortcutSheet() {
     <div
       role="dialog"
       aria-label="Keyboard shortcuts"
-      className="nodrag nowheel absolute inset-x-0 top-12 z-40 mx-auto flex max-h-picker-height w-inspector-max flex-col overflow-hidden rounded-xl border border-hairline bg-surface shadow-modal"
+      className="nodrag nowheel absolute inset-x-0 top-12 z-40 mx-auto flex max-h-picker-height w-inspector-max flex-col overflow-hidden wk-glass-strong rounded-xl border border-hairline bg-surface"
     >
       <header className="flex items-center justify-between border-b border-hairline px-7 py-5">
         <h2 className="text-title text-primary">Keyboard shortcuts</h2>

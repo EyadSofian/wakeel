@@ -6,8 +6,8 @@ import { useMotionTokens } from "../use-motion-tokens";
 
 /**
  * Dialog (design system §4, §2.4–2.6): Radix behaviour (focus trap, Escape, focus restored to the
- * trigger), our look: 12 px radius, modal shadow, a scrim without blur. Enters with `spring.gentle`
- * and a short rise; exits with a fade.
+ * trigger), our look: the strong glass surface and a lightly blurred scrim (ADR-033). Enters with
+ * `spring.gentle`, a short rise and a small scale-up; exits with a fade.
  */
 export interface DialogProps {
   open: boolean;
@@ -28,7 +28,7 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
           <RadixDialog.Portal forceMount>
             <RadixDialog.Overlay asChild forceMount>
               <motion.div
-                className="fixed inset-0 bg-scrim"
+                className="wk-scrim-blur fixed inset-0 bg-scrim"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1, transition: enterTransition(tokens).opacity }}
                 exit={{ opacity: 0, transition: exitTransition(tokens) }}
@@ -37,9 +37,14 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
             <div className="pointer-events-none fixed inset-0 flex items-start justify-center pt-12">
               <RadixDialog.Content asChild forceMount>
                 <motion.div
-                  className="pointer-events-auto flex w-inspector-max flex-col rounded-xl border border-hairline bg-surface shadow-modal"
-                  initial={{ opacity: 0, y: tokens.travel }}
-                  animate={{ opacity: 1, y: 0, transition: enterTransition(tokens) }}
+                  className="pointer-events-auto flex w-inspector-max flex-col rounded-xl border border-hairline bg-surface wk-glass-strong"
+                  initial={{ opacity: 0, y: tokens.travel, scale: tokens.popScale }}
+                  animate={{
+                    opacity: 1,
+                    y: 0,
+                    scale: 1,
+                    transition: { ...enterTransition(tokens), scale: tokens.spring.gentle },
+                  }}
                   exit={{ opacity: 0, transition: exitTransition(tokens) }}
                   {...(description === undefined ? { "aria-describedby": undefined } : {})}
                 >

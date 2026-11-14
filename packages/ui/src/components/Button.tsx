@@ -15,10 +15,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const base =
-  "inline-flex items-center justify-center gap-4 rounded-sm font-medium whitespace-nowrap select-none transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+  "wk-press inline-flex items-center justify-center gap-4 rounded-sm font-medium whitespace-nowrap select-none disabled:cursor-not-allowed disabled:opacity-50";
 
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-on-accent hover:bg-accent-hover disabled:hover:bg-accent",
+  primary: "wk-primary bg-accent text-on-accent hover:bg-accent-hover disabled:hover:bg-accent",
   secondary:
     "bg-surface text-primary border border-hairline hover:border-strong hover:bg-subtle active:bg-muted disabled:hover:bg-surface",
   ghost: "bg-transparent text-secondary hover:bg-subtle hover:text-primary active:bg-muted",

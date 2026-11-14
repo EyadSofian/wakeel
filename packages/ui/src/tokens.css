@@ -118,6 +118,22 @@
   --shadow-modal: 0 24px 56px -12px oklch(0.21 0.02 275 / 0.24);
   --elevation-border: var(--border-hairline);
 
+  /* ADR-033: glass on floating surfaces, depth on cards, the ambient backdrop. */
+  --glass-surface: oklch(1 0 0 / 0.74);
+  --glass-surface-strong: oklch(1 0 0 / 0.86);
+  --glass-border: oklch(0.21 0.02 275 / 0.09);
+  --glass-highlight: oklch(1 0 0 / 0.75);
+  --glass-blur: 16px;
+  --glass-saturate: 1.6;
+  --scrim-blur: 3px;
+  --ambient-a: radial-gradient(60rem 40rem at 6% -10%, oklch(0.6 0.2 277 / 0.16), transparent 64%);
+  --ambient-b: radial-gradient(52rem 36rem at 100% 4%, oklch(0.62 0.18 300 / 0.12), transparent 62%);
+  --ambient-c: radial-gradient(64rem 40rem at 70% 112%, oklch(0.7 0.12 200 / 0.1), transparent 62%);
+  --shadow-lift: 0 10px 24px -10px oklch(0.21 0.02 275 / 0.22), 0 2px 6px -2px oklch(0.21 0.02 275 / 0.08);
+  --shadow-halo: 0 0 0 4px oklch(0.53 0.22 277 / 0.14), 0 10px 28px -8px oklch(0.53 0.22 277 / 0.32);
+  --shadow-press: 0 1px 0 oklch(1 0 0 / 0.28) inset, 0 1px 2px oklch(0.21 0.02 275 / 0.2);
+  --run-sweep: oklch(0.53 0.22 277 / 0.85);
+
   /* §2.6 Motion for CSS transitions; must equal packages/ui/src/motion.ts (a test checks). */
   --duration-instant: 80ms;
   --duration-fast: 120ms;
@@ -125,6 +141,16 @@
   --duration-slow: 200ms;
   --duration-slower: 240ms;
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ADR-033 interaction motion; must equal packages/ui/src/motion.ts (a test checks). */
+  --press-scale: 0.97;
+  --lift: -2px;
+  --run-loop: 1.2s;
+  --sweep-duration: 1.2s;
+  --stagger-each: 24ms;
+  --travel: 8px;
+  --run-dash: 6px;
+  --size-tilt-perspective: 600px;
 }
 
 /* §2.6: reduced motion keeps colour changes at 80 ms and drops every longer transition. */
@@ -134,6 +160,10 @@
     --duration-base: 80ms;
     --duration-slow: 80ms;
     --duration-slower: 80ms;
+    --press-scale: 1;
+    --lift: 0px;
+    --travel: 0px;
+    --stagger-each: 0ms;
   }
 }
 
@@ -186,6 +216,17 @@
     --shadow-drag: 0 12px 28px -6px oklch(0 0 0 / 0.6);
     --shadow-modal: 0 24px 56px -12px oklch(0 0 0 / 0.7);
     --elevation-border: var(--border-strong);
+    --glass-surface: oklch(0.2 0.016 275 / 0.7);
+    --glass-surface-strong: oklch(0.2 0.016 275 / 0.86);
+    --glass-border: oklch(1 0 0 / 0.09);
+    --glass-highlight: oklch(1 0 0 / 0.07);
+    --ambient-a: radial-gradient(60rem 40rem at 6% -10%, oklch(0.55 0.2 277 / 0.3), transparent 64%);
+    --ambient-b: radial-gradient(52rem 36rem at 100% 4%, oklch(0.55 0.2 300 / 0.2), transparent 62%);
+    --ambient-c: radial-gradient(64rem 40rem at 70% 112%, oklch(0.6 0.12 200 / 0.14), transparent 62%);
+    --shadow-lift: 0 12px 28px -10px oklch(0 0 0 / 0.65), 0 2px 6px -2px oklch(0 0 0 / 0.4);
+    --shadow-halo: 0 0 0 4px oklch(0.55 0.2 277 / 0.24), 0 10px 32px -8px oklch(0.55 0.2 277 / 0.5);
+    --shadow-press: 0 1px 0 oklch(1 0 0 / 0.16) inset, 0 1px 2px oklch(0 0 0 / 0.4);
+    --run-sweep: oklch(0.76 0.13 277 / 0.9);
   }
 }
 
@@ -236,6 +277,17 @@
   --shadow-drag: 0 12px 28px -6px oklch(0 0 0 / 0.6);
   --shadow-modal: 0 24px 56px -12px oklch(0 0 0 / 0.7);
   --elevation-border: var(--border-strong);
+  --glass-surface: oklch(0.2 0.016 275 / 0.7);
+  --glass-surface-strong: oklch(0.2 0.016 275 / 0.86);
+  --glass-border: oklch(1 0 0 / 0.09);
+  --glass-highlight: oklch(1 0 0 / 0.07);
+  --ambient-a: radial-gradient(60rem 40rem at 6% -10%, oklch(0.55 0.2 277 / 0.3), transparent 64%);
+  --ambient-b: radial-gradient(52rem 36rem at 100% 4%, oklch(0.55 0.2 300 / 0.2), transparent 62%);
+  --ambient-c: radial-gradient(64rem 40rem at 70% 112%, oklch(0.6 0.12 200 / 0.14), transparent 62%);
+  --shadow-lift: 0 12px 28px -10px oklch(0 0 0 / 0.65), 0 2px 6px -2px oklch(0 0 0 / 0.4);
+  --shadow-halo: 0 0 0 4px oklch(0.55 0.2 277 / 0.24), 0 10px 32px -8px oklch(0.55 0.2 277 / 0.5);
+  --shadow-press: 0 1px 0 oklch(1 0 0 / 0.16) inset, 0 1px 2px oklch(0 0 0 / 0.4);
+  --run-sweep: oklch(0.76 0.13 277 / 0.9);
 }
 
 /* §2.2: Arabic content gets more line height and no tracking; §2.7: one focus ring everywhere. */
@@ -247,4 +299,15 @@
 :where(:focus-visible) {
   outline: var(--size-focus-ring) solid var(--accent);
   outline-offset: var(--size-focus-ring);
+}
+
+/* ADR-033: no see-through surfaces for people who ask for less transparency. */
+@media (prefers-reduced-transparency: reduce) {
+  /* Repeated :root outranks the dark-theme selectors above. */
+  :root:root:root {
+    --glass-surface: var(--bg-surface);
+    --glass-surface-strong: var(--bg-surface);
+    --glass-blur: 0px;
+    --scrim-blur: 0px;
+  }
 }

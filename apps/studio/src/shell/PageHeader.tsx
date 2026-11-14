@@ -5,7 +5,8 @@ import type { ReactNode } from "react";
  * the header carries the title, one line of context and the view's primary action.
  */
 export function Page({ children }: { children: ReactNode }) {
-  return <div className="mx-auto flex w-full max-w-page flex-col gap-8 px-9 pb-11 pt-9">{children}</div>;
+  // ADR-033: a page rises in when it opens.
+  return <div className="wk-enter mx-auto flex w-full max-w-page flex-col gap-8 px-9 pb-11 pt-9">{children}</div>;
 }
 
 export function PageHeader({

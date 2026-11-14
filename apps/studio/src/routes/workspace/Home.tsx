@@ -14,9 +14,10 @@ import {
   THead,
   Th,
   Tr,
+  useTilt,
 } from "@wakeel/ui";
 import { Bot, Plus } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type CSSProperties, type FormEvent, useState } from "react";
 import { fieldErrors } from "../../api/client";
 import { useBots, useCreateBot, useWorkspace } from "../../api/queries";
 import { slugFrom } from "../../lib/slug";
@@ -76,7 +77,7 @@ export function Home({ workspaceId }: { workspaceId: string }) {
         {error ? (
           <ProblemBanner error={error} />
         ) : !loading && list.length === 0 ? (
-          <div className="rounded-lg border border-hairline bg-surface">
+          <div className="wk-panel rounded-lg border border-hairline bg-surface">
             <EmptyState
               title="No bots yet"
               detail={
@@ -113,7 +114,7 @@ export function Home({ workspaceId }: { workspaceId: string }) {
                       ))}
                     </Tr>
                   ))
-                : list.map((b) => <BotRow key={b.id} bot={b} workspaceId={workspaceId} />)}
+                : list.map((b, i) => <BotRow key={b.id} bot={b} index={i} workspaceId={workspaceId} />)}
             </tbody>
           </Table>
         )}
@@ -125,16 +126,20 @@ export function Home({ workspaceId }: { workspaceId: string }) {
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-function BotRow({ bot, workspaceId }: { bot: BotResponse; workspaceId: string }) {
+function BotRow({ bot, index, workspaceId }: { bot: BotResponse; index: number; workspaceId: string }) {
+  // ADR-033: rows rise in one after another; the bot's tile leans toward the pointer.
+  const tilt = useTilt<HTMLTableRowElement>();
   return (
-    <Tr>
+    <Tr className="wk-enter" style={{ "--wk-index": index } as CSSProperties} {...tilt}>
       <Td className="max-w-node">
         <Link
           to="/w/$workspaceId/b/$botId"
           params={{ workspaceId, botId: bot.id }}
           className="flex min-w-0 items-center gap-5 rounded-sm"
         >
-          <IconTile category="ai" icon={Bot} />
+          <span className="wk-tilt">
+            <IconTile category="ai" icon={Bot} />
+          </span>
           <span className="flex min-w-0 flex-col">
             <span dir="auto" className="truncate font-medium text-primary">
               {bot.name}

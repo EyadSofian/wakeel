@@ -8,7 +8,7 @@ import type { HTMLAttributes, ReactNode, TdHTMLAttributes, ThHTMLAttributes } fr
 export function Table({ label, fixed = false, children }: { label: string; fixed?: boolean; children: ReactNode }) {
   // `fixed`: column widths come from the header cells, so stacked tables line up.
   return (
-    <div className="overflow-hidden rounded-lg border border-hairline bg-surface">
+    <div className="wk-panel overflow-hidden rounded-lg border border-hairline bg-surface">
       <table
         aria-label={label}
         className={["w-full border-collapse text-start text-body", fixed ? "table-fixed" : ""].join(" ")}
@@ -20,7 +20,7 @@ export function Table({ label, fixed = false, children }: { label: string; fixed
 }
 
 export function THead({ children }: { children: ReactNode }) {
-  return <thead className="sticky top-0 bg-subtle">{children}</thead>;
+  return <thead className="sticky top-0">{children}</thead>;
 }
 
 export function Th({ className, children, ...rest }: ThHTMLAttributes<HTMLTableCellElement>) {
