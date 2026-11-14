@@ -23,6 +23,8 @@ export interface AutonomyRunRequest {
    * the model should read; its title reaches the guest as the error's message.
    */
   onTool(call: { tool: string; operation?: string; input: Json }): Promise<Json>;
+  /** Stops the exec; the run rejects with the abort reason (a workflow tool call, ADR-035 §1). */
+  signal?: AbortSignal;
 }
 
 export type AutonomyRunOutcome =
@@ -72,6 +74,7 @@ export function createAutonomyRunPort(client: SandboxClient): AutonomyRunPort {
             });
           },
           onLog: (frame) => logs.push({ level: frame.level, args: frame.args }),
+          ...(request.signal ? { signal: request.signal } : {}),
         },
       );
       if (outcome.t === "error")

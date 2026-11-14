@@ -67,9 +67,10 @@ declare const tools: {
 
   /**
    * Find an order by number.
-   * If the workflow asks the user something, your code stops at this call and you are told the result in a later step; code after the call does not run.
+   * Calling it ends your code at this call, and you get its outputs in your next step; call it last.
+   * Outputs: { status: string; eta?: string }
    */
-  lookupOrder(input: { orderNumber: string }): Promise<{ status: string; eta?: string }>;
+  lookupOrder(input: { orderNumber: string }): Promise<never>;
 };
 \`\`\`
 Message types you may send: text, choice.
