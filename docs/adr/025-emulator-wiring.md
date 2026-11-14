@@ -39,7 +39,7 @@ Task 4.6 builds the Studio emulator. The design system (§5.3) and architecture 
 | Method and path under `/v1/workspaces/{workspaceId}/bots/{botId}/emulator` | Same as |
 |---|---|
 | `POST /conversations/{externalId}/messages` | `sendMessage`, SSE when `Accept: text/event-stream` |
-| `POST /conversations/{externalId}/user` | `updateUser` |
+| `PUT /users/{externalUserId}` | `updateUser` |
 | `POST /conversations/{externalId}/run-from` `{ userId, user?, workflowId, nodeId }` | an inbound `run_from` event, SSE as above |
 | `GET /conversations/{externalId}/state` | the Variables tab |
 
