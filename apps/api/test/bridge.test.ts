@@ -1,6 +1,4 @@
 import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { RedisContainer, type StartedRedisContainer } from "@testcontainers/redis";
 import { generateKey } from "@wakeel/auth";
 import {
@@ -8,9 +6,8 @@ import {
   BridgeConversation,
   BridgeEvent,
   BridgeUser,
-  Message,
+  type Message,
   newId,
-  Problem,
   TurnResult,
 } from "@wakeel/contracts";
 import {
@@ -28,10 +25,9 @@ import { createLogger } from "@wakeel/telemetry";
 import { RTL_FIXTURES } from "@wakeel/testing";
 import { Redis } from "ioredis";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest";
-import { parse } from "yaml";
-import type { z } from "zod";
 import { type App, buildApp } from "../src/app";
 import { Signals } from "../src/routes/bridge/signals";
+import { expectConforms, operation } from "./contract";
 import { REDIS_IMAGE } from "./stack";
 import { standInWorker } from "./stand-in-worker";
 
@@ -83,6 +79,10 @@ beforeAll(async () => {
         sleeps.push(ms);
         return autoWork ? new Promise<void>(() => {}) : Promise.resolve();
       },
+      // Webhook delivery and the connection test are covered in bridge-operations.test.ts.
+      enqueueWebhook: async () => undefined,
+      sender: { send: async () => ({ kind: "refused", code: "fetch_failed" }) },
+      keyring: { current: { version: 1, key: new Uint8Array(32) } },
     },
   });
   await app.ready();
@@ -161,63 +161,6 @@ const hello = (text = "عايز أعرف حالة الطلب رقم 5678") => ({
 /* ------------------------------------------------------------------ */
 /* Contract tests generated from the OpenAPI file                      */
 /* ------------------------------------------------------------------ */
-
-const spec = parse(
-  readFileSync(fileURLToPath(new URL("../../../docs/04-contracts/bridge-api.openapi.yaml", import.meta.url)), "utf8"),
-) as { paths: Record<string, Record<string, OpenApiOperation>> };
-
-interface OpenApiOperation {
-  operationId?: string;
-  responses?: Record<string, { $ref?: string; content?: Record<string, { schema: Record<string, unknown> }> }>;
-}
-
-/** OpenAPI schema names → the zod schemas `openapi-agreement.test.ts` proves equal to them. */
-const ZOD_FOR: Record<string, z.ZodType> = {
-  Accepted,
-  TurnResult,
-  User: BridgeUser,
-  Conversation: BridgeConversation,
-  Message,
-  BridgeEvent,
-  Problem,
-};
-
-function operation(operationId: string): { method: string; path: string; op: OpenApiOperation } {
-  for (const [path, item] of Object.entries(spec.paths)) {
-    for (const [method, op] of Object.entries(item)) {
-      if (typeof op === "object" && op && "operationId" in op && op.operationId === operationId)
-        return { method, path, op };
-    }
-  }
-  throw new Error(`OpenAPI has no operation ${operationId}`);
-}
-
-/** Validates a response against the OpenAPI response for its status: documented, and the body matches. */
-function expectConforms(operationId: string, res: Awaited<ReturnType<App["inject"]>>) {
-  const { op } = operation(operationId);
-  const documented = op.responses?.[String(res.statusCode)];
-  expect(documented, `${operationId} does not document ${res.statusCode}: ${res.body}`).toBeDefined();
-  if (documented?.$ref) {
-    expect(res.headers["content-type"]).toContain("application/problem+json");
-    Problem.parse(res.json());
-    return;
-  }
-  const schema = documented?.content?.["application/json"]?.schema;
-  if (!schema) return;
-  const ref = (s: Record<string, unknown>) => String(s["$ref"]).split("/").at(-1) as string;
-  if (schema["$ref"]) {
-    const zod = ZOD_FOR[ref(schema)];
-    expect(zod, `no zod schema mapped for ${ref(schema)}`).toBeDefined();
-    zod?.parse(res.json());
-    return;
-  }
-  // Inline list bodies: `{ data: [<ref>], nextCursor? }`.
-  const items = (schema["properties"] as Record<string, { items?: Record<string, unknown> }>)["data"]?.items;
-  const zod = items ? ZOD_FOR[ref(items)] : undefined;
-  expect(zod, `${operationId}: inline schema not understood`).toBeDefined();
-  const body = res.json() as { data: unknown[]; nextCursor?: unknown };
-  for (const item of body.data) zod?.parse(item);
-}
 
 describe("contract: every operation built so far, as the OpenAPI file describes it", () => {
   test("the operations under test exist in the OpenAPI file with the methods and paths the API serves", () => {

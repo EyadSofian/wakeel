@@ -212,6 +212,7 @@ Applying the inbound event:
 | `handoff_release` | `handed_off` | status `idle`; run Trigger `handoff_released` if present |
 | `timeout` (janitor) | `waiting_*` | run the Main workflow's Trigger node with `on.kind = "inactivity"` if one exists, else end with reason `inactivity` |
 | `run_from` (emulator only, ADR-025) | any | clear the stack and any wait, push a frame at `payload.nodeId` in `payload.workflowId`, run; an unknown node fails with `not_found` |
+| `end` (`endConversation`, ADR-029) | any except `ended` | end with reason `manual`: clear the stack, wait and handoff; keep user variables; emit `conversation.ended` |
 
 Step loop: execute the card at the top frame's cursor. A card returns exactly one outcome:
 

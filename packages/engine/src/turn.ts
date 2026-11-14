@@ -281,6 +281,10 @@ class TurnRun {
       case "run_from":
         this.#runFrom(event.payload);
         return;
+      case "end":
+        // endConversation (ADR-029 §1): from any live state, including a handoff.
+        if (state.status !== "ended") this.#end("manual");
+        return;
     }
   }
 

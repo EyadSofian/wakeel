@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ConversationId, EndUserId, IsoDateTime, Json } from "./common";
-import { BridgeEvent } from "./event";
+import { BRIDGE_EVENT_TYPES, BridgeEvent } from "./event";
 import { Message } from "./message";
 import { ConversationStatus } from "./runtime";
 
@@ -63,3 +63,31 @@ export const TurnResult = z.object({
   events: z.array(BridgeEvent),
 });
 export type TurnResult = z.infer<typeof TurnResult>;
+
+/** One event's webhook delivery, from its latest attempt (`listDeliveries`, ADR-029 §5). */
+export const BridgeDelivery = z.object({
+  eventId: z.string(),
+  eventType: z.string(),
+  conversationId: z.string().optional(),
+  seq: z.number().int().optional(),
+  status: z.enum(["pending", "delivered", "failed", "dead"]),
+  attempt: z.number().int().min(0),
+  nextAttemptAt: IsoDateTime.nullable().optional(),
+  responseStatus: z.number().int().nullable().optional(),
+  /** A code from errors.ts. */
+  error: z.string().nullable().optional(),
+});
+export type BridgeDelivery = z.infer<typeof BridgeDelivery>;
+
+/** The connection a bridge key belongs to (`getConnection`). */
+export const BridgeConnection = z.object({
+  id: z.string(),
+  botId: z.string(),
+  name: z.string(),
+  /** Which bot definition this connection runs. */
+  target: z.enum(["production", "draft"]),
+  status: z.enum(["active", "paused", "disabled"]),
+  webhookUrl: z.url().nullable().optional(),
+  subscribedEvents: z.array(z.enum(BRIDGE_EVENT_TYPES as [string, ...string[]])),
+});
+export type BridgeConnection = z.infer<typeof BridgeConnection>;

@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@wakeel/contracts": "workspace:*"
+    "@wakeel/contracts": "workspace:*",
+    "zod": "4.6.7"
   }
 }

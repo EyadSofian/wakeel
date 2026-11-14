@@ -1,4 +1,4 @@
-import { eventIdOf, signatureHeader, toBridgeEvent } from "@wakeel/bridge";
+import { eventIdOf, type SendResult, signatureHeader, toBridgeEvent, type WebhookSender } from "@wakeel/bridge";
 import { ATTEMPT_HEADER, EVENT_ID_HEADER, SIGNATURE_HEADER } from "@wakeel/contracts";
 import {
   type AttemptOutcome,
@@ -14,12 +14,12 @@ import {
 import type { ClockPort } from "@wakeel/engine";
 import { audit, type Logger } from "@wakeel/telemetry";
 import { retryAt } from "./schedule";
-import type { SendResult, WebhookSender } from "./sender";
 
 /**
  * The `webhook` queue's work for one conversation (architecture §9.2, ADR-005, ADR-028): pending
- * ephemeral events once each, then the ordered stream from its head, one event at a time, until it
- * is drained, waiting for a retry, held by another sender or by the connection's status.
+ * ephemeral events and replays once each (ADR-029 §3), then the ordered stream from its head, one
+ * event at a time, until it is drained, waiting for a retry, held by another sender or by the
+ * connection's status.
  */
 
 export interface WebhookDeps {
@@ -65,7 +65,7 @@ export async function deliverConversation(deps: WebhookDeps, conversationId: str
     // Paused and disabled connections hold their streams (ADR-028 §8).
     if (stream.connection.status !== "active") return { sent, stopped: "paused" };
 
-    for (const delivery of stream.ephemeral) {
+    for (const delivery of stream.outOfBand) {
       if (await attempt(deps, clock, log, workspaceId, stream, delivery)) sent++;
     }
 
@@ -176,14 +176,17 @@ async function attempt(
   return true;
 }
 
-/** A failed attempt: retried on schedule if ordered, dead when the schedule is used up; ephemeral never retried. */
+/**
+ * A failed attempt: retried on schedule if ordered, dead when the schedule is used up. Ephemeral
+ * events and replays are one-offs and never retried.
+ */
 function failure(
   deps: WebhookDeps,
   delivery: PendingDelivery,
   now: Date,
   details: Omit<AttemptOutcome, "status" | "attemptedAt" | "retryAt">,
 ): AttemptOutcome {
-  if (delivery.event.ephemeral) return { status: "failed", attemptedAt: now, ...details };
+  if (delivery.event.ephemeral || delivery.replay) return { status: "failed", attemptedAt: now, ...details };
   const next = retryAt(delivery.attempt, now, deps.random ?? Math.random);
   return next
     ? { status: "failed", attemptedAt: now, ...details, retryAt: next }

@@ -1,4 +1,11 @@
-import { externalMessageKey, requestFingerprint, sseFrame, toBridgeEvent, toMessage } from "@wakeel/bridge";
+import {
+  externalMessageKey,
+  requestFingerprint,
+  sseFrame,
+  toBridgeEvent,
+  toMessage,
+  type WebhookSender,
+} from "@wakeel/bridge";
 import { API_LIMITS } from "@wakeel/config";
 import {
   Accepted,
@@ -23,6 +30,7 @@ import {
   inboundForPlannedTurn,
   insertInbound,
   insertUserMessage,
+  type Keyring,
   listTranscript,
   listTurnSpans,
   outboxOfTurn,
@@ -32,6 +40,7 @@ import {
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { type BridgeContext, requireBridgeKey } from "./auth";
+import { bridgeOperationRoutes } from "./operations";
 import type { Signals } from "./signals";
 import { conversationView, turnResult, userPatch, userView } from "./views";
 
@@ -40,6 +49,12 @@ export interface BridgeDeps {
   signals: Signals;
   /** Adds a `turn` job for the conversation (BullMQ, `jobId` = conversation id; §4.2 step 3). */
   enqueueTurn(conversationId: string): Promise<void>;
+  /** Adds a `webhook` job for the conversation (ADR-028 §4), after a replay (ADR-029 §3). */
+  enqueueWebhook(conversationId: string): Promise<void>;
+  /** Sends `testWebhook`'s event through egress (ADR-029 §4). */
+  sender: WebhookSender;
+  /** Opens the connection's signing secrets for `testWebhook`. */
+  keyring: Keyring;
   now: () => Date;
   /** Waits out `?wait=`; tests pass one that does not sleep on real time. */
   sleep?: (ms: number) => Promise<void>;
@@ -67,11 +82,13 @@ const SSE_DEFAULT_SECONDS = API_LIMITS.waitSecondsMax;
 const SSE_POLL_MS = 1_000;
 
 /**
- * The Bridge API, inbound half (task 4.5, architecture §4.2, §9.1, §9.3, ADR-005): sendMessage,
- * sendEvent, updateUser, getConversation, listMessages and getTurn under `/v1/bridge`.
+ * The Bridge API under `/v1/bridge`: the inbound half (task 4.5, architecture §4.2, §9.1, §9.3,
+ * ADR-005: sendMessage, sendEvent, updateUser, getConversation, listMessages and getTurn), and the
+ * rest (task 5.3, ADR-029) in `operations.ts`.
  */
 export async function bridgeRoutes(app: FastifyInstance, deps: BridgeDeps): Promise<void> {
   const auth = (request: FastifyRequest) => requireBridgeKey(deps.db, request, deps.now());
+  await bridgeOperationRoutes(app, deps, auth);
 
   app.post(`${PREFIX}/conversations/:externalConversationId/messages`, async (request, reply) => {
     const ctx = await auth(request);

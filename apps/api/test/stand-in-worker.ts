@@ -1,4 +1,4 @@
-import { newId } from "@wakeel/contracts";
+import { emptyState, newId } from "@wakeel/contracts";
 import {
   acquireConversationLease,
   appendOutbox,
@@ -10,6 +10,7 @@ import {
   releaseConversationLease,
   startTurn,
   upsertSpans,
+  writeConversation,
 } from "@wakeel/db";
 import type { Redis } from "ioredis";
 
@@ -17,7 +18,7 @@ import type { Redis } from "ioredis";
  * A stand-in for apps/worker (apps never import each other, CLAUDE.md §4), built from the same
  * repository calls the real worker makes. Each turn answers "رد: <text>" (or the event's name, or
  * the node of a run_from), writes a turn span, emits typing, message.created and turn.completed,
- * then signals.
+ * then signals. An `end` event ends the conversation instead, as the engine does.
  */
 export function standInWorker(db: Database, publisher: Redis) {
   return async function work(conversationId: string): Promise<void> {
@@ -38,6 +39,22 @@ export function standInWorker(db: Database, publisher: Redis) {
           eventIds: [ev.id],
           id: ev.payload["turnId"] as string,
         });
+        if (ev.kind === "end") {
+          // endConversation (ADR-029 §1), as the engine does it: state cleared, conversation.ended.
+          await writeConversation(tx, conversationId, epoch, {
+            state: { ...emptyState(), status: "ended" },
+            endedReason: "manual",
+          });
+          await appendOutbox(tx, { conversationId, connectionId: ev.connectionId, epoch }, [
+            { type: "conversation.ended", payload: { turnId: turn.id, data: { reason: "manual" } } },
+            {
+              type: "turn.completed",
+              payload: { turnId: turn.id, data: { status: "ended", messageCount: 0, durationMs: 1 } },
+            },
+          ]);
+          await finishTurn(tx, { turnId: turn.id, status: "ended", stepCount: 1 });
+          return ev.seq;
+        }
         const message = ev.payload["message"] as { text?: string } | undefined;
         const reply = {
           type: "text",

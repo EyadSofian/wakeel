@@ -89,6 +89,7 @@ const TRIGGERS: Record<string, TraceContext["trigger"]> = {
   handoff_release: "handoff_release",
   timeout: "timeout",
   run_from: "run_from",
+  end: "end",
 };
 
 export interface DrainResult {

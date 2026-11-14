@@ -1,9 +1,10 @@
 import { z } from "zod";
 
 /**
- * Sends one webhook request through egress (ADR-020: `POST /v1/fetch`; ADR-028 §7). The worker is a
- * platform service, so it authenticates with the shared egress token and names the workspace whose
- * rate limit the request counts against.
+ * Sends one webhook request through egress (ADR-020: `POST /v1/fetch`; ADR-028 §7). Used by the
+ * delivery worker and by the API's connection test (ADR-029 §4). Both are platform services, so they
+ * authenticate with the shared egress token and name the workspace whose rate limit the request
+ * counts against.
  */
 
 /** Success is a 2xx within 10 s (§9.2). */

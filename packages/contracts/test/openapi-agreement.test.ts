@@ -72,6 +72,8 @@ const PAIRS: [api: string, zod: z.ZodType][] = [
   ["Conversation", c.BridgeConversation],
   ["Accepted", c.Accepted],
   ["TurnResult", c.TurnResult],
+  ["Delivery", c.BridgeDelivery],
+  ["Connection", c.BridgeConnection],
 ];
 
 describe("OpenAPI and zod agree", () => {

@@ -11,6 +11,7 @@ import {
   turns,
 } from "../schema/runtime";
 import { currentWorkspace } from "./scope";
+import type { StoredSigningSecret } from "./webhooks";
 
 /**
  * The Bridge API's reads and writes (task 4.5, architecture §4.2, §9.1). Every call runs inside
@@ -441,4 +442,54 @@ export async function outboxOfTurn(
     ephemeral: r.ephemeral,
     createdAt: r.createdAt,
   }));
+}
+
+/**
+ * `listConversationEvents` (ADR-029 §6): the conversation's ordered events after `afterSeq`,
+ * ascending. Ephemeral events have no seq and are never listed.
+ */
+export async function listConversationEvents(
+  tx: Tx,
+  conversationId: string,
+  options: { afterSeq: number; limit: number },
+): Promise<OutboxRow[]> {
+  const rows = await tx
+    .select()
+    .from(outboxEvents)
+    .where(
+      and(
+        eq(outboxEvents.conversationId, conversationId),
+        isNotNull(outboxEvents.seq),
+        gt(outboxEvents.seq, options.afterSeq),
+      ),
+    )
+    .orderBy(asc(outboxEvents.seq))
+    .limit(options.limit);
+  return rows.map((r) => ({
+    id: r.id,
+    seq: r.seq,
+    type: r.type,
+    payload: r.payload as Record<string, Json>,
+    ephemeral: r.ephemeral,
+    createdAt: r.createdAt,
+  }));
+}
+
+/** The connection as `getConnection` and `testWebhook` need it. Signing secrets stay sealed. */
+export interface ConnectionDetail extends ConnectionRecord {
+  webhookUrl: string | null;
+  subscribedEvents: string[];
+  signingSecrets: StoredSigningSecret[];
+}
+
+export async function getConnectionDetail(tx: Tx, connectionId: string): Promise<ConnectionDetail | undefined> {
+  const [row] = await tx.select().from(bridgeConnections).where(eq(bridgeConnections.id, connectionId));
+  return row
+    ? {
+        ...toConnection(row),
+        webhookUrl: row.webhookUrl,
+        subscribedEvents: row.subscribedEvents,
+        signingSecrets: row.signingSecrets as StoredSigningSecret[],
+      }
+    : undefined;
 }

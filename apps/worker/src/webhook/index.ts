@@ -2,9 +2,9 @@ import type { Queue } from "bullmq";
 import type { Processor } from "../workers";
 import { deliverConversation, type WebhookDeps } from "./deliver";
 
+export { egressSender, type SendResult, type WebhookRequest, type WebhookSender } from "@wakeel/bridge";
 export * from "./deliver";
 export * from "./schedule";
-export * from "./sender";
 
 export interface WebhookJob {
   conversationId: string;

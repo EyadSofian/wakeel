@@ -1,6 +1,17 @@
 /** api service entry: load config, check dependencies, listen, shut down cleanly. */
 import { createAuthService } from "@wakeel/auth";
-import { API_LIMITS, apiEnv, authEnv, commonEnv, databaseEnv, loadConfigOrExit, redisEnv } from "@wakeel/config";
+import { egressSender } from "@wakeel/bridge";
+import {
+  API_LIMITS,
+  apiEnv,
+  authEnv,
+  commonEnv,
+  databaseEnv,
+  egressClientEnv,
+  loadConfigOrExit,
+  masterKeyEnv,
+  redisEnv,
+} from "@wakeel/config";
 import { createDatabase } from "@wakeel/db";
 import { createLogger } from "@wakeel/telemetry";
 import { Queue } from "bullmq";
@@ -8,7 +19,16 @@ import { Redis } from "ioredis";
 import { buildApp } from "./app";
 import { Signals } from "./routes/bridge/signals";
 
-const config = loadConfigOrExit({ ...commonEnv, ...databaseEnv, ...redisEnv, ...apiEnv, ...authEnv });
+const config = loadConfigOrExit({
+  ...commonEnv,
+  ...databaseEnv,
+  ...redisEnv,
+  ...apiEnv,
+  ...authEnv,
+  // testWebhook signs and sends through egress (ADR-029 §4).
+  ...egressClientEnv,
+  ...masterKeyEnv,
+});
 if (config) {
   const logger = createLogger({ service: "api", level: config.logLevel });
   const db = createDatabase({ url: config.databaseUrl, applicationName: "wakeel-api" });
@@ -37,6 +57,7 @@ if (config) {
   const redisUrl = config.redisUrl.reveal();
   const subscriber = new Redis(redisUrl);
   const turnQueue = new Queue("turn", { connection: { url: redisUrl, maxRetriesPerRequest: null } });
+  const webhookQueue = new Queue("webhook", { connection: { url: redisUrl, maxRetriesPerRequest: null } });
   const app = buildApp({
     role: config.role,
     logger,
@@ -51,6 +72,18 @@ if (config) {
           { jobId: conversationId, removeOnComplete: true, removeOnFail: true },
         );
       },
+      enqueueWebhook: async (conversationId) => {
+        await webhookQueue.add(
+          "webhook",
+          { conversationId },
+          { jobId: conversationId, removeOnComplete: true, removeOnFail: true },
+        );
+      },
+      sender: egressSender({ egressUrl: config.egressUrl, egressToken: config.egressToken.reveal() }),
+      keyring: {
+        current: { version: config.masterKeyVersion, key: config.masterKey.reveal() },
+        previous: config.previousMasterKeys.reveal(),
+      },
     },
     readiness: {
       database: async () => void (await db.verify()),
@@ -63,7 +96,7 @@ if (config) {
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "shutting down");
     await app.close();
-    await Promise.allSettled([db.close(), redis.quit(), subscriber.quit(), turnQueue.close()]);
+    await Promise.allSettled([db.close(), redis.quit(), subscriber.quit(), turnQueue.close(), webhookQueue.close()]);
     process.exit(0);
   };
   process.once("SIGTERM", () => void shutdown("SIGTERM"));
