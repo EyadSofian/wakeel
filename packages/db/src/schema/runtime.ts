@@ -122,6 +122,25 @@ export const outboxEvents = pgTable("outbox_events", {
   createdAt: at("created_at").notNull().defaultNow(),
 });
 
+/** Migration 0008 (task 4.7): span metadata, partitioned by month on started_at (ADR-009, ADR-026). */
+export const traceSpans = pgTable("trace_spans", {
+  id: text("id").notNull(),
+  workspaceId: text("workspace_id").notNull(),
+  botId: text("bot_id").notNull(),
+  conversationId: text("conversation_id").notNull(),
+  turnId: text("turn_id").notNull(),
+  parentId: text("parent_id"),
+  seq: integer("seq").notNull(),
+  kind: text("kind").notNull(),
+  name: text("name").notNull(),
+  status: text("status").notNull(),
+  startedAt: at("started_at").notNull(),
+  durationMs: integer("duration_ms").notNull(),
+  location: jsonb("location").notNull().default(sql`'{}'::jsonb`),
+  attrs: jsonb("attrs").notNull().default(sql`'{}'::jsonb`),
+  payloadKey: text("payload_key"),
+});
+
 export const runtimeTables = {
   bridgeConnections,
   endUsers,
@@ -130,4 +149,5 @@ export const runtimeTables = {
   turns,
   messages,
   outboxEvents,
+  traceSpans,
 } as const;

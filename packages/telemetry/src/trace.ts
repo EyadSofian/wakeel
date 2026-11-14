@@ -187,7 +187,7 @@ export class TraceBuilder {
     const out: Span[] = [];
     if (this.#node) out.push(this.#closeNode(at));
     const turn = this.#turn ?? this.turnStarted(at)[0];
-    if (!turn || turn.kind !== "turn") return out;
+    if (turn?.kind !== "turn") return out;
     const outcome = (["completed", "waiting", "handed_off", "ended", "failed"] as const).find(
       (s) => s === result.status,
     );
