@@ -28,7 +28,9 @@ export const aiSdkModels: ModelFactory = {
       case "anthropic":
         return createAnthropic({ apiKey: c.apiKey })(model.providerModel);
       case "openai":
-        return createOpenAI({ apiKey: c.apiKey })(model.providerModel);
+        // Chat Completions, not the default Responses API: only Chat Completions honours stop
+        // sequences, which the Autonomous Node's protocol ends every reply with (found live, task 6.5).
+        return createOpenAI({ apiKey: c.apiKey }).chat(model.providerModel);
       case "google":
         return createGoogle({ apiKey: c.apiKey })(model.providerModel);
       case "openai-compatible":

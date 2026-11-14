@@ -93,6 +93,8 @@ class TurnRun {
   #state: ConversationState;
   readonly #user: { vars: Record<string, Json>; attributes: Record<string, Json> };
   readonly #turnScope: Record<string, Json> = {};
+  /** `event.exit` for the rest of the turn, once an Autonomous Node has left through an exit (task 6.5). */
+  #eventExit: { name: string; data: Json } | undefined;
   readonly #visits = new Map<string, number>();
 
   /** The current step's sequence number in this turn, counting those of a worker that died. */
@@ -596,6 +598,7 @@ class TurnRun {
     }
     this.#emitMessages(result.messages ?? []);
     if (result.logs?.length) this.#logs.push(...result.logs);
+    if (result.exit) this.#eventExit = result.exit;
     if (result.turn) {
       for (const key of Object.keys(this.#turnScope)) delete this.#turnScope[key];
       Object.assign(this.#turnScope, result.turn);
@@ -884,7 +887,7 @@ class TurnRun {
       state: this.#state,
       user: this.#user,
       frame,
-      event: this.#input.event,
+      event: this.#eventExit ? { ...this.#input.event, exit: this.#eventExit } : this.#input.event,
       env: this.#input.env,
       turn: this.#turnScope,
     });
