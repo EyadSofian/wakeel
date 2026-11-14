@@ -19,6 +19,8 @@ import { ConnectionsScreen } from "./routes/connections/ConnectionsScreen";
 import { Gallery } from "./routes/Gallery";
 import { ModelsSettings } from "./routes/settings/models/ModelsSettings";
 import { VariablesScreen } from "./routes/variables/VariablesScreen";
+import { CompareScreen } from "./routes/versions/CompareScreen";
+import { VersionsScreen } from "./routes/versions/VersionsScreen";
 import { ApiKeys } from "./routes/workspace/ApiKeys";
 import { General } from "./routes/workspace/General";
 import { Home } from "./routes/workspace/Home";
@@ -125,6 +127,28 @@ const botVariablesRoute = createRoute({
     const { workspaceId } = workspaceRoute.useParams();
     const { botId } = botRoute.useParams();
     return <VariablesScreen workspaceId={workspaceId} botId={botId} />;
+  },
+});
+
+/** Versions (task 7.5, design system §5.8): the list, and Compare for one version. */
+const botVersionsRoute = createRoute({
+  getParentRoute: () => botRoute,
+  path: "/versions",
+  component: function BotVersionsRoute() {
+    const { workspaceId } = workspaceRoute.useParams();
+    const { botId } = botRoute.useParams();
+    return <VersionsScreen workspaceId={workspaceId} botId={botId} />;
+  },
+});
+
+const versionCompareRoute = createRoute({
+  getParentRoute: () => botRoute,
+  path: "/versions/$versionId",
+  component: function VersionCompareRoute() {
+    const { workspaceId } = workspaceRoute.useParams();
+    const { botId } = botRoute.useParams();
+    const { versionId } = useParams({ strict: false }) as { versionId: string };
+    return <CompareScreen key={versionId} workspaceId={workspaceId} botId={botId} versionId={versionId} />;
   },
 });
 
@@ -245,6 +269,8 @@ export const router = createRouter({
       botRoute.addChildren([
         botCanvasRoute,
         botVariablesRoute,
+        botVersionsRoute,
+        versionCompareRoute,
         botConnectionsRoute,
         connectionSetupRoute,
         connectionDeliveriesRoute,

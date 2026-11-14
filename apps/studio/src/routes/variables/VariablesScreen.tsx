@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import type { IoField, ReferenceUsage, Variable, Workflow } from "@wakeel/contracts";
-import { Banner, Button, Skeleton, Table, Td, THead, Th, Tr } from "@wakeel/ui";
+import { Banner, Button, Skeleton, Table, Td, THead, Th, Tr, tabClasses } from "@wakeel/ui";
 import { Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { ApiError } from "../../api/client";
@@ -13,18 +13,19 @@ import { Breadcrumb } from "../bot/BotCanvas";
 import { useLoadState } from "../bot/BotLayout";
 import { DeleteDialog, IoDialog, type Subject, UsagesDialog, VariableDialog } from "./Dialogs";
 import { formatDefault, TYPE_LABELS, usageCounts, usesLabel, type VariableGroup, variableGroups } from "./model";
+import { SecretsTab } from "./SecretsTab";
 
 /**
  * The Variables screen (design system §5.7, task 2.7): every variable grouped by scope, then each
  * workflow with its inputs and outputs. "Used in" lists the places that refer to a variable and
  * jumps to them; a rename rewrites every reference; delete is offered only for unused ones.
- *
- * The Secrets and settings tab (config variable values per environment) arrives with task 7.5,
- * when values can be stored (7.3).
+ * The Secrets and settings tab (task 7.5, ADR-037) holds config variables and their Draft and
+ * Production values.
  */
 export function VariablesScreen({ workspaceId, botId }: { workspaceId: string; botId: string }) {
   const state = useLoadState();
   const ready = state === "ready";
+  const [tab, setTab] = useState<"variables" | "secrets">("variables");
   return (
     <AppShell
       title={<Breadcrumb workspaceId={workspaceId} ready={ready} page="Variables" />}
@@ -38,8 +39,29 @@ export function VariablesScreen({ workspaceId, botId }: { workspaceId: string; b
           title="Variables"
           description="What the bot remembers while it runs. Rename one here and every reference to it follows."
         />
+        <div role="tablist" aria-label="Variables" className="flex gap-7 border-b border-hairline">
+          {(
+            [
+              ["variables", "Variables"],
+              ["secrets", "Secrets and settings"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              className={tabClasses(tab === id)}
+              onClick={() => setTab(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         {state === "loading" ? (
           <LoadingGroups />
+        ) : ready && tab === "secrets" ? (
+          <SecretsTab workspaceId={workspaceId} botId={botId} />
         ) : ready ? (
           <Groups workspaceId={workspaceId} botId={botId} />
         ) : state.error instanceof ApiError ? (

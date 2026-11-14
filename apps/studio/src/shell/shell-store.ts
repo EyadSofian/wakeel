@@ -39,13 +39,15 @@ export interface FocusRequest {
 export interface ShellState {
   palette: boolean;
   issuesPanel: boolean;
+  /** The publish dialog (task 7.5). */
+  publish: boolean;
   dialog: WorkflowDialog | undefined;
   /** The issue `F8` last jumped to, as `code:path`, so the next press continues from it. */
   issueAt: string | undefined;
   focus: FocusRequest | undefined;
   /** Registered actions by source ("shell", "canvas"); a screen's actions leave with it. */
   sources: Readonly<Record<string, readonly Action[]>>;
-  set(patch: Partial<Pick<ShellState, "palette" | "issuesPanel" | "dialog" | "issueAt" | "focus">>): void;
+  set(patch: Partial<Pick<ShellState, "palette" | "issuesPanel" | "publish" | "dialog" | "issueAt" | "focus">>): void;
   requestFocus(target: { nodeId: string; path?: string }): void;
   register(source: string, actions: readonly Action[]): () => void;
 }
@@ -57,6 +59,7 @@ export function createShellStore(): ShellStore {
   return createStore<ShellState>((set, get) => ({
     palette: false,
     issuesPanel: false,
+    publish: false,
     dialog: undefined,
     issueAt: undefined,
     focus: undefined,

@@ -309,6 +309,11 @@ export function variablesDraft(kind: "default" | "rtl" | "empty"): { manifest: B
   };
   const manifest: BotManifest = {
     ...base.manifest,
+    // The Secrets and settings tab (7.5) lists these with the values the mock api returns.
+    configVars: [
+      { key: "SHOP_URL", secret: false, description: rtl ? "عنوان واجهة المتجر" : "Base URL of the shop's API." },
+      { key: "SHOP_TOKEN", secret: true },
+    ],
     variables: [
       ...base.manifest.variables,
       {

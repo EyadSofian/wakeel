@@ -72,7 +72,15 @@ export type ScreenState =
   | "code-drawer-rtl"
   | "code-drawer-loading"
   | "code-drawer-error"
-  | "code-drawer-empty";
+  | "code-drawer-empty"
+  // Task 7.5: publish, versions, compare, rollback and restore, and Secrets and settings.
+  | "publish"
+  | "publish-blocked"
+  | "rollback"
+  | "restore"
+  | "secrets"
+  | "secrets-rtl"
+  | "secrets-empty";
 
 export interface Screen {
   id: string;
@@ -228,6 +236,8 @@ SCREENS.push({
     "card-extract",
     "card-handoff",
     "card-handoff-rtl",
+    "publish",
+    "publish-blocked",
   ],
   sizes: DESKTOP,
   mock: true,
@@ -238,7 +248,20 @@ SCREENS.push({
 SCREENS.push({
   id: "variables",
   route: `/w/${WS}/b/bot_01m7a256m0a13warwhczsjhx9b/variables`,
-  states: ["default", "focus", "empty", "loading", "error", "rtl", "usages", "edit", "delete-blocked"],
+  states: [
+    "default",
+    "focus",
+    "empty",
+    "loading",
+    "error",
+    "rtl",
+    "usages",
+    "edit",
+    "delete-blocked",
+    "secrets",
+    "secrets-rtl",
+    "secrets-empty",
+  ],
   sizes: DESKTOP,
   mock: true,
   interactions: [],
@@ -309,6 +332,27 @@ SCREENS.push(
     id: "connection-test",
     route: `${CONNECTIONS}/conn_01m7a256m0a13warwhczsjhx01/test`,
     states: ["default", "tested", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+);
+
+// Versions (task 7.5, design system §5.8): the list with its two confirmations, and Compare.
+const VERSIONS = `/w/${WS}/b/bot_01m7a256m0a13warwhczsjhx9b/versions`;
+SCREENS.push(
+  {
+    id: "versions",
+    route: VERSIONS,
+    states: ["default", "focus", "empty", "loading", "error", "rtl", "rollback", "restore"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "version-compare",
+    route: `${VERSIONS}/ver_01m7a256m0a13warwhczsj0003`,
+    states: ["default", "loading", "error", "rtl"],
     sizes: DESKTOP,
     mock: true,
     interactions: [],

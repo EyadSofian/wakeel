@@ -1,6 +1,7 @@
 import type { Page, Route } from "@playwright/test";
 import type {
   ApiKeyResponse,
+  BotManifest,
   BotResponse,
   BridgeDelivery,
   InvitationResponse,
@@ -8,6 +9,7 @@ import type {
   Problem,
   SessionResponse,
   StudioConnection,
+  Workflow,
   WorkspaceResponse,
   WorkspaceSummary,
 } from "@wakeel/contracts";
@@ -18,6 +20,7 @@ import {
   type CanvasFixture,
   canvasDraft,
   codeDraft,
+  DRAFT_SCHEMA_VERSION,
   variablesDraft,
   workflowsDraft,
 } from "./canvas-fixtures";
@@ -356,6 +359,7 @@ export async function mockApi(
             ? aiDraft(state === "rtl")
             : canvasDraft(state === "rtl" && canvas === "typical" ? "rtl" : canvas);
   let rev = 3;
+  const rtl = state === "rtl";
   await page.route("**/v1/**", async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
@@ -500,6 +504,29 @@ export async function mockApi(
         nextCursor: null,
       });
     }
+    // Versions and config values (task 7.5).
+    if (path.startsWith(`${botBase}/versions`) || path.startsWith(`${botBase}/config`)) {
+      const method = route.request().method();
+      if (method === "POST" && path === `${botBase}/versions`) {
+        const body = JSON.parse(route.request().postData() ?? "{}") as { label: string; notes?: string };
+        return json(route, 201, {
+          ...mockVersions(rtl, draft)[0],
+          id: "ver_01m7a256m0a13warwhczsj0004",
+          number: 4,
+          ...body,
+        });
+      }
+      if (method === "PUT" || method === "DELETE") return route.fulfill({ status: 204 });
+      if (path === `${botBase}/config`)
+        return json(route, 200, { data: state === "empty" ? [] : mockConfig(rtl), nextCursor: null });
+      const versions = state === "empty" ? [] : mockVersions(rtl, draft);
+      if (path === `${botBase}/versions`)
+        return json(route, 200, { data: versions.map(({ definition: _d, ...v }) => v), nextCursor: null });
+      const one = versions.find((v) => path.startsWith(`${botBase}/versions/${v.id}`));
+      if (!one) return json(route, 404, { ...internal, status: 404, code: "not_found", title: "Not found" });
+      if (method === "POST") return json(route, 200, path.endsWith("/restore") ? { removedWorkflows: [] } : one);
+      return json(route, 200, one);
+    }
     // Connections (task 5.5).
     const connBase = `${botBase}/connections`;
     if (path.startsWith(connBase)) {
@@ -565,4 +592,108 @@ export async function mockApi(
       fix: "Check the id.",
     });
   });
+}
+
+/**
+ * Three versions for the Versions screens (task 7.5): v3 is live and differs from the draft (Greeting
+ * says something else and Shipping FAQ has no card), v2 and v1 are older. Definitions are whole.
+ */
+function mockVersions(rtl: boolean, draft: { manifest: BotManifest; workflows: Workflow[] }) {
+  const definition = (changed: boolean) => ({
+    schemaVersion: DRAFT_SCHEMA_VERSION,
+    manifest: draft.manifest,
+    workflows: changed
+      ? draft.workflows.map((w, i) =>
+          i === 0
+            ? {
+                ...w,
+                nodes: w.nodes.map((n) =>
+                  n.type === "standard" && n.cards.length > 0
+                    ? {
+                        ...n,
+                        cards: n.cards.map((c, j) =>
+                          j === 0 && c.type === "say" && c.message.type === "text"
+                            ? {
+                                ...c,
+                                message: {
+                                  ...c.message,
+                                  text: rtl ? "أهلاً بيك! أقدر أساعدك إزاي؟" : "Hi! How can I help?",
+                                },
+                              }
+                            : c,
+                        ),
+                      }
+                    : n,
+                ),
+              }
+            : w,
+        )
+      : draft.workflows,
+  });
+  const by = { id: owner, name: rtl ? "إياد سفيان" : "Eyad Sofian" };
+  return [
+    {
+      id: "ver_01m7a256m0a13warwhczsj0003",
+      number: 3,
+      label: rtl ? "تدفق الاسترجاع الجديد" : "Refund flow v2",
+      notes: rtl ? "أسئلة أوضح عن رقم الطلب قبل التحويل لموظف." : "Clearer order-number questions before handing off.",
+      definitionHash: "a".repeat(64),
+      createdBy: by,
+      createdAt: "2026-11-13T10:15:00.000Z",
+      live: true,
+      definition: definition(true),
+    },
+    {
+      id: "ver_01m7a256m0a13warwhczsj0002",
+      number: 2,
+      label: rtl ? "إصلاح سؤال اللغة" : "Fix language capture",
+      notes: "",
+      definitionHash: "b".repeat(64),
+      createdBy: by,
+      createdAt: "2026-11-11T16:02:00.000Z",
+      live: false,
+      definition: definition(false),
+    },
+    {
+      id: "ver_01m7a256m0a13warwhczsj0001",
+      number: 1,
+      label: rtl ? "أول نسخة" : "First release",
+      notes: "",
+      definitionHash: "c".repeat(64),
+      createdBy: null,
+      createdAt: "2026-11-09T09:00:00.000Z",
+      live: false,
+      definition: definition(false),
+    },
+  ];
+}
+
+/** Config variables for the Secrets and settings tab: a setting with values and a secret set in production. */
+function mockConfig(rtl: boolean) {
+  return [
+    {
+      key: "SHOP_URL",
+      secret: false,
+      description: rtl ? "عنوان واجهة المتجر" : "Base URL of the shop's API.",
+      declared: true,
+      draft: { set: true, value: "https://staging.shop.engosoft.test/api", updatedAt: T0 },
+      production: { set: true, value: "https://shop.engosoft.com/api", updatedAt: T0 },
+    },
+    {
+      key: "SHOP_TOKEN",
+      secret: true,
+      description: null,
+      declared: true,
+      draft: { set: false, value: null, updatedAt: null },
+      production: { set: true, value: null, updatedAt: "2026-11-12T08:00:00.000Z" },
+    },
+    {
+      key: "OLD_WEBHOOK",
+      secret: true,
+      description: null,
+      declared: false,
+      draft: { set: true, value: null, updatedAt: T0 },
+      production: { set: false, value: null, updatedAt: null },
+    },
+  ];
 }

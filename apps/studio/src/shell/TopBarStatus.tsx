@@ -54,12 +54,12 @@ export function TopBarStatus() {
       ) : null}
       <span aria-hidden="true" className="h-control-sm border-s border-hairline" />
       <TestButton />
-      {/* Publishing arrives with versions (7.1). */}
       <Button
         variant="primary"
         icon={<Rocket className="size-icon" strokeWidth={1.75} aria-hidden="true" />}
-        disabled
-        title="Publishing is not available yet"
+        title="Publish the draft (⇧⌘P)"
+        aria-keyshortcuts="Shift+Meta+P Shift+Control+P"
+        onClick={() => store.getState().set({ publish: true })}
       >
         Publish
       </Button>
