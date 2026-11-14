@@ -70,3 +70,18 @@ describe("newElementId", () => {
     expect(seen.size).toBe(62);
   });
 });
+
+describe("idFromDigest", () => {
+  test("encodes the first 130 bits of a digest as a 26-character entity id, the same every time", () => {
+    const digest = Uint8Array.from({ length: 32 }, (_, i) => (i * 37 + 11) % 256);
+    const id = contracts.idFromDigest("span", digest);
+    expect(id).toBe(contracts.idFromDigest("span", digest));
+    expect(entityId("span").safeParse(id).success).toBe(true);
+    const other = Uint8Array.from(digest, (b, i) => (i === 0 ? b ^ 1 : b));
+    expect(contracts.idFromDigest("span", other)).not.toBe(id);
+  });
+
+  test("refuses a digest shorter than 17 bytes", () => {
+    expect(() => contracts.idFromDigest("span", new Uint8Array(16))).toThrow(RangeError);
+  });
+});

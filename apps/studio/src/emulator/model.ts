@@ -22,10 +22,10 @@ export type TranscriptEntry =
       /** The newest bot message's buttons are usable; earlier ones are history. */
       live: boolean;
     }
-  | { kind: "error"; key: string; code: string; title: string; fix: string }
+  | { kind: "error"; key: string; code: string; title: string; fix: string; turnId: string | undefined }
   | { kind: "handoff"; key: string; reason: string }
   | { kind: "ended"; key: string; reason: string }
-  | { kind: "footer"; key: string; durationMs: number; status: string }
+  | { kind: "footer"; key: string; durationMs: number; status: string; turnId: string | undefined }
   /** The request itself failed (network, validation, permission): the API's problem document. */
   | { kind: "problem"; key: string; title: string; fix: string };
 
@@ -116,7 +116,7 @@ export function applyEvent(t: Transcript, event: BridgeEvent): Transcript {
       return {
         ...next,
         typing: false,
-        items: [...t.items, { kind: "error", key: event.id, code: event.data.code, title, fix }],
+        items: [...t.items, { kind: "error", key: event.id, code: event.data.code, title, fix, turnId: event.turnId }],
       };
     }
     case "handoff.requested":
@@ -138,7 +138,13 @@ export function applyEvent(t: Transcript, event: BridgeEvent): Transcript {
         typing: false,
         items: [
           ...t.items,
-          { kind: "footer", key: event.id, durationMs: event.data.durationMs, status: event.data.status },
+          {
+            kind: "footer",
+            key: event.id,
+            durationMs: event.data.durationMs,
+            status: event.data.status,
+            turnId: event.turnId,
+          },
         ],
       };
   }

@@ -33,7 +33,9 @@ export type ScreenState =
   | "bubbles"
   | "variables"
   | "user-form"
-  | "run-from";
+  | "run-from"
+  // Task 4.7: the trace tab with a step selected, and the run overlay on the canvas.
+  | "trace";
 
 export interface Screen {
   id: string;
@@ -182,7 +184,19 @@ SCREENS.push({
 SCREENS.push({
   id: "emulator",
   route: `/w/${WS}/b/bot_01m7a256m0a13warwhczsjhx9b`,
-  states: ["default", "focus", "empty", "loading", "error", "rtl", "bubbles", "variables", "user-form", "run-from"],
+  states: [
+    "default",
+    "focus",
+    "empty",
+    "loading",
+    "error",
+    "rtl",
+    "bubbles",
+    "variables",
+    "user-form",
+    "run-from",
+    "trace",
+  ],
   sizes: DESKTOP,
   mock: true,
   interactions: [],

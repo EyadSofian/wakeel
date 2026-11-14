@@ -28,6 +28,7 @@ import { waitForSaved } from "../../emulator/run-from";
 import { Inspector } from "../../inspector/Inspector";
 import { AppShell } from "../../shell/AppShell";
 import { ProblemBanner } from "../../shell/ProblemBanner";
+import { RunOverlayProvider } from "../../trace/overlay";
 import { type LoadState, useLoadState } from "./BotLayout";
 
 /**
@@ -47,7 +48,7 @@ function Body({ workspaceId, botId, state }: { workspaceId: string; botId: strin
   const [emulator] = useState(() =>
     createEmulatorStore({
       base: emulatorBase(workspaceId, botId),
-      transport: fetchTransport,
+      transport: fetchTransport(workspaceId),
       beforeTurn: () => waitForSaved(canvas),
     }),
   );
@@ -55,7 +56,9 @@ function Body({ workspaceId, botId, state }: { workspaceId: string; botId: strin
     <ReactFlowProvider>
       <UiStoreContext.Provider value={ui}>
         <EmulatorStoreContext.Provider value={emulator}>
-          <Frame workspaceId={workspaceId} botId={botId} state={state} />
+          <RunOverlayProvider>
+            <Frame workspaceId={workspaceId} botId={botId} state={state} />
+          </RunOverlayProvider>
         </EmulatorStoreContext.Provider>
       </UiStoreContext.Provider>
     </ReactFlowProvider>

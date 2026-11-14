@@ -172,6 +172,58 @@ const outboxTypes = async (c: Seeded) =>
     )
   ).map((r) => r.type);
 
+/** The trace of a conversation's turns as stored (task 4.7). */
+const spansOf = (c: Seeded) =>
+  query<{
+    seq: number;
+    kind: string;
+    name: string;
+    parent_seq: number | null;
+    status: string;
+    attrs: Record<string, unknown>;
+  }>(
+    `select s.seq, s.kind, s.name, p.seq as parent_seq, s.status, s.attrs
+       from trace_spans s left join trace_spans p on p.id = s.parent_id
+      where s.conversation_id = $1 order by s.turn_id, s.seq`,
+    [c.conversationId],
+  );
+
+describe("traces (task 4.7)", () => {
+  test("a turn writes complete, ordered spans: the turn, each node, each card, code under code cards", async () => {
+    const c = await seed([
+      card({ type: "say", message: { type: "text", text: "أهلاً" } }),
+      card({ type: "code", source: "log.info('hi')" }),
+    ]);
+    await send(c, "مرحبا");
+    const { d } = deps();
+    await drainConversation(d, c.conversationId);
+    const spans = await spansOf(c);
+    expect(spans.map((s) => [s.seq, s.kind, s.name, s.parent_seq])).toEqual([
+      // Start has no cards and runs no step of its own, so the first node span is Reply.
+      [0, "turn", "Turn", null],
+      [1, "node", "Reply", 0],
+      [2, "card", "say", 1],
+      [3, "card", "code", 1],
+      [4, "code.exec", "Run code", 3],
+    ]);
+    expect(spans[0]?.attrs).toMatchObject({ trigger: "message", mode: "emulator", outcome: "completed", stepCount: 2 });
+    expect(spans[1]?.attrs).toMatchObject({ nodeType: "standard", leftBy: "next" });
+  });
+
+  test("a failing trace store never fails the turn", async () => {
+    const c = await seed([card({ type: "say", message: { type: "text", text: "أهلاً" } })]);
+    await send(c, "مرحبا");
+    const { d } = deps({
+      writeSpans: async () => {
+        throw new Error("trace store is down");
+      },
+    });
+    expect(await drainConversation(d, c.conversationId)).toEqual({ turns: 1, stopped: "drained" });
+    expect(await botTexts(c)).toEqual(["أهلاً"]);
+    expect(await spansOf(c)).toEqual([]);
+  });
+});
+
 describe("one message", () => {
   test("runs the bot, commits each step with deterministic message ids, and signals turn-done", async () => {
     const c = await seed([
@@ -308,6 +360,18 @@ describe("a worker killed mid-turn", () => {
       [c.conversationId],
     );
     expect(turn).toMatchObject({ status: "completed", step_count: 2, n: 1 });
+
+    // The trace continues where worker A left it: one span per step, none twice, the node closed once.
+    const spans = await spansOf(c);
+    expect(spans.map((s) => [s.seq, s.kind, s.name])).toEqual([
+      [0, "turn", "Turn"],
+      [1, "node", "Reply"],
+      [2, "card", "code"],
+      [3, "code.exec", "Run code"],
+      [4, "card", "code"],
+      [5, "code.exec", "Run code"],
+    ]);
+    expect(spans[0]?.attrs).toMatchObject({ outcome: "completed", stepCount: 2 });
   });
 });
 

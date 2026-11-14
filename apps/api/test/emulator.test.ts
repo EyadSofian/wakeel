@@ -5,6 +5,8 @@ import {
   BridgeUser,
   EmulatorStateResponse,
   newElementId,
+  Span,
+  Trace,
   type Workflow,
 } from "@wakeel/contracts";
 import { superuserQuery } from "@wakeel/db/testing";
@@ -146,8 +148,10 @@ describe("sending messages", () => {
         const [eventLine, dataLine] = f.split("\n");
         return { type: eventLine?.slice("event: ".length), data: JSON.parse(dataLine?.slice("data: ".length) ?? "{}") };
       });
-    expect(frames.map((f) => f.type)).toEqual(["typing", "message.created", "turn.completed"]);
-    expect(frames[1]?.data.data.message.payload.text).toBe(`رد: ${text}`);
+    // The emulator's stream also carries the turn's spans (ADR-026); the public Bridge stream does not.
+    expect(frames.map((f) => f.type)).toEqual(["trace.span", "typing", "message.created", "turn.completed"]);
+    expect(Span.parse(frames[0]?.data)).toMatchObject({ kind: "turn", seq: 0 });
+    expect(frames[2]?.data.data.message.payload.text).toBe(`رد: ${text}`);
   });
 
   test("mutations need the session's CSRF token", async () => {
@@ -301,5 +305,32 @@ describe("who may use it", () => {
     const crossed = `/v1/workspaces/${theirs.ws}/bots/${b.botId}/emulator/conversations/${emu()}/messages`;
     expect((await stranger.send("POST", crossed, hello())).json()).toMatchObject({ code: "not_found" });
     expect(stack.jobs).toEqual([]);
+  });
+});
+
+describe("traces (task 4.7)", () => {
+  test("GET …/turns/{turnId}/trace returns the turn's spans in order; another workspace gets not_found", async () => {
+    const owner = await signUp(stack.app);
+    const b = await botOf(owner);
+    stack.autoWork.on = true;
+    const res = await stack.app.inject({
+      method: "POST",
+      url: `${b.base}/conversations/${emu()}/messages?wait=5`,
+      headers: { cookie: owner.cookie, origin: STUDIO, "x-csrf-token": owner.csrf },
+      payload: hello(),
+    });
+    const turnId = res.json().turnId as string;
+    const trace = await owner.get(`/v1/workspaces/${b.ws}/turns/${turnId}/trace`);
+    expect(trace.statusCode, trace.body).toBe(200);
+    expect(Trace.parse(trace.json())).toMatchObject({ turnId, spans: [{ kind: "turn", seq: 0 }] });
+
+    const stranger = await signUp(stack.app);
+    const theirs = await botOf(stranger);
+    expect((await stranger.get(`/v1/workspaces/${theirs.ws}/turns/${turnId}/trace`)).json()).toMatchObject({
+      code: "not_found",
+    });
+    expect((await owner.get(`/v1/workspaces/${b.ws}/turns/not-a-turn/trace`)).json()).toMatchObject({
+      code: "not_found",
+    });
   });
 });

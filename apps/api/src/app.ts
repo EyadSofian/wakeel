@@ -10,6 +10,7 @@ import { type BridgeDeps, bridgeRoutes } from "./routes/bridge/index";
 import { emulatorRoutes } from "./routes/emulator";
 import { invitationRoutes } from "./routes/invitations";
 import { memberRoutes } from "./routes/members";
+import { traceRoutes } from "./routes/traces";
 import { workspaceRoutes } from "./routes/workspaces";
 import type { StudioDeps } from "./studio";
 
@@ -109,6 +110,7 @@ export function buildApp(options: AppOptions) {
     void app.register(apiKeyRoutes, deps);
     void app.register(auditRoutes, deps);
     void app.register(botRoutes, deps);
+    void app.register(traceRoutes, deps);
   }
 
   // The Studio emulator runs the Bridge inbound path for the builder's session (ADR-025).

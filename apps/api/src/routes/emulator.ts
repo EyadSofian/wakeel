@@ -59,7 +59,10 @@ export async function emulatorRoutes(app: FastifyInstance, deps: EmulatorDeps): 
 
   app.post(`${base}/conversations/:externalConversationId/messages`, async (request, reply) => {
     const ctx = await context(request, reply);
-    return inbound(deps.bridge, ctx, request, reply, sendMessageInput(SendMessageRequest.parse(request.body)));
+    return inbound(deps.bridge, ctx, request, reply, {
+      ...sendMessageInput(SendMessageRequest.parse(request.body)),
+      streamSpans: true,
+    });
   });
 
   app.post(`${base}/conversations/:externalConversationId/run-from`, async (request, reply) => {
@@ -72,6 +75,7 @@ export async function emulatorRoutes(app: FastifyInstance, deps: EmulatorDeps): 
       user: body.user,
       kind: "run_from",
       payload: { workflowId: body.workflowId, nodeId: body.nodeId },
+      streamSpans: true,
     });
   });
 

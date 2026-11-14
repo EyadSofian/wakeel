@@ -1,4 +1,4 @@
-import { BridgeEvent, EmulatorStateResponse, Problem } from "@wakeel/contracts";
+import { BridgeEvent, EmulatorStateResponse, Problem, Span, Trace } from "@wakeel/contracts";
 import { ApiError, api, csrfHeaders, networkProblem } from "../api/client";
 import type { EmulatorTransport } from "./controller";
 import { SseParser } from "./sse";
@@ -12,8 +12,8 @@ export const emulatorBase = (workspaceId: string, botId: string) =>
  * `EventSource` can neither POST nor send the CSRF header; each frame is parsed as a Bridge event,
  * and a frame that does not parse is skipped rather than breaking the transcript.
  */
-export const fetchTransport: EmulatorTransport = {
-  async stream(path, body, onEvent) {
+export const fetchTransport = (workspaceId: string): EmulatorTransport => ({
+  async stream(path, body, onEvent, onSpan) {
     let res: Response;
     try {
       res = await fetch(path, {
@@ -42,6 +42,11 @@ export const fetchTransport: EmulatorTransport = {
         } catch {
           continue;
         }
+        if (frame.event === "trace.span") {
+          const span = Span.safeParse(json);
+          if (span.success) onSpan(span.data);
+          continue;
+        }
         const event = BridgeEvent.safeParse(json);
         if (event.success) onEvent(event.data);
       }
@@ -49,4 +54,5 @@ export const fetchTransport: EmulatorTransport = {
   },
   put: (path, body) => api("PUT", path, body),
   get: async (path) => EmulatorStateResponse.parse(await api("GET", path)),
-};
+  trace: async (turnId) => Trace.parse(await api("GET", `/v1/workspaces/${workspaceId}/turns/${turnId}/trace`)),
+});

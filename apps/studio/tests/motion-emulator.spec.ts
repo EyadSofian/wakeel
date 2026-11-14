@@ -156,4 +156,54 @@ for (const mode of MODES) {
     const timing = await frames(choices, `${DIR}/choices-${mode.id}`);
     expect(timing.some((t) => t.props.includes("opacity"))).toBe(true);
   });
+
+  test(`emulator trace rows ${mode.id}`, async ({ page }) => {
+    mkdirSync(DIR, { recursive: true });
+    const panel = await open(page, mode.reducedMotion, "conversation");
+    await panel.getByRole("tab", { name: "Trace" }).click();
+    // Sample the first step row as it enters (§5.3 "Trace, live": fade + 4 px, 120 ms).
+    await page.evaluate(() => {
+      const w = window as unknown as { __rows: { t: number; dy: number; opacity: number }[] };
+      w.__rows = [];
+      const root = document.querySelector('[aria-label="Trace and variables"]');
+      if (!root) return;
+      const t0 = performance.now();
+      const observer = new MutationObserver(() => {
+        const row = root.querySelector('[aria-label="Steps"] > li') as HTMLElement | null;
+        if (!row) return;
+        observer.disconnect();
+        const sample = () => {
+          const t = performance.now() - t0;
+          const m = new DOMMatrixReadOnly(getComputedStyle(row).transform);
+          w.__rows.push({
+            t: Math.round(t),
+            dy: Math.round(m.m42 * 10) / 10,
+            opacity: Number(getComputedStyle(row).opacity),
+          });
+          if (t < 400) requestAnimationFrame(sample);
+        };
+        sample();
+      });
+      observer.observe(root, { childList: true, subtree: true });
+    });
+    const box = panel.getByRole("textbox", { name: "Message the bot" });
+    await box.fill("عايز أعرف حالة طلبي");
+    await box.press("Enter");
+    await expect(panel.getByRole("list", { name: "Steps" })).toBeVisible();
+    await page.waitForTimeout(500);
+    const rows = await page.evaluate(
+      () => (window as unknown as { __rows: { t: number; dy: number; opacity: number }[] }).__rows,
+    );
+    writeFileSync(`${DIR}/trace-${mode.id}-samples.json`, `${JSON.stringify(rows, null, 2)}\n`);
+    expect(rows.length).toBeGreaterThan(3);
+    if (mode.id === "normal") {
+      expect(rows[0]?.dy).toBeLessThan(0);
+      expect(rows[0]?.dy).toBeGreaterThanOrEqual(-4);
+    } else {
+      expect(rows.every((r) => r.dy === 0)).toBe(true);
+    }
+    expect(rows[0]?.opacity).toBeLessThan(1);
+    expect(rows.at(-1)).toMatchObject({ dy: 0, opacity: 1 });
+    await panel.getByRole("list", { name: "Steps" }).screenshot({ path: `${DIR}/trace-${mode.id}-100.png` });
+  });
 }

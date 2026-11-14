@@ -1,4 +1,4 @@
-import { API_VERSION, type BridgeEvent, type EmulatorStateResponse, type Problem } from "@wakeel/contracts";
+import { API_VERSION, type BridgeEvent, type EmulatorStateResponse, type Problem, type Span } from "@wakeel/contracts";
 import { describe, expect, test } from "vitest";
 import { ApiError } from "../api/client";
 import { createEmulatorStore, type EmulatorTransport } from "./controller";
@@ -46,18 +46,49 @@ const state = (value: string): EmulatorStateResponse => ({
   limitBytes: 262_144,
 });
 
-function fake(script: { events?: BridgeEvent[]; fail?: Problem; state?: EmulatorStateResponse[] } = {}) {
+const traceSpan = (seq: number, extra: Record<string, unknown> = {}): Span =>
+  ({
+    id: `span_01m7a256m0a13warwhczsj${String(seq).padStart(4, "0")}`,
+    workspaceId: "ws_01m7a256m0a13warwhczsjhx9g",
+    botId: "bot_01m7a256m0a13warwhczsjhx9b",
+    conversationId: "conv_01m7a256m0a13warwhczsjhx9v",
+    turnId: "turn_01m7a256m0a13warwhczsjhx9t",
+    seq,
+    name: seq === 0 ? "Turn" : "Greet",
+    status: "ok",
+    startedAt: "2026-11-14T10:00:00.000Z",
+    durationMs: 0,
+    location: seq === 0 ? {} : { workflowId: "wf_MAINAAAAAA", nodeId: "node_GREETAAAAA" },
+    kind: seq === 0 ? "turn" : "node",
+    attrs: seq === 0 ? { trigger: "message", mode: "emulator" } : { nodeType: "standard" },
+    ...extra,
+  }) as Span;
+
+function fake(
+  script: {
+    events?: BridgeEvent[];
+    fail?: Problem;
+    state?: EmulatorStateResponse[];
+    spans?: Span[];
+    trace?: Span[];
+  } = {},
+) {
   const calls: { method: string; path: string; body?: unknown }[] = [];
   const states = [...(script.state ?? [state("القاهرة")])];
   const transport: EmulatorTransport = {
-    async stream(path, body, onEvent) {
+    async stream(path, body, onEvent, onSpan) {
       calls.push({ method: "STREAM", path, body });
       if (script.fail) throw new ApiError(script.fail);
+      for (const sp of script.spans ?? []) onSpan(sp);
       for (const e of script.events ?? [event(2, "message.created"), event(3, "turn.completed")]) onEvent(e);
     },
     async put(path, body) {
       calls.push({ method: "PUT", path, body });
       return {};
+    },
+    async trace(turnId) {
+      calls.push({ method: "TRACE", path: turnId });
+      return { turnId, conversationId: "conv_01m7a256m0a13warwhczsjhx9v", spans: script.trace ?? [] };
     },
     async get(path) {
       calls.push({ method: "GET", path });
@@ -181,5 +212,54 @@ describe("the emulator controller", () => {
     const t = store.getState().transcript;
     expect(t.running).toBe(false);
     expect(t.items.at(-1)).toMatchObject({ kind: "problem", title: "The turn is still running" });
+  });
+});
+
+describe("the trace (task 4.7)", () => {
+  const TURN = "turn_01m7a256m0a13warwhczsjhx9t";
+
+  test("spans stream into the turn's trace; a span sent again replaces its copy; the run overlay follows the turn", async () => {
+    const { store } = fake({ spans: [traceSpan(0), traceSpan(1), traceSpan(0, { durationMs: 40 })] });
+    await store.getState().send("مرحبا");
+    const s = store.getState();
+    expect(s.traces[TURN]?.map((x) => [x.seq, x.durationMs])).toEqual([
+      [0, 40],
+      [1, 0],
+    ]);
+    expect(s.traceTurn).toBe(TURN);
+    expect(s.overlayTurn).toBe(TURN);
+    store.getState().clearOverlay();
+    expect(store.getState().overlayTurn).toBeUndefined();
+  });
+
+  test("the turn footer knows its turn, and opening it shows that trace with the area expanded", async () => {
+    const { store } = fake({ spans: [traceSpan(0)] });
+    await store.getState().send("مرحبا");
+    const footer = store.getState().transcript.items.find((i) => i.kind === "footer");
+    expect(footer && "turnId" in footer && footer.turnId).toBe(TURN);
+    await store.getState().openTrace(TURN);
+    expect(store.getState()).toMatchObject({ traceTurn: TURN, area: { open: true, tab: "trace" } });
+  });
+
+  test("a turn whose spans were not streamed is fetched once from the trace endpoint", async () => {
+    const { store, calls } = fake({ trace: [traceSpan(0)] });
+    await store.getState().openTrace("turn_01m7a256m0a13warwhczsjhx9z");
+    await store.getState().openTrace("turn_01m7a256m0a13warwhczsjhx9z");
+    expect(calls.filter((c) => c.method === "TRACE")).toHaveLength(1);
+    expect(store.getState().traces["turn_01m7a256m0a13warwhczsjhx9z"]).toHaveLength(1);
+  });
+
+  test("selecting a step remembers it; reset clears traces, overlay and selection", async () => {
+    const { store } = fake({ spans: [traceSpan(0), traceSpan(1)] });
+    await store.getState().send("مرحبا");
+    store.getState().selectStep(traceSpan(1).id);
+    expect(store.getState().selectedStep).toBe(traceSpan(1).id);
+    store.getState().reset();
+    expect(store.getState()).toMatchObject({
+      traces: {},
+      traceTurn: undefined,
+      overlayTurn: undefined,
+      selectedStep: undefined,
+    });
   });
 });

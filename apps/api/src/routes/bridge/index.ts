@@ -24,6 +24,7 @@ import {
   insertInbound,
   insertUserMessage,
   listTranscript,
+  listTurnSpans,
   outboxOfTurn,
   type StoredInbound,
   upsertEndUser,
@@ -188,6 +189,8 @@ export interface InboundInput {
   user: UserData | undefined;
   /** `run_from` comes only from the Studio emulator routes (ADR-025). */
   kind: "message" | "event" | "run_from";
+  /** The emulator's stream also carries the turn's spans (ADR-026); the public Bridge API never does. */
+  streamSpans?: boolean;
   payload: Record<string, Json>;
   message?: { payload: Record<string, Json>; type: string; externalId: string | undefined };
 }
@@ -302,7 +305,8 @@ export async function inbound(
   const accepted = Accepted.parse(event.payload["response"]);
 
   const wantsStream = (request.headers.accept ?? "").includes("text/event-stream");
-  if (wantsStream) return stream(deps, ctx, reply, event, accepted, wait ?? SSE_DEFAULT_SECONDS);
+  if (wantsStream)
+    return stream(deps, ctx, reply, event, accepted, wait ?? SSE_DEFAULT_SECONDS, input.streamSpans === true);
   if (wait === undefined) {
     if (!event.processedAt) await deps.enqueueTurn(event.conversationId);
     return reply.code(202).send(accepted);
@@ -342,6 +346,7 @@ async function stream(
   event: StoredInbound,
   accepted: Accepted,
   seconds: number,
+  withSpans = false,
 ) {
   reply.hijack();
   const res = reply.raw;
@@ -352,6 +357,7 @@ async function stream(
     "x-request-id": reply.request.id,
   });
   const seen = new Set<string>();
+  const sentSpans = new Map<string, string>();
   let finished = false;
   let wake: () => void = () => {};
   const stop = await deps.signals.listen(`conversation-events:${event.conversationId}`, () => wake());
@@ -365,8 +371,16 @@ async function stream(
         const conv = await getBridgeConversation(tx, event.conversationId);
         const user = conv ? await getEndUserById(tx, conv.endUserId) : undefined;
         const outbox = await outboxOfTurn(tx, event.conversationId, turnId, { ephemeral: true });
-        return { outbox, conv, user };
+        const spans = withSpans ? await listTurnSpans(tx, turnId) : [];
+        return { outbox, conv, user, spans };
       });
+      // A span is sent when it appears and again whenever it changes (an open node or turn closing).
+      for (const span of rows.spans) {
+        const version = `${span.status}:${span.durationMs}:${JSON.stringify(span.attrs)}`;
+        if (sentSpans.get(span.id) === version) continue;
+        sentSpans.set(span.id, version);
+        res.write(sseFrame("trace.span", span));
+      }
       for (const row of rows.outbox) {
         if (seen.has(row.id) || !rows.conv || !rows.user) continue;
         seen.add(row.id);

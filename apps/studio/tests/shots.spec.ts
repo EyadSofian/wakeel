@@ -85,7 +85,7 @@ async function playEmulator(page: Page, state: ScreenState): Promise<void> {
     return;
   }
   const scenario = emulatorScenario(state);
-  const texts = state === "variables" ? [...SENT.conversation, "5678"] : SENT[scenario];
+  const texts = state === "variables" || state === "trace" ? [...SENT.conversation, "5678"] : SENT[scenario];
   const box = panel.getByRole("textbox", { name: "Message the bot" });
   for (const [i, text] of texts.entries()) {
     await box.fill(text);
@@ -93,8 +93,19 @@ async function playEmulator(page: Page, state: ScreenState): Promise<void> {
     if (scenario === "running") await expect(panel.getByRole("status", { name: "Typing…" })).toBeVisible();
     else await expect(panel.locator("p", { hasText: / s$|Waiting for the user/ })).toHaveCount(i + 1);
   }
+  if (state === "trace") {
+    // The second turn's trace, with its branch step selected: details below, card selected on the canvas.
+    await panel.getByTitle("Open this turn's trace").last().click();
+    await panel
+      .getByRole("list", { name: "Steps" })
+      .getByRole("button", { name: /Condition|Branch/ })
+      .click();
+    await expect(panel.getByRole("region", { name: "Step details" })).toBeVisible();
+    // Park the pointer so no row shows its hover background in the shot.
+    await page.mouse.move(0, 0);
+  }
   if (state === "variables") {
-    await panel.getByRole("button", { name: /Variables/ }).click();
+    await panel.getByRole("tab", { name: "Variables" }).click();
     await expect(panel.getByText("2 changed")).toBeVisible();
   }
   if (state === "focus") {

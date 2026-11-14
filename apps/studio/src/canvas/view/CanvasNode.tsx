@@ -1,9 +1,10 @@
 import { type Card, type Node as DefNode, NON_TARGETABLE_NODE_TYPES } from "@wakeel/contracts";
 import { CATEGORY_CLASSES, type Category, IconTile, useMotionTokens } from "@wakeel/ui";
 import { Handle, type NodeProps, Position, type Node as RFNode, useStore, useUpdateNodeInternals } from "@xyflow/react";
-import { CircleAlert, Ellipsis, GripVertical, Plus, TriangleAlert } from "lucide-react";
+import { Check, CircleAlert, Ellipsis, GripVertical, Plus, TriangleAlert } from "lucide-react";
 import { type HTMLMotionProps, motion, Reorder } from "motion/react";
 import { type HTMLAttributes, memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useRunOverlay } from "../../trace/overlay";
 import { useCanvas, useCanvasStore } from "../context";
 import { nodeRows } from "../interaction/rows";
 import { useUi, useUiStore } from "../interaction/ui-store";
@@ -129,6 +130,10 @@ function CardRow({
   const outputs = cardOutputRows(card);
   const text = summarizeCard(card, summary);
   const current = rowState.cursorRow === cardIndex || rowState.selectedCard === card.id;
+  // The last emulator turn's path (§5.1 "Run overlay"): tinted, with a check when it did not fail.
+  const overlay = useRunOverlay();
+  const ran = overlay.cards.has(card.id);
+  const ranFailed = overlay.failed.has(card.id);
   return (
     <div data-card={card.id} className={card.disabled ? "opacity-50" : ""}>
       {/* Clicking a card opens it in the inspector; the keyboard reaches cards with Enter (2.5). */}
@@ -145,8 +150,11 @@ function CardRow({
               ? "border-warning"
               : current
                 ? "border-accent"
-                : "border-transparent",
+                : ran || ranFailed
+                  ? "border-accent-border"
+                  : "border-transparent",
         ].join(" ")}
+        {...(ran ? { "data-ran": "true" } : {})}
       >
         <GripVertical
           className="size-icon-sm shrink-0 cursor-grab text-tertiary opacity-0 transition-opacity group-hover:opacity-100"
@@ -161,6 +169,13 @@ function CardRow({
         <span dir="auto" className="min-w-0 flex-1 truncate text-body text-primary">
           {text}
         </span>
+        {ran ? (
+          <Check
+            className="size-icon-sm shrink-0 text-accent-border"
+            strokeWidth={2}
+            aria-label="Ran in the last test"
+          />
+        ) : null}
         {severity ? <IssueMarker severity={severity} label={message ?? ""} /> : null}
       </div>
       {outputs.map((row) => (
