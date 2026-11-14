@@ -35,6 +35,9 @@ importers:
       '@wakeel/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@wakeel/bridge':
+        specifier: workspace:*
+        version: link:../../packages/bridge
       '@wakeel/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -47,6 +50,9 @@ importers:
       '@wakeel/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
+      bullmq:
+        specifier: 6.7.6
+        version: 6.7.6(ioredis@6.0.0)(pg@8.23.1)
       fastify:
         specifier: 5.12.8
         version: 5.12.8
@@ -60,9 +66,15 @@ importers:
       '@testcontainers/redis':
         specifier: 12.2.1
         version: 12.2.1(bare-buffer@3.7.2)
+      '@wakeel/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
       testcontainers:
         specifier: 12.2.1
         version: 12.2.1(bare-buffer@3.7.2)
+      yaml:
+        specifier: 2.9.1
+        version: 2.9.1
 
   apps/egress:
     dependencies:
