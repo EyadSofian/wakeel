@@ -11,8 +11,10 @@ import {
   getEndUser,
   type InboundEventRecord,
   insertBotMessages,
+  type Keyring,
   LeaseLostError,
   listTurnSpans,
+  loadConfigEnv,
   loadVersionDefinition,
   type NewOutboxEvent,
   nextUnprocessedEvent,
@@ -45,6 +47,7 @@ import { type Logger, type TraceBefore, TraceBuilder, type TraceContext } from "
 import type { AutonomyTurn } from "./autonomy";
 import { eventScope, isTextMessage } from "./event-scope";
 import { botMessageId } from "./message-id";
+import { scrubSecrets } from "./redact";
 import { migrateToVersion } from "./version";
 
 /** ADR-008: a lease lasts 30 s and a heartbeat renews it every 10 s. */
@@ -85,6 +88,11 @@ export interface TurnDeps {
   summarizeHandoff?(input: HandoffSummaryInput): Promise<string>;
   /** The model layer for AI cards (task 6.7). Absent: AI cards fail with `model_not_configured`. */
   ai?(turn: AutonomyTurn): AiPort;
+  /**
+   * Opens config variable values (task 7.3). Absent: `env` is empty, as before config variables
+   * existed.
+   */
+  keyring?: Keyring;
 }
 
 /** What the worker's handoff summarizer is asked for (task 5.4); `model` is the bot's utility model. */
@@ -163,6 +171,8 @@ class ConversationRun {
   /** The open turn's trace (task 4.7) and the values before the next step, for its variable diff. */
   #trace: TraceBuilder | undefined;
   #before: TraceBefore | undefined;
+  /** Plaintext of this turn's secret config values, scrubbed from every span (task 7.3). */
+  #secrets: readonly string[] = [];
 
   constructor(
     readonly deps: TurnDeps,
@@ -220,10 +230,21 @@ class ConversationRun {
       const migrated = turn ? undefined : await followPublishedVersion(tx, this.conversationId, this.epoch);
       const conversation = await getConversation(tx, this.conversationId);
       const definition = await loadDefinition(tx, conversation.botId, conversation.versionId);
-      return { event, conversation, definition, turn, migrated };
+      // A published version runs with production values; the draft with draft values (ADR-037).
+      const config = this.deps.keyring
+        ? await loadConfigEnv(
+            tx,
+            this.deps.keyring,
+            this.workspaceId,
+            conversation.botId,
+            conversation.versionId ? "production" : "draft",
+          )
+        : { values: {}, secrets: [] };
+      return { event, conversation, definition, turn, migrated, config };
     });
     if (!loaded) return false;
-    const { event, conversation, definition, migrated } = loaded;
+    const { event, conversation, definition, migrated, config } = loaded;
+    this.#secrets = config.secrets;
 
     let turn = loaded.turn;
     if (!turn) {
@@ -286,7 +307,7 @@ class ConversationRun {
       mode: conversation.mode as AutonomyTurn["mode"],
       definition,
       ...(state.summary ? { summary: state.summary.text } : {}),
-      env: {},
+      env: config.values,
     };
     const autonomy = this.deps.autonomy?.(modelTurn, sandbox.code);
     const ai = this.deps.ai?.(modelTurn);
@@ -330,8 +351,7 @@ class ConversationRun {
           state,
           event: eventScope(events, conversation, user),
           user: { vars: user.vars, attributes: user.attributes },
-          // Config variable values arrive with task 7.3.
-          env: {},
+          env: config.values,
           startedAt: turn.startedAt.getTime(),
           committedSteps: turn.stepCount,
         },
@@ -423,8 +443,10 @@ class ConversationRun {
    * Writes spans outside any step transaction (ADR-009): a failing trace store is logged and the
    * turn goes on. Readers are told afterwards with the step's own notification.
    */
-  async #writeSpans(spans: readonly Span[]): Promise<void> {
-    if (spans.length === 0) return;
+  async #writeSpans(written: readonly Span[]): Promise<void> {
+    if (written.length === 0) return;
+    // The redaction set (task 7.3): no secret config value is ever stored in a span.
+    const spans = scrubSecrets(written, this.#secrets);
     try {
       if (this.deps.writeSpans) await this.deps.writeSpans(this.workspaceId, spans);
       else await this.#tx((tx) => upsertSpans(tx, spans));

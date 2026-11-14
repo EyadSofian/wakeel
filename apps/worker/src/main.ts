@@ -98,6 +98,7 @@ if (config) {
     // AI cards and the handoff summary use the same client: workspace keys, one usage event per call.
     ai: (turn) => aiPort({ llm }, turn),
     summarizeHandoff: modelHandoffSummary({ db, model: llm }),
+    keyring,
   };
 
   const running = startWorkers({

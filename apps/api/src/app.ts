@@ -7,6 +7,7 @@ import { auditRoutes } from "./routes/audit";
 import { authRoutes } from "./routes/auth";
 import { botRoutes } from "./routes/bots";
 import { type BridgeDeps, bridgeRoutes } from "./routes/bridge/index";
+import { configVarRoutes } from "./routes/config-vars";
 import { connectionRoutes } from "./routes/connections";
 import { emulatorRoutes } from "./routes/emulator";
 import { invitationRoutes } from "./routes/invitations";
@@ -114,6 +115,7 @@ export function buildApp(options: AppOptions) {
     void app.register(auditRoutes, deps);
     void app.register(botRoutes, deps);
     void app.register(versionRoutes, deps);
+    void app.register(configVarRoutes, deps);
     void app.register(traceRoutes, deps);
     void app.register(modelRoutes, { studio: deps, keyring: deps.keyring });
   }

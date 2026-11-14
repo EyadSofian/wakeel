@@ -283,6 +283,36 @@ export const RestoreResponse = z.object({ removedWorkflows: z.array(z.string()) 
 export type RestoreResponse = z.infer<typeof RestoreResponse>;
 
 /* ------------------------------------------------------------------ */
+/* Config variable values (task 7.3, ADR-037)                          */
+/* ------------------------------------------------------------------ */
+
+export const ConfigEnv = z.enum(["draft", "production"]);
+export type ConfigEnv = z.infer<typeof ConfigEnv>;
+
+/** `PUT …/bots/{botId}/config/{env}/{key}`. */
+export const SetConfigValueRequest = z.strictObject({
+  value: z.string().max(8_192, "Use 8,192 characters or fewer"),
+});
+
+/** One environment of a config variable: set or not, and the value only when it is not secret. */
+export const ConfigValueState = z.object({
+  set: z.boolean(),
+  value: z.string().nullable(),
+  updatedAt: isoDate.nullable(),
+});
+
+/** `GET …/bots/{botId}/config`: every key the draft declares, plus stored keys it no longer declares. */
+export const ConfigVariableResponse = z.object({
+  key: z.string(),
+  secret: z.boolean(),
+  description: z.string().nullable(),
+  declared: z.boolean(),
+  draft: ConfigValueState,
+  production: ConfigValueState,
+});
+export type ConfigVariableResponse = z.infer<typeof ConfigVariableResponse>;
+
+/* ------------------------------------------------------------------ */
 /* Emulator (task 4.6, ADR-025)                                        */
 /* ------------------------------------------------------------------ */
 
