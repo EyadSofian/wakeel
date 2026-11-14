@@ -91,6 +91,11 @@ export const ConversationState = z.object({
   summary: z.object({ text: z.string(), throughSeq: z.number().int().nonnegative() }).optional(),
   /** Minutes; overrides the bot default when set by a card. */
   inactivityTimeoutMinutes: z.number().int().nonnegative().optional(),
+  /**
+   * Set when the session begins (ADR-027). Absent on a new conversation and after `ended`, which
+   * is when the `conversation_started` trigger runs.
+   */
+  started: z.literal(true).optional(),
 });
 export type ConversationState = z.infer<typeof ConversationState>;
 

@@ -25,11 +25,12 @@ export function findEventTrigger(
 
 /**
  * A Main-workflow trigger for a platform event: `inactivity` (the Trigger node contract says "Main
- * workflow only") or `handoff_released`, which arrives with an empty stack.
+ * workflow only"), `handoff_released`, which arrives with an empty stack, or `conversation_started`,
+ * which fires before anything else is on the stack (ADR-027).
  */
 export function findMainTrigger(
   index: DefinitionIndex,
-  kind: "inactivity" | "handoff_released",
+  kind: "inactivity" | "handoff_released" | "conversation_started",
 ): FoundTrigger | undefined {
   const node = index.triggers(index.mainWorkflowId).find((t) => t.on.kind === kind);
   return node ? { workflowId: index.mainWorkflowId, node } : undefined;

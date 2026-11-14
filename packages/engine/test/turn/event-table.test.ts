@@ -452,7 +452,7 @@ describe("timeout", () => {
       const { result, commits } = await run({ def: t.def, state: t.waiting, event: event("timeout") });
       expect(events(commits)).toEqual([{ type: "conversation.ended", data: { reason: "inactivity" } }]);
       expect(result.status).toBe("ended");
-      expect(result.state).toEqual(state({ status: "ended" }));
+      expect(result.state).toEqual(state({ status: "ended", started: undefined }));
     },
   );
 

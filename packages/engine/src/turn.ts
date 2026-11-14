@@ -221,9 +221,11 @@ class TurnRun {
             this.#state = emptyState();
             this.#touch();
             this.#startMain();
+            this.#startSession();
             return;
           case "idle":
             this.#startMain();
+            this.#startSession();
             return;
           case "waiting_input": {
             const wait = state.wait as WaitSpec;
@@ -249,6 +251,7 @@ class TurnRun {
           name,
         );
         if (found) this.#pushTrigger(found.workflowId, found.node);
+        this.#startSession();
         return;
       }
       case "tool_result": {
@@ -306,6 +309,21 @@ class TurnRun {
       return;
     }
     this.#push({ workflowId, nodeId, cardIndex: 0, vars: {}, inputs: {} });
+    // The builder picked where to start, so the conversation_started path is skipped (ADR-027).
+    this.#state.started = true;
+  }
+
+  /**
+   * Marks a new conversation (or a new session after `ended`) as started and, if Main has a
+   * `conversation_started` trigger, runs its path first (ADR-027). Called after the event has
+   * pushed its own frame, so that frame runs once the trigger's path pops.
+   */
+  #startSession(): void {
+    if (this.#state.started) return;
+    this.#state.started = true;
+    this.#touch();
+    const found = findMainTrigger(this.#index, "conversation_started");
+    if (found) this.#pushTrigger(found.workflowId, found.node);
   }
 
   #clearWait(): void {

@@ -46,5 +46,5 @@ Option A.
 
 - `ConversationState` gains one optional field. Conversations stored before this change have no `started` flag, so a conversation that was already `idle` would fire the trigger on its next message. Nothing is in production yet (Phase 15), so no data migration is needed. After launch, a change like this would need one.
 - State comparisons in engine tests now include `started: true` after any turn that began a session.
-- The trace shows the trigger as a node span of its own before Start's path (ADR-026 builds node spans from step commits, so no trace change is needed).
+- The trace shows the trigger's path before Start's path. The Trigger node itself, like Start, passes straight through and runs no step, so it has no span (ADR-026 builds spans from step commits, so no trace change is needed).
 - Docs changed with this ADR: the `conversation_started` row in the architecture §4.4 event table, and `started` in `04-contracts/runtime.ts`.
