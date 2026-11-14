@@ -494,7 +494,7 @@ components:
     IdempotencyKey:
       name: Idempotency-Key
       in: header
-      description: A unique value per logical request. The same key with the same body returns the first response for 24 hours.
+      description: A unique value per logical request. The same key with the same body returns the first response for at least 24 hours; the same key with a different body is `idempotency_mismatch`.
       schema: { type: string, minLength: 1, maxLength: 255 }
     Limit:
       name: limit
@@ -566,7 +566,7 @@ components:
         externalMessageId:
           type: string
           maxLength: 255
-          description: Your id for this message. Used for de-duplication when no `Idempotency-Key` is sent.
+          description: Your id for this message. When no `Idempotency-Key` is sent, a repeat of the same id in the same conversation returns the first response, and the same id with different content is `idempotency_mismatch`.
         metadata:
           type: object
           description: Opaque data available to the bot as `event.metadata`. At most 8 KB.
@@ -970,7 +970,10 @@ components:
           type: string
           enum: [production, draft]
           description: Which bot definition this connection runs.
-        status: { type: string, enum: [active, paused, disabled] }
+        status:
+          type: string
+          enum: [active, paused, disabled]
+          description: "`paused` answers inbound calls and holds webhook deliveries until the connection is active again. `disabled` refuses inbound calls with `connection_disabled`."
         webhookUrl: { type: [string, "null"], format: uri }
         subscribedEvents:
           type: array
