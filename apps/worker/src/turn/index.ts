@@ -62,9 +62,12 @@ export function turnProcessor(deps: TurnDeps): Processor {
 }
 
 /** The `maintenance` queue: `janitor` jobs run the janitor; other names belong to later phases. */
-export function maintenanceProcessor(deps: JanitorDeps): Processor {
+/** `tasks` are other phases' maintenance jobs by name, such as the knowledge base re-sync (8.5). */
+export function maintenanceProcessor(deps: JanitorDeps, tasks: Record<string, () => Promise<unknown>> = {}): Processor {
   return async (job, log) => {
     if (job.name === "janitor") return runJanitor(deps);
+    const task = tasks[job.name];
+    if (task) return task();
     log.warn({ jobName: job.name }, "no maintenance task by this name yet");
     return undefined;
   };

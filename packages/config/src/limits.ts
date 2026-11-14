@@ -97,4 +97,8 @@ export const KB_LIMITS = {
   maxOcrPagesPerDocument: 50,
   /** The parser's own limits are its env (PARSER_MAX_*); this is the worker's wait for an answer. */
   parserTimeoutMs: 200_000,
+  /** Architecture §8.1: at most one request per second to a host while crawling. */
+  crawlMinIntervalMs: 1_000,
+  /** How often the maintenance job looks for sources whose re-sync is due. */
+  resyncScanSeconds: 300,
 } as const;

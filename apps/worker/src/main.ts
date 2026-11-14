@@ -14,10 +14,10 @@ import {
   WORKER_LIMITS,
   workerEnv,
 } from "@wakeel/config";
-import { mintCapabilityToken } from "@wakeel/contracts";
+import { AppError, mintCapabilityToken } from "@wakeel/contracts";
 import { createDatabase, s3ObjectStore } from "@wakeel/db";
 import { createLlm } from "@wakeel/llm";
-import { httpParser, visionOcr } from "@wakeel/retrieval";
+import { CRAWLER_USER_AGENT, httpParser, visionOcr } from "@wakeel/retrieval";
 import {
   createAutonomyRunPort,
   createCodePort,
@@ -27,7 +27,15 @@ import {
 import { createLogger } from "@wakeel/telemetry";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
-import { ingestEnqueuer, ingestProcessor } from "./kb/index";
+import {
+  egressGet,
+  enqueueDueSyncs,
+  ingestEnqueuer,
+  ingestProcessor,
+  mimeOf,
+  syncEnqueuer,
+  syncProcessor,
+} from "./kb/index";
 import {
   aiPort,
   autonomyPort,
@@ -71,6 +79,15 @@ if (config) {
   const maintenanceQueue = new Queue("maintenance", { connection });
   const webhookQueue = new Queue("webhook", { connection });
   const ingestQueue = new Queue("kb-ingest", { connection });
+  const syncQueue = new Queue("kb-sync", { connection });
+  const enqueueIngest = ingestEnqueuer(ingestQueue);
+  const enqueueSync = syncEnqueuer(syncQueue);
+  const egressFor = (workspaceId: string) =>
+    egressGet({ egressUrl: config.egressUrl, egressToken: config.egressToken.reveal(), workspaceId });
+  const realClock = {
+    now: () => Date.now(),
+    sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)),
+  };
   const webhooks = webhookEnqueuer(webhookQueue);
   const publisher = new Redis(redisUrl);
   const sandbox = createSandboxClient({ url: config.sandboxUrl });
@@ -128,12 +145,16 @@ if (config) {
     queues: config.queues,
     processors: {
       turn: turnProcessor(turnDeps),
-      maintenance: maintenanceProcessor({
-        db,
-        logger,
-        enqueueTurn: turnEnqueuer(turnQueue),
-        enqueueWebhook: webhooks.now,
-      }),
+      maintenance: maintenanceProcessor(
+        {
+          db,
+          logger,
+          enqueueTurn: turnEnqueuer(turnQueue),
+          enqueueWebhook: webhooks.now,
+        },
+        // Scheduled knowledge base re-sync (task 8.5): finds due sources and adds kb-sync jobs.
+        { "kb-resync": () => enqueueDueSyncs({ db, enqueueSync }, new Date()) },
+      ),
       "kb-ingest": ingestProcessor({
         db,
         objectStore,
@@ -157,7 +178,22 @@ if (config) {
                 context: { workspaceId, mode: "live", botId },
               })
             ).embeddings,
-        enqueue: ingestEnqueuer(ingestQueue),
+        // URL, sitemap and crawl pages are fetched through egress (ADR-020), never directly.
+        fetchRemote: async ({ workspaceId, url }) => {
+          const res = await egressFor(workspaceId)(url, { "user-agent": CRAWLER_USER_AGENT });
+          if (res.status !== 200)
+            throw new AppError("source_fetch_failed", { url, message: `the page answered ${res.status}` });
+          return { body: res.body, mime: mimeOf(res), name: url };
+        },
+        enqueue: enqueueIngest,
+        logger,
+      }),
+      "kb-sync": syncProcessor({
+        db,
+        get: egressFor,
+        clock: realClock,
+        minIntervalMs: KB_LIMITS.crawlMinIntervalMs,
+        enqueueIngest,
         logger,
       }),
       webhook: webhookProcessor({
@@ -185,6 +221,12 @@ if (config) {
         { every: WORKER_LIMITS.janitorIntervalSeconds * 1000 },
         { name: "janitor", opts: { removeOnComplete: true, removeOnFail: 100 } },
       );
+    if (config.queues.includes("maintenance"))
+      await maintenanceQueue.upsertJobScheduler(
+        "kb-resync",
+        { every: KB_LIMITS.resyncScanSeconds * 1000 },
+        { name: "kb-resync", opts: { removeOnComplete: true, removeOnFail: 100 } },
+      );
   } catch (err) {
     logger.fatal({ err }, "cannot connect to Redis");
     process.exit(1);
@@ -205,6 +247,7 @@ if (config) {
       maintenanceQueue.close(),
       webhookQueue.close(),
       ingestQueue.close(),
+      syncQueue.close(),
       publisher.quit(),
       db.close(),
     ]);
