@@ -208,7 +208,11 @@ describe("one message", () => {
       [c.conversationId],
     );
     expect(conv).toMatchObject({ status: "idle", lease_until: null, processed: 1 });
-    expect(published).toEqual([
+    // SSE readers are told after each commit (typing on, two steps, typing off, the end of the turn).
+    expect(
+      published.filter((p) => p.channel === `conversation-events:${c.conversationId}`).length,
+    ).toBeGreaterThanOrEqual(3);
+    expect(published.filter((p) => p.channel.startsWith("turn-done:"))).toEqual([
       {
         channel: `turn-done:${c.conversationId}:1`,
         message: JSON.stringify({ turnId: turn?.id, status: "completed" }),
@@ -320,7 +324,7 @@ describe("the janitor", () => {
     });
     const { d } = deps({
       publish: async (channel) => {
-        resolveDone(channel);
+        if (channel.startsWith("turn-done:")) resolveDone(channel);
       },
     });
     const running = startWorkers({
@@ -394,7 +398,7 @@ describe("coalescing", () => {
     expect(await drainConversation(d, c.conversationId)).toEqual({ turns: 1, stopped: "drained" });
     expect(waited).toBe(800);
     expect(await botTexts(c)).toEqual(["أهلاً\nعايز أعرف طلبي فين"]);
-    expect(published.map((p) => p.channel)).toEqual([
+    expect(published.map((p) => p.channel).filter((ch) => ch.startsWith("turn-done:"))).toEqual([
       `turn-done:${c.conversationId}:1`,
       `turn-done:${c.conversationId}:2`,
     ]);

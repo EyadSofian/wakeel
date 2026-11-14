@@ -6,6 +6,7 @@ import { apiKeyRoutes } from "./routes/api-keys";
 import { auditRoutes } from "./routes/audit";
 import { authRoutes } from "./routes/auth";
 import { botRoutes } from "./routes/bots";
+import { type BridgeDeps, bridgeRoutes } from "./routes/bridge/index";
 import { invitationRoutes } from "./routes/invitations";
 import { memberRoutes } from "./routes/members";
 import { workspaceRoutes } from "./routes/workspaces";
@@ -25,6 +26,8 @@ export interface AppOptions {
   readinessTimeoutMs?: number;
   /** The Studio API (sign-in, workspaces, members); mounted for roles studio and all. */
   studio?: Omit<StudioDeps, "now"> & { now?: () => Date };
+  /** The Bridge API (task 4.5); mounted for roles bridge and all. */
+  bridge?: Omit<BridgeDeps, "now"> & { now?: () => Date };
   /** Fastify `trustProxy`: which proxies may set X-Forwarded-For. Off by default. */
   trustProxy?: boolean | string | string[];
 }
@@ -105,6 +108,10 @@ export function buildApp(options: AppOptions) {
     void app.register(apiKeyRoutes, deps);
     void app.register(auditRoutes, deps);
     void app.register(botRoutes, deps);
+  }
+
+  if (options.bridge && options.role !== "studio") {
+    void app.register(bridgeRoutes, { ...options.bridge, now: options.bridge.now ?? (() => new Date()) });
   }
 
   return app;

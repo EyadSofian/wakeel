@@ -8,6 +8,7 @@ export * from "./platform";
 export * from "./workflow";
 export * from "./bot-definition";
 export * from "./event";
+export * from "./bridge";
 export * from "./runtime";
 export * from "./seed";
 export * from "./validate/index";

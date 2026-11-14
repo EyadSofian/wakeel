@@ -3,8 +3,10 @@ import { createAuthService } from "@wakeel/auth";
 import { API_LIMITS, apiEnv, authEnv, commonEnv, databaseEnv, loadConfigOrExit, redisEnv } from "@wakeel/config";
 import { createDatabase } from "@wakeel/db";
 import { createLogger } from "@wakeel/telemetry";
+import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import { buildApp } from "./app";
+import { Signals } from "./routes/bridge/signals";
 
 const config = loadConfigOrExit({ ...commonEnv, ...databaseEnv, ...redisEnv, ...apiEnv, ...authEnv });
 if (config) {
@@ -31,10 +33,25 @@ if (config) {
     signInFailuresPerMinute: API_LIMITS.signInFailuresPerMinute,
   });
 
+  // The Bridge API enqueues turns and waits on their signals (§4.2, §9.3).
+  const redisUrl = config.redisUrl.reveal();
+  const subscriber = new Redis(redisUrl);
+  const turnQueue = new Queue("turn", { connection: { url: redisUrl, maxRetriesPerRequest: null } });
   const app = buildApp({
     role: config.role,
     logger,
     studio: { auth, studioOrigin: config.studioOrigin, db },
+    bridge: {
+      db,
+      signals: new Signals(subscriber),
+      enqueueTurn: async (conversationId) => {
+        await turnQueue.add(
+          "turn",
+          { conversationId },
+          { jobId: conversationId, removeOnComplete: true, removeOnFail: true },
+        );
+      },
+    },
     readiness: {
       database: async () => void (await db.verify()),
       redis: async () => {
@@ -46,7 +63,7 @@ if (config) {
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "shutting down");
     await app.close();
-    await Promise.allSettled([db.close(), redis.quit()]);
+    await Promise.allSettled([db.close(), redis.quit(), subscriber.quit(), turnQueue.close()]);
     process.exit(0);
   };
   process.once("SIGTERM", () => void shutdown("SIGTERM"));
