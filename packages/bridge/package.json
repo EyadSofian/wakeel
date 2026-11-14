@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./signing": "./src/signing.ts"
+    "./signing": "./src/signing.ts",
+    "./snippets": "./src/snippets.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -14,5 +15,8 @@
   "dependencies": {
     "@wakeel/contracts": "workspace:*",
     "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "testcontainers": "12.2.1"
   }
 }

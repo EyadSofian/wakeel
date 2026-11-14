@@ -17,6 +17,7 @@
   "dependencies": {
     "@tanstack/react-query": "5.105.0",
     "@tanstack/react-router": "1.170.46",
+    "@wakeel/bridge": "workspace:*",
     "@wakeel/config": "workspace:*",
     "@wakeel/contracts": "workspace:*",
     "@wakeel/testing": "workspace:*",
@@ -35,6 +36,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.3.0",
+    "@wakeel/db": "workspace:*",
     "tailwindcss": "4.3.5",
     "vite": "8.3.8"
   }

@@ -212,6 +212,21 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
       .locator("header")
       .click({ modifiers: ["Shift"] });
   }
+  if (screen.id.startsWith("connection") && !["loading", "error"].includes(state)) {
+    await expect(page.locator("main h1").first()).not.toBeEmpty();
+    await expect(page.locator('main [aria-hidden="true"].bg-muted')).toHaveCount(0);
+  }
+  if (screen.id === "connection-test" && (state === "tested" || state === "rtl")) {
+    // A test event the receiver refused, and one message with the bot's reply.
+    await page.getByRole("button", { name: "Send test event" }).click();
+    await expect(page.getByRole("alert")).toBeVisible();
+    await page
+      .getByLabel("Message", { exact: true })
+      .fill(state === "rtl" ? "عايز أعرف حالة طلبي 5678" : "Where is my order 5678?");
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(page.getByRole("list", { name: "Replies" })).toBeVisible();
+    await page.mouse.move(0, 0);
+  }
   if (state === "focus") {
     // Keyboard focus on the first control, to review the focus ring (checklist 18).
     await page.keyboard.press("Tab");

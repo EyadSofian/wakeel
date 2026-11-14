@@ -2,10 +2,12 @@ import type { Page, Route } from "@playwright/test";
 import type {
   ApiKeyResponse,
   BotResponse,
+  BridgeDelivery,
   InvitationResponse,
   MemberResponse,
   Problem,
   SessionResponse,
+  StudioConnection,
   WorkspaceResponse,
   WorkspaceSummary,
 } from "@wakeel/contracts";
@@ -40,7 +42,141 @@ const permissions = [
   "bot.update",
   "bot.delete",
   "bot.publish",
+  "connection.read",
+  "connection.manage",
 ];
+
+/** Connection ids the Connections screens open (task 5.5). */
+export const CONN = "conn_01m7a256m0a13warwhczsjhx01";
+export const CONN_DISABLED = "conn_01m7a256m0a13warwhczsjhx03";
+
+/** Connections, keys and deliveries for the Connections screens (task 5.5). */
+function connectionsData(state: MockState) {
+  const rtl = state === "rtl";
+  const empty = state === "empty";
+  const base = {
+    botId: BOT,
+    target: "production" as const,
+    subscribedEvents: ["message.created", "handoff.requested", "conversation.ended", "turn.completed"],
+    createdAt: T0,
+  };
+  const connections: StudioConnection[] = [
+    {
+      ...base,
+      id: CONN,
+      name: rtl ? "محوّل Chatwoot الرئيسي" : "Chatwoot",
+      status: "active",
+      webhookUrl: empty ? null : "https://bridge.engosoft.com/wakeel/webhook",
+      signingSecrets: empty ? [{ last4: "Q7mN" }] : [{ last4: "Q7mN" }, { last4: "c2Xe" }],
+      consecutiveDead: 0,
+      lastDelivery: empty ? null : { status: "delivered", at: "2026-11-13T18:31:00.000Z" },
+    },
+    {
+      ...base,
+      id: "conn_01m7a256m0a13warwhczsjhx02",
+      name: rtl ? "واتساب فرع المعادي" : "WhatsApp staging",
+      target: "draft",
+      status: "paused",
+      webhookUrl: "https://staging.engosoft.com/hooks/wakeel-whatsapp-with-a-long-path",
+      signingSecrets: [{ last4: "k9Pw" }],
+      consecutiveDead: 0,
+      lastDelivery: { status: "failed", at: "2026-11-12T10:05:00.000Z" },
+    },
+    {
+      ...base,
+      id: CONN_DISABLED,
+      name: rtl ? `تجربة قديمة ${longToken}` : "Old n8n flow",
+      status: "disabled",
+      webhookUrl: "https://n8n.example.com/webhook/7f3a",
+      signingSecrets: [{ last4: "Zr4t" }],
+      consecutiveDead: 20,
+      lastDelivery: { status: "dead", at: "2026-11-11T22:40:00.000Z" },
+    },
+  ];
+  const keys = empty
+    ? []
+    : [
+        {
+          id: "key_01m7a256m0a13warwhczsjhx01",
+          name: rtl ? "المحوّل في الإنتاج" : "Production adapter",
+          prefix: "wk_bridge_8f2kq1zd",
+          createdBy: owner,
+          lastUsedAt: "2026-11-13T18:30:00.000Z",
+          revokedAt: null,
+          createdAt: T0,
+        },
+        {
+          id: "key_01m7a256m0a13warwhczsjhx02",
+          name: rtl ? "اختبار محلي" : "Local testing",
+          prefix: "wk_bridge_3mv0tc8s",
+          createdBy: owner,
+          lastUsedAt: null,
+          revokedAt: null,
+          createdAt: "2026-11-10T08:00:00.000Z",
+        },
+      ];
+  const conv = "conv_01m7a256m0a13warwhczsjhx77";
+  const deliveries: BridgeDelivery[] = empty
+    ? []
+    : [
+        {
+          eventId: "evt_01m7a256m0a13warwhczsjhx09",
+          eventType: "turn.completed",
+          conversationId: conv,
+          seq: 9,
+          status: "delivered",
+          attempt: 1,
+          nextAttemptAt: null,
+          responseStatus: 200,
+          error: null,
+        },
+        {
+          eventId: "evt_01m7a256m0a13warwhczsjhx08",
+          eventType: "message.created",
+          conversationId: conv,
+          seq: 8,
+          status: "delivered",
+          attempt: 1,
+          nextAttemptAt: null,
+          responseStatus: 204,
+          error: null,
+        },
+        {
+          eventId: "evt_01m7a256m0a13warwhczsjhx07",
+          eventType: "handoff.requested",
+          conversationId: conv,
+          seq: 7,
+          status: "failed",
+          attempt: 3,
+          nextAttemptAt: "2026-11-13T18:42:00.000Z",
+          responseStatus: 503,
+          error: "webhook_rejected",
+        },
+        {
+          eventId: "evt_01m7a256m0a13warwhczsjhx06",
+          eventType: "message.created",
+          conversationId: conv,
+          seq: 6,
+          status: "dead",
+          attempt: 9,
+          nextAttemptAt: null,
+          responseStatus: null,
+          error: "fetch_failed",
+        },
+        {
+          eventId: "evt_01m7a256m0a13warwhczsjhx05",
+          eventType: "conversation.ended",
+          conversationId: conv,
+          seq: 5,
+          status: "dead",
+          attempt: 9,
+          nextAttemptAt: null,
+          responseStatus: 301,
+          error: "webhook_redirected",
+        },
+      ];
+  return { connections, keys, deliveries };
+}
 
 /** The fixture set's long unbroken token, in a member name, to check truncation (design system §6). */
 const longToken = SCREENSHOT_FIXTURES.find((f) => f.id === "long_token")?.text.slice(-24) ?? "X7Q9X7Q9X7Q9X7Q9X7Q9X7Q9";
@@ -280,6 +416,63 @@ export async function mockApi(
     }
     if (path.endsWith("/api-keys"))
       return json(route, 200, { data: state === "empty" ? [] : d.apiKeys, nextCursor: null });
+    // Connections (task 5.5).
+    const connBase = `${botBase}/connections`;
+    if (path.startsWith(connBase)) {
+      const c = connectionsData(state);
+      const rest = path.slice(connBase.length).split("/").filter(Boolean);
+      const method = route.request().method();
+      if (rest.length === 0) {
+        return json(route, 200, { data: state === "empty" ? [] : c.connections, nextCursor: null });
+      }
+      const one = c.connections.find((x) => x.id === rest[0]);
+      if (!one)
+        return json(route, 404, {
+          ...internal,
+          status: 404,
+          code: "not_found",
+          title: "We could not find that",
+          fix: "Check the id.",
+        });
+      if (rest.length === 1) return json(route, 200, one);
+      if (rest[1] === "keys") return json(route, 200, { data: c.keys, nextCursor: null });
+      if (rest[1] === "deliveries") {
+        const dead = url.searchParams.get("status") === "dead";
+        return json(route, 200, {
+          data: dead ? c.deliveries.filter((x) => x.status === "dead") : c.deliveries,
+          nextCursor: null,
+        });
+      }
+      if (rest[1] === "test" && rest[2] === "messages" && method === "POST") {
+        return json(route, 200, {
+          turnId: "turn_01m7a256m0a13warwhczsjhx01",
+          conversationId: "conv_01m7a256m0a13warwhczsjhx88",
+          status: "completed",
+          messages: [
+            {
+              id: "msg_01m7a256m0a13warwhczsjhx01",
+              conversationId: "conv_01m7a256m0a13warwhczsjhx88",
+              seq: 2,
+              direction: "out",
+              payload: {
+                type: "text",
+                text:
+                  state === "rtl"
+                    ? "أهلاً بيك! طلبك رقم 5678 اتشحن امبارح."
+                    : "Hello! Your order 5678 shipped yesterday.",
+                format: "markdown",
+              },
+              citations: [],
+              createdAt: T0,
+            },
+          ],
+          events: [],
+        });
+      }
+      if (rest[1] === "test" && method === "POST") {
+        return json(route, 200, { delivered: false, statusCode: 503, durationMs: 412, error: "webhook_rejected" });
+      }
+    }
     return json(route, 404, {
       ...internal,
       status: 404,

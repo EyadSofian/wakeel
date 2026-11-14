@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import {
   BookOpen,
   Braces,
+  Cable,
   Database,
   FlaskConical,
   GitCommitHorizontal,
@@ -19,7 +20,7 @@ import {
 const DESTINATIONS: {
   label: string;
   icon: LucideIcon;
-  to?: "/w/$workspaceId/b/$botId" | "/w/$workspaceId/b/$botId/variables";
+  to?: "/w/$workspaceId/b/$botId" | "/w/$workspaceId/b/$botId/variables" | "/w/$workspaceId/b/$botId/connections";
 }[] = [
   { label: "Workflows", icon: Workflow, to: "/w/$workspaceId/b/$botId" },
   { label: "Knowledge", icon: BookOpen },
@@ -28,6 +29,8 @@ const DESTINATIONS: {
   { label: "Versions", icon: GitCommitHorizontal },
   { label: "Evals", icon: FlaskConical },
   { label: "Conversations", icon: MessagesSquare },
+  // Task 5.5 (ADR-030): the bridges that talk to this bot.
+  { label: "Connections", icon: Cable, to: "/w/$workspaceId/b/$botId/connections" },
 ];
 
 /** The active destination is a filled accent tile (ADR-017); the rest stay quiet. */
@@ -63,7 +66,8 @@ function RailLink({
     | "/w/$workspaceId"
     | "/w/$workspaceId/settings/general"
     | "/w/$workspaceId/b/$botId"
-    | "/w/$workspaceId/b/$botId/variables";
+    | "/w/$workspaceId/b/$botId/variables"
+    | "/w/$workspaceId/b/$botId/connections";
   workspaceId: string;
   botId?: string;
   label: string;
