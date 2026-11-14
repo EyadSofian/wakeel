@@ -4,6 +4,7 @@ import { useIssues } from "../canvas/issues";
 import { CommandPalette } from "./CommandPalette";
 import { IssuesPanel } from "./IssuesPanel";
 import { issueKey, orderIssues, stepIssue } from "./issue-order";
+import { PublishDialog } from "./PublishDialog";
 import { type Action, createShellStore, type Shell, ShellContext, useRegisterActions, useShell } from "./shell-store";
 import { useGoTo } from "./use-go-to";
 import { useWorkflowRequests, WorkflowDialogs } from "./WorkflowDialogs";
@@ -39,6 +40,7 @@ export function ShellProvider({
           <CommandPalette />
           <IssuesPanel />
           <WorkflowDialogs />
+          <PublishDialog />
         </>
       ) : null}
     </ShellContext.Provider>
@@ -75,6 +77,10 @@ function ShellKeys() {
         if (!s.palette && document.querySelector('[role="dialog"][data-state="open"]')) return;
         e.preventDefault();
         s.set({ palette: !s.palette });
+      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === "p") {
+        if (document.querySelector('[role="dialog"][data-state="open"]')) return;
+        e.preventDefault();
+        s.set({ publish: true });
       } else if (e.key === "F8" && !s.palette && !s.dialog) {
         e.preventDefault();
         step(e.shiftKey ? -1 : 1);
@@ -146,6 +152,13 @@ function ShellActions() {
           const wf = open();
           if (wf) store.getState().set({ dialog: { kind: "delete", workflowId: wf.id } });
         },
+      },
+      {
+        id: "shell.publish",
+        label: "Publish",
+        keywords: "release version live",
+        keys: ["⇧", "⌘", "P"],
+        run: () => store.getState().set({ publish: true }),
       },
       {
         id: "shell.issues",

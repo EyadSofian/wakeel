@@ -20,13 +20,17 @@ import {
 const DESTINATIONS: {
   label: string;
   icon: LucideIcon;
-  to?: "/w/$workspaceId/b/$botId" | "/w/$workspaceId/b/$botId/variables" | "/w/$workspaceId/b/$botId/connections";
+  to?:
+    | "/w/$workspaceId/b/$botId"
+    | "/w/$workspaceId/b/$botId/variables"
+    | "/w/$workspaceId/b/$botId/versions"
+    | "/w/$workspaceId/b/$botId/connections";
 }[] = [
   { label: "Workflows", icon: Workflow, to: "/w/$workspaceId/b/$botId" },
   { label: "Knowledge", icon: BookOpen },
   { label: "Tables", icon: Database },
   { label: "Variables", icon: Braces, to: "/w/$workspaceId/b/$botId/variables" },
-  { label: "Versions", icon: GitCommitHorizontal },
+  { label: "Versions", icon: GitCommitHorizontal, to: "/w/$workspaceId/b/$botId/versions" },
   { label: "Evals", icon: FlaskConical },
   { label: "Conversations", icon: MessagesSquare },
   // Task 5.5 (ADR-030): the bridges that talk to this bot.
@@ -64,6 +68,7 @@ function RailLink({
 }: {
   to:
     | "/w/$workspaceId"
+    | "/w/$workspaceId/b/$botId/versions"
     | "/w/$workspaceId/settings/general"
     | "/w/$workspaceId/b/$botId"
     | "/w/$workspaceId/b/$botId/variables"

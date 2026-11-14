@@ -23,6 +23,7 @@ const mockStateFor = (screen: Screen, state: ScreenState): MockState => {
   // The emulator's states are its own; the canvas behind it always loads.
   if (screen.id === "emulator") return "default";
   if (state === "empty" && screen.id === "canvas") return "default";
+  if (state === "secrets-empty") return "empty";
   if (
     [
       "card-rtl",
@@ -33,6 +34,7 @@ const mockStateFor = (screen: Screen, state: ScreenState): MockState => {
       "code-drawer-rtl",
       "card-generate-rtl",
       "card-handoff-rtl",
+      "secrets-rtl",
     ].includes(state)
   )
     return "rtl";
@@ -218,6 +220,38 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
     if (!pane) throw new Error("no canvas");
     await page.mouse.dblclick(pane.x + 60, pane.y + 140);
     await expect(page.getByRole("dialog", { name: "Add node" })).toBeVisible();
+  }
+  if (state === "publish" || state === "publish-blocked") {
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: /^Publish v/ });
+    await settled(dialog);
+    if (state === "publish") await expect(dialog.getByText("Changes since v3, the live version")).toBeVisible();
+    else await expect(dialog.getByText(/blocks? publishing/)).toBeVisible();
+    await expect(dialog.locator("dl, p").first()).toBeVisible();
+  }
+  if (screen.id === "versions" && !["loading", "error", "empty"].includes(state)) {
+    await expect(page.getByRole("table", { name: "Versions" })).toBeVisible();
+  }
+  if (state === "rollback") {
+    await page.getByRole("button", { name: "Roll back to v2" }).click();
+    await settled(page.getByRole("dialog", { name: "Roll back to v2?" }));
+  }
+  if (state === "restore") {
+    await page.getByRole("button", { name: "Restore v2 to the draft" }).click();
+    const dialog = page.getByRole("dialog", { name: "Restore v2 to the draft?" });
+    await settled(dialog);
+    await expect(dialog.getByRole("button", { name: "Restore v2" })).toBeEnabled();
+  }
+  if (screen.id === "version-compare" && !["loading", "error"].includes(state)) {
+    await expect(page.getByRole("table", { name: "Changes" })).toBeVisible();
+  }
+  if (state.startsWith("secrets")) {
+    await page.getByRole("tab", { name: "Secrets and settings" }).click();
+    await expect(
+      state === "secrets-empty"
+        ? page.getByText("No config variables yet")
+        : page.getByRole("table", { name: "Config variables" }),
+    ).toBeVisible();
   }
   if (state === "node-actions") {
     // The node's "…" menu (task 2.4, Duplicate and Delete added after 6.9).
