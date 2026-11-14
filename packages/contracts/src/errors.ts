@@ -209,6 +209,11 @@ export const ERRORS = {
     title: "No model is set for this step",
     fix: "Choose a default model in bot settings.",
   },
+  ai_extraction_invalid: {
+    status: 500,
+    title: "The model's answer did not match the extraction schema: {message}",
+    fix: "Describe the fields more clearly in the instructions, or make fields the text may not give optional.",
+  },
 
   // Knowledge and tables
   kb_not_ready: { status: 409, title: '"{kb}" is still being indexed', fix: "Wait for indexing to finish." },

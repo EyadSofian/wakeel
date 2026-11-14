@@ -496,6 +496,7 @@ class TurnRun {
         deadline: this.#deadline,
         summarizeHandoff: async (reason) =>
           this.#ports.handoffSummary ? this.#ports.handoffSummary({ turnId: this.#input.turnId, reason }) : "",
+        ...(this.#ports.ai ? { ai: this.#ports.ai } : {}),
       });
     } catch (error) {
       this.#lastStep = { ...location, outcome: "fail" };
@@ -533,13 +534,30 @@ class TurnRun {
         deadline: this.#deadline,
       });
       this.#state.autonomy[key] = stepped.memory;
-      result = stepped;
+      result = await this.#withHandoffSummary(stepped);
     } catch (error) {
       this.#lastStep = { ...location, outcome: "fail" };
       this.#fail(error, location, "error");
       return;
     }
     this.#applyStep(result, location, snapshot, { from: "autonomy", failurePort: "error" });
+  }
+
+  /**
+   * An Autonomous Node that hands off without a summary of its own gets the automatic one, as a
+   * Handoff card with `summary: "auto"` does (task 6.7). A failing summarizer never stops the handoff.
+   */
+  async #withHandoffSummary(result: StepResult): Promise<StepResult> {
+    const outcome = result.outcome;
+    if (outcome.type !== "handoff" || outcome.summary !== "" || !this.#ports.handoffSummary) return result;
+    try {
+      const summary = await this.#ports.handoffSummary({ turnId: this.#input.turnId, reason: outcome.reason });
+      return { ...result, outcome: { ...outcome, summary } };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      const log = { level: "warn" as const, message: `The handoff summary could not be written: ${detail}` };
+      return { ...result, logs: [...(result.logs ?? []), log] };
+    }
   }
 
   async #runExit(frame: Frame, node: Extract<Node, { type: "exit" }>): Promise<void> {

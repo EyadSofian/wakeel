@@ -27,10 +27,11 @@ import {
   readSecretValue,
   recentTranscript,
 } from "@wakeel/db";
-import type { AutonomyPort, CodePort } from "@wakeel/engine";
+import type { AiPort, AutonomyPort, CodePort } from "@wakeel/engine";
 import type { LlmClient, UsageEvent } from "@wakeel/llm";
 import type { AutonomyRunPort, BuilderTool } from "@wakeel/sandbox-client";
 import type { Logger } from "@wakeel/telemetry";
+import { modelId } from "./handoff-summary";
 
 /**
  * The worker side of the Autonomous Node (task 6.6, ADR-032): the model resolved for the node, the
@@ -240,6 +241,36 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
     context,
   });
   return { step: (input) => autonomy.step(input as never) as never };
+}
+
+/**
+ * The engine's model port for AI cards (task 6.7): one streamed call, read to the end, with the
+ * workspace's key and one usage event, like the Autonomous Node's calls.
+ */
+export function aiPort(w: { llm: LlmClient }, turn: AutonomyTurn): AiPort {
+  return {
+    async complete(request) {
+      const handle = w.llm.stream({
+        model: modelId(request.model),
+        system: request.system,
+        messages: request.messages,
+        ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
+        ...(request.maxOutputTokens !== undefined ? { maxOutputTokens: request.maxOutputTokens } : {}),
+        purpose: request.purpose,
+        context: {
+          workspaceId: turn.workspaceId,
+          mode: turn.mode,
+          botId: turn.botId,
+          conversationId: turn.conversationId,
+          turnId: turn.turnId,
+        },
+      });
+      for await (const _chunk of handle.textStream) {
+        // The whole text is in `result`, which settles once the stream is read.
+      }
+      return { text: (await handle.result).text };
+    },
+  };
 }
 
 function manifestEntry(tool: Tool): BuilderTool {
