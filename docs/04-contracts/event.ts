@@ -51,7 +51,16 @@ export const SendEventRequest = z.object({
 export type SendEventRequest = z.infer<typeof SendEventRequest>;
 
 /** Internal inbox record kinds (`inbound_events.kind`). */
-export const InboundKind = z.enum(["message", "event", "user_update", "tool_result", "handoff_release", "timeout"]);
+/** `run_from` is internal: only the Studio emulator inserts it, on emulator conversations (ADR-025). */
+export const InboundKind = z.enum([
+  "message",
+  "event",
+  "user_update",
+  "tool_result",
+  "handoff_release",
+  "timeout",
+  "run_from",
+]);
 export type InboundKind = z.infer<typeof InboundKind>;
 
 /** The read-only `event` object visible to expressions and code during a turn. */

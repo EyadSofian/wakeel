@@ -47,6 +47,12 @@ export const stagger = {
   list: { each: 0.024, maxItems: 8 },
 } as const;
 
+/**
+ * The emulator's typing indicator (§5.3): three dots looping opacity every 1.2 s, shown only if
+ * nothing has arrived 300 ms after the turn starts. The one looping animation allowed (§2.6).
+ */
+export const typing = { loop: 1.2, appearAfter: 0.3 } as const;
+
 /** Enter travels 4–8 px from where the thing came from; exit is a fade at 0.75× the enter time. */
 export const travel = { min: 4, max: 8 } as const;
 export const EXIT_DURATION_FACTOR = 0.75;
@@ -69,6 +75,8 @@ export interface MotionTokens {
   readonly spring: Record<keyof typeof spring, Transition>;
   readonly ease: typeof ease;
   readonly stagger: { readonly list: { readonly each: number; readonly maxItems: number } };
+  /** Typing dots; `loop` is null when motion is reduced (static "Typing…"). */
+  readonly typing: { readonly loop: number | null; readonly appearAfter: number };
   /** Pixels an entrance travels; 0 when motion is reduced. */
   readonly travel: number;
   /** Pan inertia after a flick (§5.1); off when motion is reduced. */
@@ -83,7 +91,7 @@ const reducedTransition: Transition = { type: "tween", duration: duration.instan
  */
 export function motionTokens(reduced: boolean): MotionTokens {
   if (!reduced) {
-    return { reduced, duration, spring, ease, stagger, travel: travel.max, panInertia: true };
+    return { reduced, duration, spring, ease, stagger, typing, travel: travel.max, panInertia: true };
   }
   return {
     reduced,
@@ -91,6 +99,7 @@ export function motionTokens(reduced: boolean): MotionTokens {
     spring: { snappy: reducedTransition, smooth: reducedTransition, gentle: reducedTransition },
     ease,
     stagger: { list: { each: 0, maxItems: stagger.list.maxItems } },
+    typing: { loop: null, appearAfter: typing.appearAfter },
     travel: 0,
     panInertia: false,
   };

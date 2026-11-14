@@ -7,6 +7,7 @@ import { auditRoutes } from "./routes/audit";
 import { authRoutes } from "./routes/auth";
 import { botRoutes } from "./routes/bots";
 import { type BridgeDeps, bridgeRoutes } from "./routes/bridge/index";
+import { emulatorRoutes } from "./routes/emulator";
 import { invitationRoutes } from "./routes/invitations";
 import { memberRoutes } from "./routes/members";
 import { workspaceRoutes } from "./routes/workspaces";
@@ -108,6 +109,14 @@ export function buildApp(options: AppOptions) {
     void app.register(apiKeyRoutes, deps);
     void app.register(auditRoutes, deps);
     void app.register(botRoutes, deps);
+  }
+
+  // The Studio emulator runs the Bridge inbound path for the builder's session (ADR-025).
+  if (options.studio && options.bridge && options.role !== "bridge") {
+    void app.register(emulatorRoutes, {
+      studio: { ...options.studio, now: options.studio.now ?? (() => new Date()) },
+      bridge: { ...options.bridge, now: options.bridge.now ?? (() => new Date()) },
+    });
   }
 
   if (options.bridge && options.role !== "studio") {

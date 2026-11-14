@@ -32,6 +32,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { id: "leave", group: "Nodes", keys: ["Esc"], action: "Go up one level; clears the selection at the top" },
   { id: "move", group: "Nodes", keys: ["⇧", "←→↑↓"], action: "Move 8 px; with ⌥, 1 px" },
   { id: "rename", group: "Nodes", keys: ["F2"], action: "Rename; double-click the name works too" },
+  { id: "run-from", group: "Nodes", keys: ["⌘", "Enter"], action: "Run from here in the emulator" },
   { id: "duplicate", group: "Nodes", keys: ["⌘", "D"], action: "Duplicate" },
   { id: "delete", group: "Nodes", keys: ["⌫"], action: "Delete" },
   { id: "copy", group: "Nodes", keys: ["⌘", "C"], action: "Copy" },

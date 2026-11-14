@@ -17,7 +17,9 @@ export type Menu =
   /** The add-node menu at a screen point; with `from`, the new node is wired from that output. */
   | { kind: "node"; at: { x: number; y: number }; from?: Port }
   /** The card menu for a standard node, optionally pre-filtered (`/` inside a node). */
-  | { kind: "card"; nodeId: string; at: { x: number; y: number }; query?: string };
+  | { kind: "card"; nodeId: string; at: { x: number; y: number }; query?: string }
+  /** The node menu from its header button: Run from here, Rename (§5.1). */
+  | { kind: "actions"; nodeId: string; at: { x: number; y: number } };
 
 export interface UiState {
   menu: Menu | undefined;

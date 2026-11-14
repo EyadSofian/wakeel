@@ -24,8 +24,13 @@ export function setCsrfToken(token: string | undefined): void {
   csrfToken = token;
 }
 
+/** The CSRF header for a mutation made outside `api()` (the emulator's streamed requests). */
+export function csrfHeaders(): Record<string, string> {
+  return csrfToken === undefined ? {} : { "x-csrf-token": csrfToken };
+}
+
 /** A problem for failures that never reached the api (offline, proxy down). */
-function networkProblem(): Problem {
+export function networkProblem(): Problem {
   const code: ErrorCode = "internal_error";
   return {
     type: "about:blank",

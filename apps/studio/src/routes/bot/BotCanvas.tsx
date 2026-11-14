@@ -4,16 +4,27 @@ import { Badge, Banner, Button, Skeleton } from "@wakeel/ui";
 import { ReactFlowProvider } from "@xyflow/react";
 import { CircleAlert, CircleCheck, LoaderCircle, Play, Rocket, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useStore } from "zustand";
+import { createStore } from "zustand/vanilla";
 import { ApiError } from "../../api/client";
 import { useWorkspace } from "../../api/queries";
 import { useAddNode } from "../../canvas/add-node";
-import { useCanvas } from "../../canvas/context";
+import { useCanvas, useCanvasStore } from "../../canvas/context";
 import { createUiStore, UiStoreContext } from "../../canvas/interaction/ui-store";
 import { groupIssues, useIssues } from "../../canvas/issues";
 import { NodeLibrary } from "../../canvas/library/NodeLibrary";
 import { isDirty } from "../../canvas/store/store";
 import { useSummaryContext } from "../../canvas/use-summary";
 import { Canvas } from "../../canvas/view/Canvas";
+import { emulatorBase, fetchTransport } from "../../emulator/api";
+import {
+  createEmulatorStore,
+  EmulatorStoreContext,
+  useEmulator,
+  useEmulatorStoreOptional,
+} from "../../emulator/controller";
+import { EmulatorPanel } from "../../emulator/EmulatorPanel";
+import { waitForSaved } from "../../emulator/run-from";
 import { Inspector } from "../../inspector/Inspector";
 import { AppShell } from "../../shell/AppShell";
 import { ProblemBanner } from "../../shell/ProblemBanner";
@@ -31,12 +42,34 @@ export function BotCanvas({ workspaceId, botId }: { workspaceId: string; botId: 
 /** Inside the store provider: validates once and shares the result with the top bar and canvas. */
 function Body({ workspaceId, botId, state }: { workspaceId: string; botId: string; state: LoadState }) {
   const [ui] = useState(createUiStore);
+  const canvas = useCanvasStore();
+  // One emulator per open bot: its test conversation survives moving between workflows.
+  const [emulator] = useState(() =>
+    createEmulatorStore({
+      base: emulatorBase(workspaceId, botId),
+      transport: fetchTransport,
+      beforeTurn: () => waitForSaved(canvas),
+    }),
+  );
   return (
     <ReactFlowProvider>
       <UiStoreContext.Provider value={ui}>
-        <Frame workspaceId={workspaceId} botId={botId} state={state} />
+        <EmulatorStoreContext.Provider value={emulator}>
+          <Frame workspaceId={workspaceId} botId={botId} state={state} />
+        </EmulatorStoreContext.Provider>
       </UiStoreContext.Provider>
     </ReactFlowProvider>
+  );
+}
+
+/** The end side: the emulator while it is open, otherwise the inspector for the selection. */
+function SidePanel({ issues, summary }: { issues: DefinitionIssue[]; summary: ReturnType<typeof useSummaryContext> }) {
+  const open = useEmulator((s) => s.open);
+  const setOpen = useEmulator((s) => s.setOpen);
+  return open ? (
+    <EmulatorPanel onShowInspector={() => setOpen(false)} />
+  ) : (
+    <Inspector issues={issues} summary={summary} />
   );
 }
 
@@ -56,7 +89,7 @@ function Frame({ workspaceId, botId, state }: { workspaceId: string; botId: stri
       botId={botId}
       actions={ready ? <TopBarStatus issues={issues} validated={result !== undefined} /> : null}
       panel={ready ? <NodeLibrary onAdd={(type) => addNode(type)} /> : null}
-      inspector={ready ? <Inspector issues={issues} summary={summary} /> : null}
+      inspector={ready ? <SidePanel issues={issues} summary={summary} /> : null}
     >
       {state === "loading" ? (
         <CanvasSkeleton />
@@ -174,14 +207,8 @@ export function TopBarStatus({ issues: all, validated }: { issues: DefinitionIss
         </span>
       ) : null}
       <span aria-hidden="true" className="h-control-sm border-s border-hairline" />
-      {/* Testing arrives with the emulator (4.6) and publishing with versions (7.1). */}
-      <Button
-        icon={<Play className="size-icon" strokeWidth={1.75} aria-hidden="true" />}
-        disabled
-        title="Testing is not available yet"
-      >
-        Test
-      </Button>
+      <TestButton />
+      {/* Publishing arrives with versions (7.1). */}
       <Button
         variant="primary"
         icon={<Rocket className="size-icon" strokeWidth={1.75} aria-hidden="true" />}
@@ -193,6 +220,26 @@ export function TopBarStatus({ issues: all, validated }: { issues: DefinitionIss
     </div>
   );
 }
+
+/** Opens and closes the emulator (§5.3); off the canvas, where there is none, it is disabled. */
+function TestButton() {
+  const emulator = useEmulatorStoreOptional();
+  const open = useStore(emulator ?? NO_EMULATOR, (s) => s.open);
+  return (
+    <Button
+      icon={<Play className="size-icon" strokeWidth={1.75} aria-hidden="true" />}
+      aria-pressed={emulator ? open : undefined}
+      disabled={!emulator}
+      title={emulator ? (open ? "Close the emulator" : "Test the draft in the emulator") : "Open the canvas to test"}
+      onClick={() => emulator?.getState().setOpen(!open)}
+    >
+      Test
+    </Button>
+  );
+}
+
+/** Stands in for a missing emulator so the hook order stays the same. */
+const NO_EMULATOR = createStore(() => ({ open: false }));
 
 /** Node-shaped placeholders while the draft loads: header tile and two lines, then rows. */
 function NodeSkeleton({ rows }: { rows: number }) {

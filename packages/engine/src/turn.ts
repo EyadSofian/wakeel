@@ -275,7 +275,37 @@ class TurnRun {
         else this.#end("inactivity");
         return;
       }
+      case "run_from":
+        this.#runFrom(event.payload);
+        return;
     }
+  }
+
+  /**
+   * The emulator's "Run from here" (ADR-025): whatever the conversation was doing is dropped, and the
+   * turn starts at the named node. Only the Studio emulator inserts this event.
+   */
+  #runFrom(payload: Record<string, unknown>): void {
+    const { workflowId, nodeId } = payload;
+    this.#state.stack = [];
+    delete this.#state.wait;
+    this.#state.status = "idle";
+    this.#touch();
+    if (typeof workflowId !== "string" || typeof nodeId !== "string") {
+      this.#fail(new AppError("validation_failed", {}, { detail: "Run from here needs a workflowId and a nodeId." }), {
+        workflowId: typeof workflowId === "string" ? workflowId : this.#index.mainWorkflowId,
+        nodeId: "",
+      });
+      return;
+    }
+    if (!this.#index.node(workflowId, nodeId)) {
+      this.#fail(new AppError("not_found", {}, { detail: `Node ${nodeId} is not in workflow ${workflowId}.` }), {
+        workflowId,
+        nodeId,
+      });
+      return;
+    }
+    this.#push({ workflowId, nodeId, cardIndex: 0, vars: {}, inputs: {} });
   }
 
   #clearWait(): void {

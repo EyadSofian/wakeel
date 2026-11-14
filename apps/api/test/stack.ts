@@ -7,7 +7,9 @@ import { createLogger } from "@wakeel/telemetry";
 import { Redis } from "ioredis";
 import { expect } from "vitest";
 import { type App, buildApp } from "../src/app";
+import { Signals } from "../src/routes/bridge/signals";
 import type { StudioDeps } from "../src/studio";
+import { standInWorker } from "./stand-in-worker";
 
 /** The api on real Postgres (app_rw) and Redis, as main.ts wires it, for Studio API tests. */
 export const REDIS_IMAGE =
@@ -19,11 +21,15 @@ export interface Stack {
   app: App;
   db: Database;
   pg: StartedTestDatabase;
+  /** With `bridge: true`: conversations enqueued for a turn, in order. */
+  jobs: string[];
+  /** With `bridge: true`: run the stand-in worker for each enqueued conversation at once. */
+  autoWork: { on: boolean };
   stop(): Promise<void>;
 }
 
 export async function startStack(
-  options: { now?: () => Date; extraRoutes?: (app: App, deps: StudioDeps) => void } = {},
+  options: { now?: () => Date; extraRoutes?: (app: App, deps: StudioDeps) => void; bridge?: boolean } = {},
 ): Promise<Stack> {
   const [pg, redisContainer]: [StartedTestDatabase, StartedRedisContainer] = await Promise.all([
     startTestDatabase(),
@@ -40,16 +46,42 @@ export async function startStack(
     signInFailuresPerMinute: API_LIMITS.signInFailuresPerMinute,
   });
   const deps: StudioDeps = { auth, studioOrigin: STUDIO, db, now: options.now ?? (() => new Date()) };
-  const app = buildApp({ role: "all", logger: createLogger({ service: "api", level: "silent" }), studio: deps });
+  const jobs: string[] = [];
+  const autoWork = { on: false };
+  // The Bridge deps, for routes that run the inbound path (the Studio emulator, ADR-025).
+  const publisher = options.bridge ? new Redis(redisContainer.getConnectionUrl()) : undefined;
+  const subscriber = options.bridge ? new Redis(redisContainer.getConnectionUrl()) : undefined;
+  const work = publisher ? standInWorker(db, publisher) : undefined;
+  const app = buildApp({
+    role: "all",
+    logger: createLogger({ service: "api", level: (process.env["TEST_LOG"] as "error" | undefined) ?? "silent" }),
+    studio: deps,
+    ...(subscriber && work
+      ? {
+          bridge: {
+            db,
+            signals: new Signals(subscriber),
+            enqueueTurn: async (conversationId: string) => {
+              jobs.push(conversationId);
+              if (autoWork.on) setImmediate(() => void work(conversationId));
+            },
+            // A wait ends only by the turn-done signal while the stand-in runs; at once otherwise.
+            sleep: () => (autoWork.on ? new Promise<void>(() => {}) : Promise.resolve()),
+          },
+        }
+      : {}),
+  });
   options.extraRoutes?.(app, deps);
   await app.ready();
   return {
     app,
     db,
     pg,
+    jobs,
+    autoWork,
     async stop() {
       await app.close();
-      await Promise.allSettled([db.close(), redis.quit()]);
+      await Promise.allSettled([db.close(), redis.quit(), publisher?.quit(), subscriber?.quit()]);
       await Promise.allSettled([pg.stop(), redisContainer.stop()]);
     },
   };
