@@ -50,6 +50,12 @@ export interface Lookups {
   apiKeyByPrefix(prefix: string): Promise<{ keyId: string; workspaceId: string } | undefined>;
   /** The invitation with this token hash, open or not. */
   invitationByTokenHash(tokenHash: string): Promise<{ invitationId: string; workspaceId: string } | undefined>;
+  /** The workspace of a conversation, for a `turn` job that carries only the conversation id. */
+  conversationWorkspace(conversationId: string): Promise<string | undefined>;
+  /** Conversations with unprocessed inbound events and no live lease (the janitor wakes them). */
+  conversationsToWake(limit: number): Promise<{ conversationId: string; workspaceId: string }[]>;
+  /** Waiting conversations past their inactivity deadline with no timeout pending. */
+  conversationsExpired(limit: number): Promise<{ conversationId: string; workspaceId: string }[]>;
 }
 
 /** Opens a pool for the app_rw role. The pool itself is never exposed. */
@@ -112,6 +118,26 @@ export function createDatabase(options: DatabaseOptions): Database {
           [tokenHash],
         );
         return rows[0];
+      },
+      async conversationWorkspace(conversationId) {
+        const { rows } = await pool.query<{ id: string | null }>("select lookup.conversation_workspace($1) as id", [
+          conversationId,
+        ]);
+        return rows[0]?.id ?? undefined;
+      },
+      async conversationsToWake(limit) {
+        const { rows } = await pool.query<{ conversationId: string; workspaceId: string }>(
+          'select conversation_id as "conversationId", workspace_id as "workspaceId" from lookup.conversations_to_wake($1)',
+          [limit],
+        );
+        return rows;
+      },
+      async conversationsExpired(limit) {
+        const { rows } = await pool.query<{ conversationId: string; workspaceId: string }>(
+          'select conversation_id as "conversationId", workspace_id as "workspaceId" from lookup.conversations_expired($1)',
+          [limit],
+        );
+        return rows;
       },
     },
 
