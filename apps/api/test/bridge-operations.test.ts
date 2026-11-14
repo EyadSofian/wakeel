@@ -20,6 +20,7 @@ import { type App, buildApp } from "../src/app";
 import { Signals } from "../src/routes/bridge/signals";
 import { TEST_CONVERSATION, TEST_USER } from "../src/routes/bridge/webhook-tools";
 import { expectConforms, operation, spec } from "./contract";
+import { publishSeeded } from "./publish";
 import { REDIS_IMAGE } from "./stack";
 import { standInWorker } from "./stand-in-worker";
 
@@ -116,6 +117,8 @@ async function tenant() {
   });
   const ws = workspace.id;
   const bot = await db.withWorkspace(ws, (tx) => createBot(tx, { name: "النور", slug: "noor", createdBy: userId }));
+  // Production connections only run a published version (ADR-036).
+  await db.withWorkspace(ws, (tx) => publishSeeded(tx, bot.id, userId));
   const connection = async (name: string, webhookUrl?: string) => {
     const conn = await db.withWorkspace(ws, (tx) =>
       createBridgeConnection(tx, { botId: bot.id, name, target: "production", ...(webhookUrl ? { webhookUrl } : {}) }),

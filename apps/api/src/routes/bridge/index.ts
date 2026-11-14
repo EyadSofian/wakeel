@@ -25,6 +25,7 @@ import {
   findConversation,
   findEndUser,
   findInboundByIdempotencyKey,
+  getBot,
   getBridgeConversation,
   getEndUserById,
   inboundForPlannedTurn,
@@ -254,6 +255,11 @@ export async function inbound(
           return first;
         }
       }
+      // Draft connections run the draft and are not live traffic (§3.2, §13).
+      const mode = input.mode ?? (ctx.connection.target === "draft" ? "emulator" : "live");
+      // ADR-036: live traffic on a production connection runs only a published version.
+      const published = mode === "live" ? (await getBot(tx, ctx.connection.botId)).publishedVersionId : null;
+      if (mode === "live" && !published) throw new AppError("bot_not_published");
       let conv = await findConversation(tx, ctx.connection.id, externalId);
       let userExternalId = input.userId;
       if (!conv && userExternalId === undefined)
@@ -288,10 +294,10 @@ export async function inbound(
         botId: ctx.connection.botId,
         endUserId: user.id,
         externalId,
-        // Draft connections run the draft and are not live traffic (§3.2, §13).
-        mode: input.mode ?? (ctx.connection.target === "draft" ? "emulator" : "live"),
+        mode,
         state: emptyState() as unknown as Record<string, Json>,
         stateBytes: bytes(emptyState()),
+        versionId: published,
       });
       const turnId = newId("turn");
       const stored = input.message

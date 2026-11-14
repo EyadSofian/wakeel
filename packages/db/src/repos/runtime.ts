@@ -1,6 +1,7 @@
 import { AppError, ConversationState, type Json, newId } from "@wakeel/contracts";
 import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import type { Tx } from "../client";
+import { bots } from "../schema/bots";
 import {
   bridgeConnections,
   conversations,
@@ -258,6 +259,8 @@ export interface ConversationWrite {
   touchActivity?: boolean;
   /** Minutes after the last activity; 0 or null clears `expires_at`. */
   timeoutMinutes?: number | null;
+  /** The version the conversation now runs (task 7.2). */
+  versionId?: string;
 }
 
 /**
@@ -281,6 +284,7 @@ export async function writeConversation(
     set["endedAt"] = write.endedReason === null ? null : sql`now()`;
   }
   if (write.handoff !== undefined) set["handoff"] = write.handoff;
+  if (write.versionId !== undefined) set["versionId"] = write.versionId;
   if (write.touchActivity) set["lastActivityAt"] = sql`now()`;
   if (write.timeoutMinutes !== undefined) {
     const activity = write.touchActivity ? sql`now()` : conversations.lastActivityAt;
@@ -477,4 +481,21 @@ export async function appendInboundEvent(
     payload: input.payload,
   });
   return { id, seq: conv.seq };
+}
+
+/**
+ * The version a conversation should run (architecture §3.2, ADR-036): the bot's published version
+ * when the conversation's connection targets production, null (the draft) otherwise.
+ */
+export async function versionToRun(
+  tx: Tx,
+  conversation: Pick<ConversationRecord, "botId" | "connectionId">,
+): Promise<{ target: "production" | "draft"; publishedVersionId: string | null }> {
+  const [row] = await tx
+    .select({ target: bridgeConnections.target, publishedVersionId: bots.publishedVersionId })
+    .from(bridgeConnections)
+    .innerJoin(bots, eq(bots.id, bridgeConnections.botId))
+    .where(and(eq(bridgeConnections.id, conversation.connectionId), eq(bots.id, conversation.botId)));
+  if (!row) throw new AppError("not_found", {}, { detail: `Connection ${conversation.connectionId} was not found.` });
+  return { target: row.target === "production" ? "production" : "draft", publishedVersionId: row.publishedVersionId };
 }

@@ -226,6 +226,8 @@ export async function ensureConversation(
     mode: "live" | "emulator" | "eval";
     state: Record<string, Json>;
     stateBytes: number;
+    /** The published version a production conversation starts on (task 7.2); absent runs the draft. */
+    versionId?: string | null;
   },
 ): Promise<BridgeConversationRecord> {
   await tx
@@ -240,6 +242,7 @@ export async function ensureConversation(
       mode: input.mode,
       state: input.state,
       stateBytes: input.stateBytes,
+      versionId: input.versionId ?? null,
     })
     .onConflictDoNothing({ target: [conversations.connectionId, conversations.externalId] });
   const found = await findConversation(tx, input.connectionId, input.externalId);

@@ -30,6 +30,7 @@ const span = (kind: Span["kind"], extra: Record<string, unknown> = {}): Span => 
     "kb.search": {},
     "table.op": {},
     "webhook.delivery": {},
+    "version.migrated": { fromVersionId: null, toVersionId: "ver_x", positionKept: true, dropped: [] },
   };
   return {
     id: `span_01m7a256m0a13warwhczsj${String(n).padStart(4, "0")}`,

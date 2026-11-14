@@ -40,6 +40,12 @@ export const ERRORS = {
     title: "This was changed elsewhere",
     fix: "Reload to get the latest copy, then reapply your change.",
   },
+  // ADR-036: a production connection only runs a published version.
+  bot_not_published: {
+    status: 409,
+    title: "This bot has not been published yet",
+    fix: "Publish the bot in the Studio, or use a connection with target draft.",
+  },
   idempotency_mismatch: {
     status: 409,
     title: "This idempotency key was used with different content",

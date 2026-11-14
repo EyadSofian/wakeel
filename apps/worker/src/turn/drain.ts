@@ -25,6 +25,7 @@ import {
   unprocessedEventsAfter,
   updateEndUser,
   upsertSpans,
+  versionToRun,
   writeConversation,
 } from "@wakeel/db";
 import {
@@ -44,6 +45,7 @@ import { type Logger, type TraceBefore, TraceBuilder, type TraceContext } from "
 import type { AutonomyTurn } from "./autonomy";
 import { eventScope, isTextMessage } from "./event-scope";
 import { botMessageId } from "./message-id";
+import { migrateToVersion } from "./version";
 
 /** ADR-008: a lease lasts 30 s and a heartbeat renews it every 10 s. */
 export const LEASE_MS = 30_000;
@@ -213,13 +215,15 @@ class ConversationRun {
     const loaded = await this.#tx(async (tx) => {
       const event = await nextUnprocessedEvent(tx, this.conversationId);
       if (!event) return undefined;
+      const turn = await runningTurnFor(tx, event.id);
+      // A resumed turn finishes on the version it started with; a new one first follows a publish.
+      const migrated = turn ? undefined : await followPublishedVersion(tx, this.conversationId, this.epoch);
       const conversation = await getConversation(tx, this.conversationId);
       const definition = await loadDefinition(tx, conversation.botId, conversation.versionId);
-      const turn = await runningTurnFor(tx, event.id);
-      return { event, conversation, definition, turn };
+      return { event, conversation, definition, turn, migrated };
     });
     if (!loaded) return false;
-    const { event, conversation, definition } = loaded;
+    const { event, conversation, definition, migrated } = loaded;
 
     let turn = loaded.turn;
     if (!turn) {
@@ -267,6 +271,7 @@ class ConversationRun {
     );
     this.#before = { state, user: { vars: user.vars, attributes: user.attributes } };
     await this.#writeSpans(this.#trace.turnStarted(new Date(clock.now())));
+    if (migrated) await this.#writeSpans(this.#trace.versionMigrated(migrated, new Date(clock.now())));
     const sandbox = this.deps.enginePorts({
       workspaceId: this.workspaceId,
       conversationId: this.conversationId,
@@ -528,6 +533,48 @@ class ConversationRun {
     }
     await this.#notify();
   }
+}
+
+/**
+ * Moves a live conversation on a production connection to the bot's published version when it differs
+ * from the one it is pinned to (architecture §3.2, task 7.2), and returns what to record in the
+ * trace. Nothing happens for draft conversations or before the first publish.
+ */
+async function followPublishedVersion(
+  tx: Tx,
+  conversationId: string,
+  epoch: number,
+): Promise<Extract<Span, { kind: "version.migrated" }>["attrs"] | undefined> {
+  const conversation = await getConversation(tx, conversationId);
+  const run = await versionToRun(tx, conversation);
+  // Emulator and eval conversations run what they were started on, even on a production connection.
+  if (
+    conversation.mode !== "live" ||
+    run.target !== "production" ||
+    !run.publishedVersionId ||
+    run.publishedVersionId === conversation.versionId
+  )
+    return undefined;
+  const next = await loadVersionDefinition(tx, run.publishedVersionId);
+  const previous = conversation.versionId ? await loadVersionDefinition(tx, conversation.versionId) : undefined;
+  const user = await getEndUser(tx, conversation.endUserId);
+  const m = migrateToVersion({
+    state: conversation.state,
+    userVars: user.vars,
+    next,
+    ...(previous ? { previous } : {}),
+  });
+  await writeConversation(tx, conversationId, epoch, {
+    versionId: run.publishedVersionId,
+    ...(m.positionKept ? {} : { state: m.state, stateBytes: Buffer.byteLength(JSON.stringify(m.state)) }),
+  });
+  if (m.dropped.some((d) => d.scope === "user")) await updateEndUser(tx, conversation.endUserId, { vars: m.userVars });
+  return {
+    fromVersionId: conversation.versionId,
+    toVersionId: run.publishedVersionId,
+    positionKept: m.positionKept,
+    dropped: m.dropped,
+  };
 }
 
 /**

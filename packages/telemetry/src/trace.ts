@@ -150,6 +150,25 @@ export class TraceBuilder {
     return [this.#turn];
   }
 
+  /**
+   * The conversation moved to another published version before this turn ran (task 7.2): one span
+   * under the turn listing what was dropped.
+   */
+  versionMigrated(attrs: Extract<Span, { kind: "version.migrated" }>["attrs"], at: Date): Span[] {
+    return [
+      {
+        ...this.#base(
+          this.#seq++,
+          attrs.positionKept ? "Moved to the new version" : "Started over on the new version",
+          at,
+        ),
+        parentId: this.turnSpanId,
+        kind: "version.migrated",
+        attrs,
+      },
+    ];
+  }
+
   /** The spans for one committed step; `before` is the state before it, for the variable diff. */
   stepCommitted(step: TraceStep, before: TraceBefore, at: Date): Span[] {
     const start = this.#boundary ?? at;
