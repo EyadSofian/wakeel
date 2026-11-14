@@ -80,7 +80,9 @@ export type ScreenState =
   | "restore"
   | "secrets"
   | "secrets-rtl"
-  | "secrets-empty";
+  | "secrets-empty"
+  // Task 7.6: the Import bot dialog on the workspace home.
+  | "import";
 
 export interface Screen {
   id: string;
@@ -154,7 +156,7 @@ SCREENS.push(
   {
     id: "home",
     route: `/w/${WS}`,
-    states: ["default", "focus", "empty", "loading", "error", "rtl"],
+    states: ["default", "focus", "empty", "loading", "error", "rtl", "import"],
     sizes: DESKTOP,
     mock: true,
     interactions: [],

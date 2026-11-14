@@ -245,6 +245,10 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
   if (screen.id === "version-compare" && !["loading", "error"].includes(state)) {
     await expect(page.getByRole("table", { name: "Changes" })).toBeVisible();
   }
+  if (state === "import") {
+    await page.getByRole("button", { name: "Import bot" }).click();
+    await settled(page.getByRole("dialog", { name: "Import bot" }));
+  }
   if (state.startsWith("secrets")) {
     await page.getByRole("tab", { name: "Secrets and settings" }).click();
     await expect(
