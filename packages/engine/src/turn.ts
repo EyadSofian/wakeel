@@ -36,6 +36,7 @@ import type {
   TurnResult,
   TurnStatus,
 } from "./ports";
+import { toStepError } from "./step-error";
 import { findEventTrigger, findMainTrigger } from "./triggers";
 import { applyWrites, buildScopes, checkType, stateSizeError, type VariableWrite, writeFor } from "./variables";
 
@@ -74,15 +75,6 @@ const RETRYABLE_CODES: ReadonlySet<string> = new Set<ErrorCode>([
 const END_REASONS: ReadonlySet<string> = new Set<EndReason>(["completed", "inactivity", "manual", "error"]);
 
 const DEFAULT_ERROR_MESSAGE = BotSettings.shape.errorMessage.parse(undefined);
-
-/** An `AppError` (or anything thrown) as a step error. */
-export function toStepError(error: unknown, turnId: string): StepError {
-  const e =
-    error instanceof AppError
-      ? error
-      : new AppError("internal_error", { requestId: turnId }, { detail: String(error), cause: error });
-  return { code: e.code, message: e.detail ? `${e.title}: ${e.detail}` : e.title, fix: e.fix };
-}
 
 interface Snapshot {
   state: ConversationState;

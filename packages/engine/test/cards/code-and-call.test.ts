@@ -218,6 +218,79 @@ function callCardOf(def: { workflows: { nodes: unknown[] }[] }) {
   return node?.cards[0];
 }
 
+describe("code: more paths", () => {
+  test("say('text') is a text message; logs whose first argument is not text keep everything as data", async () => {
+    const c = codeBot();
+    const h = harness({
+      code: () =>
+        success({
+          said: ["تم"],
+          logs: [
+            { level: "info", args: [{ a: 1 }, 2] },
+            { level: "error", args: ["only"] },
+          ],
+        }),
+    });
+    const { commits } = await run({ def: c.def, h });
+    expect(commits[0]?.messages).toEqual([{ type: "text", text: "تم", format: "markdown" }]);
+    expect(commits[0]?.logs.slice(0, 2)).toEqual([
+      { level: "info", message: "", data: [{ a: 1 }, 2] },
+      { level: "error", message: "only" },
+    ]);
+  });
+
+  test("a run that ends in internal_error carries the turn id", async () => {
+    const c = codeBot();
+    const h = harness({ code: () => failure({ code: "internal_error", message: "worker died" }) });
+    const { result, input } = await run({ def: c.def, h });
+    expect(result.error?.message).toBe("Something went wrong on our side: worker died");
+    expect(result.error?.fix).toContain(input.turnId);
+  });
+
+  test("an error with no line says so", async () => {
+    const c = codeBot();
+    const h = harness({ code: () => failure({ code: "code_error", message: "bad" }) });
+    const { result } = await run({ def: c.def, h });
+    expect(result.error?.fix).toBe("See line ?. The trace shows the variables at that point.");
+  });
+
+  test.each([
+    [{ user: { set: { attributes: { plan: "x" } } } }, "write_not_allowed"],
+    [{ workflow: { unset: ["rows"] }, turn: { unset: ["gone"] } }, undefined],
+  ])("patch %j → %s", async (patches, code) => {
+    const c = codeBot();
+    const h = harness({ code: () => success({ patches }) });
+    const { result } = await run({ def: c.def, h });
+    expect(result.error?.code).toBe(code);
+  });
+
+  test("a workflow input cannot be written", async () => {
+    const subId = wfId();
+    const entry = nodeId();
+    const body = nodeId();
+    const sub = workflow({
+      id: subId,
+      kind: "sub",
+      inputs: [{ name: "orderId", type: "string" }],
+      nodes: [
+        { id: entry, type: "entry", name: "Entry" },
+        standard(body, [{ id: cardId(), type: "code", source: "x" }]),
+      ],
+      edges: [edge(entry, "next", body)],
+    });
+    const bot = linearBot(
+      [{ id: cardId(), type: "call_workflow", workflowId: subId, inputs: { orderId: "event.text" } }],
+      {
+        workflows: [sub],
+      },
+    );
+    const h = harness({ code: () => success({ patches: { workflow: { set: { orderId: "changed" } } } }) });
+    const { result } = await run({ def: bot.def, h });
+    expect(result.error?.code).toBe("write_not_allowed");
+    expect(result.error?.message).toBe('The node tried to change "workflow.orderId" without write access');
+  });
+});
+
 describe("call_workflow and Exit outputs", () => {
   /** Lookup(orderId: string, note?: string) → { status: string, eta: number } */
   function lookupBot(exitOutputs: Record<string, string> = { status: "workflow.orderId", eta: "env.ETA" }) {

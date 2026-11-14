@@ -285,10 +285,11 @@ describe("what counts as a failure", () => {
   });
 
   test("the engine's own executors are used by default", async () => {
-    const bot = linearBot([step()]);
-    const { result } = await run({ def: bot.def });
-    // Task 4.3 adds them; until then every card type is missing.
-    expect(result.error?.code).toBe("internal_error");
+    const bot = linearBot([step(), { id: cardId(), type: "handoff" }]);
+    const { result, commits } = await run({ def: bot.def });
+    // The Log card has an executor (4.3); the Handoff card does not have one yet.
+    expect(commits.flatMap((c) => c.logs)).toEqual([{ level: "info", message: "step" }]);
+    expect(result.error?.message).toBe("Something went wrong on our side: No executor for handoff cards.");
   });
 
   test("an autonomous node with no autonomy port is internal_error", async () => {

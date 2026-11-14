@@ -240,7 +240,7 @@ describe("set_variable", () => {
 
   test("an unknown variable is variable_not_found", async () => {
     const bot = linearBot([
-      { id: cardId(), type: "set_variable", assignments: [{ variableId: "var_GONEGONE00", value: "1" }] },
+      { id: cardId(), type: "set_variable", assignments: [{ variableId: "var_GONEGONE00", value: "event.text" }] },
     ]);
     const { result } = await run({ def: bot.def });
     expect(result.error?.code).toBe("variable_not_found");
@@ -295,5 +295,65 @@ describe("set_timeout", () => {
     const { result, commits } = await run({ def: bot.def });
     expect(result.state.inactivityTimeoutMinutes).toBe(minutes);
     expect(commits[0]?.state.inactivityTimeoutMinutes).toBe(minutes);
+  });
+});
+
+describe("say: every message type", () => {
+  test("file, image, dropdown and carousel render; optional texts that render empty are left out", async () => {
+    const bot = linearBot([
+      say({
+        type: "file",
+        url: "https://cdn.example.com/{{ env.F }}",
+        name: "فاتورة {{ env.F }}",
+        mime: "application/pdf",
+      }),
+      say({ type: "image", url: "https://cdn.example.com/a.png", alt: "{{ env.EMPTY }}", caption: "صورة المنتج" }),
+      say({
+        type: "dropdown",
+        text: "اختار المدينة",
+        placeholder: "{{ env.EMPTY }}",
+        options: [{ label: "القاهرة", value: "cairo" }],
+      }),
+      say({
+        type: "carousel",
+        items: [
+          { title: "باقة {{ env.F }}", subtitle: "{{ env.EMPTY }}", actions: [] },
+          {
+            title: "باقة ٢",
+            imageUrl: "https://cdn.example.com/2.png",
+            actions: [{ type: "url", label: "تفاصيل", value: "https://example.com" }],
+          },
+        ],
+      }),
+    ]);
+    const { commits } = await run({ def: bot.def, env: { F: "1", EMPTY: "" } });
+    expect(commits.flatMap((c) => c.messages)).toEqual([
+      { type: "file", url: "https://cdn.example.com/1", name: "فاتورة 1", mime: "application/pdf" },
+      { type: "image", url: "https://cdn.example.com/a.png", caption: "صورة المنتج" },
+      { type: "dropdown", text: "اختار المدينة", options: [{ label: "القاهرة", value: "cairo" }] },
+      {
+        type: "carousel",
+        items: [
+          { title: "باقة 1", actions: [] },
+          {
+            title: "باقة ٢",
+            imageUrl: "https://cdn.example.com/2.png",
+            actions: [{ type: "url", label: "تفاصيل", value: "https://example.com" }],
+          },
+        ],
+      },
+    ]);
+  });
+
+  test("custom data that gives undefined is sent as null", async () => {
+    const bot = linearBot([say({ type: "custom", name: "x", data: "env.NONE" })]);
+    const { commits } = await run({ def: bot.def });
+    expect(commits[0]?.messages).toEqual([{ type: "custom", name: "x", data: null }]);
+  });
+
+  test("a template that does not parse is template_error", async () => {
+    const bot = linearBot([say({ type: "text", text: "{{ env.A " })]);
+    const { result } = await run({ def: bot.def });
+    expect(result.error?.code).toBe("template_error");
   });
 });

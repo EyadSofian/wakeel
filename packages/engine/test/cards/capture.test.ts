@@ -282,3 +282,60 @@ test("the step after a capture runs only once the reply is stored", async () => 
   const second = await run({ def: c.def, state: first.result.state, event: message("12") });
   expect(logged(second.commits)).toEqual(["after"]);
 });
+
+describe("more capture paths", () => {
+  const options = {
+    kind: "choice",
+    type: "string",
+    routeByOption: true,
+    prompt: {
+      type: "dropdown",
+      text: "اختار",
+      options: [
+        { label: "الشحن", value: "shipping" },
+        { label: "الفواتير", value: "billing" },
+      ],
+    },
+    connect: ["option:billing"],
+  };
+
+  test("skipIfFilled with routeByOption takes the stored option's port", async () => {
+    const c = captureBot({ ...options, skipIfFilled: true });
+    const { commits } = await run({ def: c.def, state: state({ conversationVars: { [c.into]: "billing" } }) });
+    expect(logged(commits)).toEqual(["option:billing"]);
+  });
+
+  test("skipIfFilled with a stored value that is no option falls through", async () => {
+    const c = captureBot({ ...options, skipIfFilled: true });
+    const { commits } = await run({ def: c.def, state: state({ conversationVars: { [c.into]: "gifts" } }) });
+    expect(logged(commits)).toEqual(["after"]);
+  });
+
+  test("a validate expression that throws is expression_error naming the builder's expression", async () => {
+    const c = captureBot({ validate: { expression: "value.x.y", message: "x" } });
+    const { result } = await run({ def: c.def, state: c.waiting(), event: message("5") });
+    expect(result.error?.code).toBe("expression_error");
+    expect(result.error?.message).toContain("value.x.y");
+    expect(result.error?.fix).toBe("Fix the expression `value.x.y`.");
+  });
+
+  test("a choice question whose prompt has no options accepts nothing", async () => {
+    const c = captureBot({ kind: "choice", type: "string", prompt: { type: "text", text: "اختار" } });
+    const { result } = await run({ def: c.def, state: c.waiting(), event: message("1") });
+    expect(result.state.wait).toMatchObject({ attempts: 1 });
+  });
+
+  test("a capture into a variable that does not exist is variable_not_found", async () => {
+    const c = captureBot();
+    const def = structuredClone(c.def);
+    def.manifest.variables = [];
+    const { result } = await run({ def });
+    expect(result.error?.code).toBe("variable_not_found");
+  });
+
+  test("an event with text but no message payload is read as text", async () => {
+    const c = captureBot();
+    const { result } = await run({ def: c.def, state: c.waiting(), event: event("message", { text: "٧" }) });
+    expect(result.state.conversationVars).toEqual({ [c.into]: 7 });
+  });
+});
