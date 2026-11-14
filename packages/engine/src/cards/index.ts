@@ -1,8 +1,27 @@
 import type { CardExecutors } from "../ports";
+import { branch } from "./branch";
+import { callWorkflow } from "./call-workflow";
+import { capture } from "./capture";
+import { code } from "./code";
+import { say } from "./say";
+import { setVariable } from "./set-variable";
+import { end, log, setTimeoutCard } from "./simple";
+
+export { normalizeDigits, parseReply } from "./capture-parse";
+export { CardEvaluator, checkMessage, renderMessages } from "./render";
 
 /**
- * The engine's card executors, by card type. Task 4.3 adds say, capture, branch, set_variable,
- * code, log, end, set_timeout and call_workflow; later phases add the AI, knowledge and table cards.
- * A card type with no executor fails its step with `internal_error`.
+ * The engine's card executors, by card type (task 4.3). The AI, knowledge, table and handoff cards
+ * arrive in later phases; a card type with no executor fails its step with `internal_error`.
  */
-export const CARD_EXECUTORS: CardExecutors = {};
+export const CARD_EXECUTORS: CardExecutors = {
+  say,
+  capture,
+  branch,
+  set_variable: setVariable,
+  code,
+  log,
+  end,
+  set_timeout: setTimeoutCard,
+  call_workflow: callWorkflow,
+};

@@ -30,11 +30,13 @@ import type {
   StepError,
   StepFailure,
   StepLocation,
+  StepLog,
   StepResult,
   TurnInput,
   TurnResult,
   TurnStatus,
 } from "./ports";
+import { toStepError } from "./step-error";
 import { findEventTrigger, findMainTrigger } from "./triggers";
 import { applyWrites, buildScopes, checkType, stateSizeError, type VariableWrite, writeFor } from "./variables";
 
@@ -74,15 +76,6 @@ const END_REASONS: ReadonlySet<string> = new Set<EndReason>(["completed", "inact
 
 const DEFAULT_ERROR_MESSAGE = BotSettings.shape.errorMessage.parse(undefined);
 
-/** An `AppError` (or anything thrown) as a step error. */
-export function toStepError(error: unknown, turnId: string): StepError {
-  const e =
-    error instanceof AppError
-      ? error
-      : new AppError("internal_error", { requestId: turnId }, { detail: String(error), cause: error });
-  return { code: e.code, message: e.detail ? `${e.title}: ${e.detail}` : e.title, fix: e.fix };
-}
-
 interface Snapshot {
   state: ConversationState;
   messages: number;
@@ -111,6 +104,7 @@ class TurnRun {
   #messages: BotMessagePayload[] = [];
   #events: EngineEvent[] = [];
   #failures: StepFailure[] = [];
+  #logs: StepLog[] = [];
   #userVarsChanged = false;
   #attributesChanged = false;
   #dirty = false;
@@ -439,6 +433,7 @@ class TurnRun {
         definition: this.#input.definition,
         scopes: this.#scopes(frame),
         sandbox: this.#ports.sandbox,
+        code: this.#ports.code,
         ...(reply ? { reply } : {}),
         turnId: this.#input.turnId,
         stepSeq: this.#stepSeq,
@@ -546,6 +541,13 @@ class TurnRun {
       return;
     }
     this.#emitMessages(result.messages ?? []);
+    if (result.logs?.length) this.#logs.push(...result.logs);
+    if (result.turn) {
+      for (const key of Object.keys(this.#turnScope)) delete this.#turnScope[key];
+      Object.assign(this.#turnScope, result.turn);
+    }
+    if (result.inactivityTimeoutMinutes !== undefined)
+      this.#state.inactivityTimeoutMinutes = result.inactivityTimeoutMinutes;
     this.#applyOutcome(parsed.data, location, via);
     const tooLarge = stateSizeError(this.#index, this.#state);
     if (tooLarge) {
@@ -846,12 +848,14 @@ class TurnRun {
       messages: this.#messages,
       events: this.#events,
       failures: this.#failures,
+      logs: this.#logs,
       ...(user.vars || user.attributes ? { user } : {}),
       ...(this.#lastStep ? { step: this.#lastStep } : {}),
     };
     this.#messages = [];
     this.#events = [];
     this.#failures = [];
+    this.#logs = [];
     this.#userVarsChanged = false;
     this.#attributesChanged = false;
     this.#lastStep = undefined;

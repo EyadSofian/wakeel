@@ -19,6 +19,8 @@ import type {
   AutonomyStepInput,
   CardContext,
   CardExecutors,
+  CodeOutcome,
+  CodeRequest,
   EnginePorts,
   EphemeralEvent,
   StepCommit,
@@ -203,13 +205,22 @@ export function scripted(behaviours: Record<string, Behaviour> = {}) {
   return { executors, calls, ran: () => calls.map((c) => c.card.id) };
 }
 
-/** A sandbox that must not be reached; tests use paths, which never call it. */
-export function sandbox(answers: Record<string, ExpressionOutcome> = {}) {
+export type SandboxAnswers =
+  | Record<string, ExpressionOutcome>
+  | ((expression: string, batch: ExpressionBatch) => ExpressionOutcome | undefined);
+
+/**
+ * A sandbox stand-in that answers from a table or a function and records every batch. It never
+ * evaluates builder text (CLAUDE.md §9); expressions it has no answer for fail.
+ */
+export function sandbox(answers: SandboxAnswers = {}) {
   const batches: ExpressionBatch[] = [];
+  const answer = (e: string, batch: ExpressionBatch) =>
+    typeof answers === "function" ? answers(e, batch) : answers[e];
   const port: SandboxPort = {
     evalExpressions: async (batch) => {
       batches.push(batch);
-      return batch.expressions.map((e) => answers[e] ?? { ok: false, message: `no answer for ${e}` });
+      return batch.expressions.map((e) => answer(e, batch) ?? { ok: false, message: `no answer for ${e}` });
     },
   };
   return { port, batches };
@@ -219,8 +230,9 @@ export interface HarnessOptions {
   /** `commitStep` rejects for this stepSeq, like a worker that lost its lease. */
   loseLeaseAt?: number;
   autonomy?: (input: AutonomyStepInput) => StepResult & { memory?: AutonomyMemory };
-  sandboxAnswers?: Record<string, ExpressionOutcome>;
+  sandboxAnswers?: SandboxAnswers;
   ephemeralFails?: boolean;
+  code?: (request: CodeRequest) => CodeOutcome | Promise<CodeOutcome>;
 }
 
 export function harness(options: HarnessOptions = {}) {
@@ -238,8 +250,16 @@ export function harness(options: HarnessOptions = {}) {
         },
       }
     : undefined;
+  const codeRuns: CodeRequest[] = [];
   const ports: EnginePorts = {
     sandbox: box.port,
+    code: {
+      run: async (request) => {
+        codeRuns.push(request);
+        if (!options.code) throw new Error("this test runs no code");
+        return options.code(request);
+      },
+    },
     clock,
     commitStep: async (commit) => {
       if (commit.stepSeq === options.loseLeaseAt) throw new Error("lease lost");
@@ -251,7 +271,7 @@ export function harness(options: HarnessOptions = {}) {
     },
     ...(autonomy ? { autonomy } : {}),
   };
-  return { clock, commits, ephemeral, ports, autonomyCalls, batches: box.batches };
+  return { clock, commits, ephemeral, ports, autonomyCalls, batches: box.batches, codeRuns };
 }
 
 export interface RunInit {
