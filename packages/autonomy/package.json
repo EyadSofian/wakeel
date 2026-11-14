@@ -1,0 +1,19 @@
+{
+  "name": "@wakeel/autonomy",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@wakeel/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@wakeel/testing": "workspace:*"
+  }
+}
