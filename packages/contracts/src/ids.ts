@@ -70,6 +70,28 @@ export function newRequestId(options: NewIdOptions = {}): `req_${string}` {
   return `req_${ulid(options.now ?? Date.now())}`;
 }
 
+/**
+ * A stored-entity id derived from a digest instead of the clock: the same input always gives the
+ * same id, so a step that runs again cannot write a second copy (span ids, ADR-026). The caller
+ * hashes (this module stays browser-safe); the first 130 bits become 26 Crockford characters.
+ */
+export function idFromDigest<P extends EntityPrefix>(prefix: P, digest: Uint8Array): `${P}_${string}` {
+  if (digest.length < 17) throw new RangeError(`A digest needs at least 17 bytes; got ${digest.length}`);
+  let out = "";
+  let buffer = 0;
+  let bits = 0;
+  for (const byte of digest) {
+    buffer = ((buffer << 8) | byte) & 0xffff;
+    bits += 8;
+    while (bits >= 5 && out.length < 26) {
+      bits -= 5;
+      out += CROCKFORD.charAt((buffer >> bits) & 31);
+    }
+    if (out.length === 26) break;
+  }
+  return `${prefix}_${out}`;
+}
+
 /** Creates a definition-element id such as `card_V1StGXR8Z5`. */
 export function newElementId<P extends ElementPrefix>(prefix: P): `${P}_${string}` {
   return `${prefix}_${nanoid(ELEMENT_ID_CHARS)}`;
