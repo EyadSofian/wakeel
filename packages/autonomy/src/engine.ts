@@ -85,9 +85,13 @@ export type RunOutcome =
     }
   | { ok: false; error: { message: string; line?: number } };
 
-/** Runs the model's `:::run` block in the sandbox (tools are bridged by task 6.6). */
+/**
+ * Runs the model's `:::run` block in the sandbox with the node's tools bridged (task 6.6, ADR-032).
+ * `scopes` includes `memo`; the run's `memo` patch comes back like any other scope's.
+ */
 export interface AutonomyCode {
   run(request: {
+    node: AutonomousNode;
     source: string;
     scopes: Record<string, Json>;
     idempotencyKey: string;
@@ -187,6 +191,7 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
       let turn: Record<string, Json> | undefined;
       if (result.run) {
         const run = await deps.code.run({
+          node,
           source: result.run.code,
           scopes: { ...(input.scopes as Record<string, Json>), memo: memory.memo as Json },
           idempotencyKey: `${input.idempotencyKey}:run`,

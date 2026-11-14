@@ -60,8 +60,12 @@ const TOOL_OPS = new Set([
   "ai.extract",
   "ai.classify",
 ]);
+/** Headroom reserved before each guest call's promise is made (see `callFn`). */
+const PROMISE_ROOM_BYTES = 4 * 1024;
 const LOG_LEVELS = new Set(["info", "warn", "error"]);
 const PATCH_SCOPES = new Set(["workflow", "conversation", "user", "turn"]);
+/** `autonomy_run` also keeps the node's `memo` (ADR-032 §1). */
+const AUTONOMY_PATCH_SCOPES = new Set([...PATCH_SCOPES, "memo"]);
 const CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
 /** Never a variable name in a patch: each would reach a prototype through a plain property write. */
 const RESERVED_NAMES = new Set(["__proto__", "constructor", "prototype"]);
@@ -133,6 +137,10 @@ export function installGuest(ctx: QuickJSContext, job: ExecJob, channel: HostCha
   const toolWaiting: (() => void)[] = [];
   const fetchWaiting: (() => void)[] = [];
   let toolsRunning = 0;
+  const tools = job.kind === "autonomy_run" ? (job.tools ?? []) : [];
+  const builderOps = new Set(
+    tools.flatMap((t) => (t.operations ? t.operations.map((o) => `tool.${t.name}.${o}`) : [`tool.${t.name}`])),
+  );
   let fetchesRunning = 0;
   let calls = 0;
   let nextId = 0;
@@ -255,11 +263,17 @@ export function installGuest(ctx: QuickJSContext, job: ExecJob, channel: HostCha
   const callFn = ctx.newFunction("call", (opHandle, inputHandle) => {
     const op = ctx.typeof(opHandle) === "string" ? ctx.getString(opHandle) : "";
     const inputText = ctx.typeof(inputHandle) === "string" ? ctx.getString(inputHandle) : "null";
+    // quickjs-emscripten 0.32's newPromise keeps a view of WASM memory across a call that may grow
+    // it; growth detaches the view and the call throws. Reserving room first means it cannot grow
+    // here: the probe grows memory if it must and frees the space for the promise to reuse. With no
+    // room at all the heap is at QuickJS's own limit, which newPromise reports without growing.
+    guard.room(PROMISE_ROOM_BYTES);
     const deferred = ctx.newPromise();
     const id = nextId++;
     pending.set(id, deferred);
     const promise = deferred.handle.dup();
-    if (op !== "fetch" && !TOOL_OPS.has(op)) {
+    // A model's run block may call only the node's tools; code cards only platform calls (ADR-032 §1).
+    if (job.kind === "autonomy_run" ? !builderOps.has(op) : op !== "fetch" && !TOOL_OPS.has(op)) {
       queueMicrotask(() => settle(id, { ok: false, code: "code_error", message: `${op} is not a guest call` }));
     } else if (calls >= GUEST_LIMITS.callsPerExec) {
       queueMicrotask(() =>
@@ -300,7 +314,7 @@ export function installGuest(ctx: QuickJSContext, job: ExecJob, channel: HostCha
   owned.push(emitFn);
 
   // The scopes arrive as JSON text already; spliced in rather than parsed and serialised again.
-  const config = `{"kind":${JSON.stringify(job.kind)},"tables":${JSON.stringify(job.tables ?? [])},"idempotencyKey":${JSON.stringify(job.idempotencyKey ?? job.execId)},"scopes":${job.scopesText}}`;
+  const config = `{"kind":${JSON.stringify(job.kind)},"tables":${JSON.stringify(job.tables ?? [])},"tools":${JSON.stringify(tools)},"idempotencyKey":${JSON.stringify(job.idempotencyKey ?? job.execId)},"scopes":${job.scopesText}}`;
 
   if (!guard.room(Buffer.byteLength(PRELUDE, "utf8"))) throw new PreludeError("the prelude does not fit", "memory");
   const installed = ctx.evalCode(PRELUDE, PRELUDE_NAME, { type: "global", strict: true });
@@ -357,7 +371,7 @@ export function installGuest(ctx: QuickJSContext, job: ExecJob, channel: HostCha
         };
       }),
     snapshot,
-    parsePatches,
+    parsePatches: (text) => parsePatches(text, job.kind === "autonomy_run" ? AUTONOMY_PATCH_SCOPES : PATCH_SCOPES),
     redact,
     finish: () => {
       if (dropped > 0) {
@@ -378,12 +392,12 @@ export function installGuest(ctx: QuickJSContext, job: ExecJob, channel: HostCha
 }
 
 /** The ADR-023 §2 shape, checked on the host: the prelude ran in the guest's heap. */
-function parsePatches(text: string): Record<string, unknown> {
+function parsePatches(text: string, scopes: ReadonlySet<string>): Record<string, unknown> {
   const parsed: unknown = JSON.parse(text);
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new Error("patches: not an object");
   const out: Record<string, unknown> = {};
   for (const [scope, patch] of Object.entries(parsed)) {
-    if (!PATCH_SCOPES.has(scope)) throw new Error(`patches: ${scope} cannot be written`);
+    if (!scopes.has(scope)) throw new Error(`patches: ${scope} cannot be written`);
     if (typeof patch !== "object" || patch === null || Array.isArray(patch)) throw new Error("patches: bad patch");
     const { set, unset, ...rest } = patch as { set?: unknown; unset?: unknown };
     if (Object.keys(rest).length > 0) throw new Error("patches: unknown key");

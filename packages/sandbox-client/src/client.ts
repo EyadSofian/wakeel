@@ -2,6 +2,7 @@ import { request as httpRequest, type IncomingMessage } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { AppError, ERRORS, type ErrorCode, type FieldError } from "@wakeel/contracts";
 import {
+  type BuilderCallName,
   type ExecOutcome,
   type ExecRequestFrameInput,
   type LogFrame,
@@ -20,7 +21,7 @@ import {
 
 export interface ToolCall {
   callId: string;
-  name: ToolCallName;
+  name: ToolCallName | BuilderCallName;
   input: unknown;
 }
 

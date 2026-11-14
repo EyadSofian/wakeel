@@ -32,6 +32,8 @@ export interface StreamRequest {
   system: string;
   messages: LlmMessage[];
   stop?: string[];
+  /** 0–2; the provider's default when absent. */
+  temperature?: number;
   maxOutputTokens?: number;
   signal?: AbortSignal;
   /** What the call is for, for the usage record and the trace ("autonomy", "handoff_summary", …). */
@@ -197,6 +199,7 @@ export function createLlm(deps: LlmDeps): LlmClient {
           messages: request.messages,
           maxRetries: 0,
           ...(request.stop ? { stopSequences: request.stop } : {}),
+          ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
           ...(request.maxOutputTokens ? { maxOutputTokens: request.maxOutputTokens } : {}),
           ...(request.signal ? { abortSignal: request.signal } : {}),
         });

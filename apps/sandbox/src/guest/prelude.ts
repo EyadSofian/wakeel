@@ -53,7 +53,9 @@ export const PRELUDE = `(function install(call, emit, configText) {
   }
 
   const scopes = asObject(config.scopes);
-  const MUTABLE = ["workflow", "conversation", "user", "turn"];
+  const AUTONOMY = config.kind === "autonomy_run";
+  // A model's run block also keeps the node's memo between iterations (ADR-032 §1).
+  const MUTABLE = AUTONOMY ? ["workflow", "conversation", "user", "turn", "memo"] : ["workflow", "conversation", "user", "turn"];
   const FROZEN = ["bot", "event", "env"];
 
   for (let i = 0; i < FROZEN.length; i++) constant(G, FROZEN[i], deepFreeze(asObject(scopes[FROZEN[i]])));
@@ -75,6 +77,7 @@ export const PRELUDE = `(function install(call, emit, configText) {
     user: user,
     turn: asObject(scopes.turn),
   };
+  if (AUTONOMY) mutable.memo = asObject(scopes.memo);
   for (let i = 0; i < MUTABLE.length; i++) constant(G, MUTABLE[i], mutable[MUTABLE[i]]);
 
   // Names that would set a prototype, not a variable, wherever the patch is applied with plain
@@ -390,6 +393,36 @@ export const PRELUDE = `(function install(call, emit, configText) {
   const log = freeze({ info: logger("info"), warn: logger("warn"), error: logger("error") });
 
   const ctx = freeze({ idempotencyKey: StringC(config.idempotencyKey) });
+
+  if (AUTONOMY) {
+    // Only the node's own tools exist (CLAUDE.md §9): no fetch, tables, kb, ai or say here. A tool is
+    // a function on \`tools\`, or an object of table operations (ADR-032 §1).
+    const tools = {};
+    const list = isArray(config.tools) ? config.tools : [];
+    for (let i = 0; i < list.length; i++) {
+      const name = StringC(list[i].name);
+      const ops = list[i].operations;
+      if (isArray(ops)) {
+        const methods = {};
+        for (let j = 0; j < ops.length; j++) {
+          const opName = "tool." + name + "." + StringC(ops[j]);
+          constant(methods, StringC(ops[j]), function (input) {
+            return invoke(opName, input === undefined ? null : input, new ErrorC());
+          });
+        }
+        constant(tools, name, freeze(methods));
+      } else {
+        const opName = "tool." + name;
+        constant(tools, name, function (input) {
+          return invoke(opName, input === undefined ? null : input, new ErrorC());
+        });
+      }
+    }
+    constant(G, "tools", freeze(tools));
+    constant(G, "log", log);
+    constant(G, "ctx", ctx);
+    return snapshot;
+  }
 
   constant(G, "say", say);
   constant(G, "fetch", guestFetch);

@@ -35,6 +35,7 @@ import {
   writeConversation,
 } from "@wakeel/db";
 import {
+  type AutonomyPort,
   type ClockPort,
   type CodePort,
   type EnginePorts,
@@ -46,6 +47,7 @@ import {
   toStepError,
 } from "@wakeel/engine";
 import { type Logger, type TraceBefore, TraceBuilder, type TraceContext } from "@wakeel/telemetry";
+import type { AutonomyTurn } from "./autonomy";
 import { eventScope, isTextMessage } from "./event-scope";
 import { botMessageId } from "./message-id";
 
@@ -78,6 +80,11 @@ export interface TurnDeps {
    * created deliveries. Optional: without it the janitor still finds them.
    */
   enqueueWebhook?(conversationId: string): Promise<void>;
+  /**
+   * The Autonomous Node for one turn (task 6.6). Absent: reaching an Autonomous Node fails the step
+   * with a clear code, as before the model layer existed.
+   */
+  autonomy?(turn: AutonomyTurn, code: CodePort): AutonomyPort;
   /** Writes handoff summaries (task 5.4). Absent until the model layer exists: summaries are empty. */
   summarizeHandoff?(input: { workspaceId: string; conversationId: string; reason: string }): Promise<string>;
 }
@@ -259,8 +266,22 @@ class ConversationRun {
       turnId: turn.id,
     });
     const summarize = this.deps.summarizeHandoff;
+    const autonomy = this.deps.autonomy?.(
+      {
+        workspaceId: this.workspaceId,
+        conversationId: this.conversationId,
+        botId: conversation.botId,
+        turnId: turn.id,
+        mode: conversation.mode as AutonomyTurn["mode"],
+        definition,
+        ...(state.summary ? { summary: state.summary.text } : {}),
+        env: {},
+      },
+      sandbox.code,
+    );
     const ports: EnginePorts = {
       ...sandbox,
+      ...(autonomy ? { autonomy } : {}),
       clock,
       ...(summarize
         ? {

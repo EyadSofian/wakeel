@@ -130,6 +130,7 @@ async function exec(options: ServerOptions, req: IncomingMessage, res: ServerRes
       scopes: request.scopes,
       secretKeys: request.secretKeys,
       tables: request.tables,
+      ...(request.kind === "autonomy_run" ? { tools: request.toolManifest } : {}),
       ...(request.ctx ? { idempotencyKey: request.ctx.idempotencyKey } : {}),
       ...(request.capabilityToken ? { capabilityToken: request.capabilityToken } : {}),
     },

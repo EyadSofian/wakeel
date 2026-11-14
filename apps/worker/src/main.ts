@@ -13,11 +13,25 @@ import {
 } from "@wakeel/config";
 import { mintCapabilityToken } from "@wakeel/contracts";
 import { createDatabase } from "@wakeel/db";
-import { createCodePort, createExpressionPort, createSandboxClient } from "@wakeel/sandbox-client";
+import { createLlm } from "@wakeel/llm";
+import {
+  createAutonomyRunPort,
+  createCodePort,
+  createExpressionPort,
+  createSandboxClient,
+} from "@wakeel/sandbox-client";
 import { createLogger } from "@wakeel/telemetry";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
-import { maintenanceProcessor, type TurnDeps, turnEnqueuer, turnProcessor } from "./turn/index";
+import {
+  autonomyPort,
+  maintenanceProcessor,
+  recordUsage,
+  type TurnDeps,
+  turnEnqueuer,
+  turnProcessor,
+  workspaceCredentials,
+} from "./turn/index";
 import { egressSender, webhookEnqueuer, webhookProcessor } from "./webhook/index";
 import { startWorkers } from "./workers";
 
@@ -49,6 +63,17 @@ if (config) {
   const publisher = new Redis(redisUrl);
   const sandbox = createSandboxClient({ url: config.sandboxUrl });
   const capabilityKey = config.egressCapabilityKey.reveal();
+  const keyring = {
+    current: { version: config.masterKeyVersion, key: config.masterKey.reveal() },
+    previous: config.previousMasterKeys.reveal(),
+  };
+  // The model layer (task 6.1): workspace keys only, one usage event per call.
+  const usage = recordUsage(db);
+  const llm = createLlm({
+    credentials: workspaceCredentials(db, keyring),
+    onUsage: (e) => usage(e).catch((err: unknown) => logger.error({ err, model: e.model }, "usage event not written")),
+  });
+  const runPort = createAutonomyRunPort(sandbox);
 
   const turnDeps: TurnDeps = {
     db,
@@ -66,6 +91,7 @@ if (config) {
       await publisher.publish(channel, message);
     },
     enqueueWebhook: webhooks.now,
+    autonomy: (turn, code) => autonomyPort({ db, llm, runPort, logger }, turn, code),
   };
 
   const running = startWorkers({
@@ -83,10 +109,7 @@ if (config) {
         db,
         logger,
         sender: egressSender({ egressUrl: config.egressUrl, egressToken: config.egressToken.reveal() }),
-        keyring: {
-          current: { version: config.masterKeyVersion, key: config.masterKey.reveal() },
-          previous: config.previousMasterKeys.reveal(),
-        },
+        keyring,
         scheduleWake: webhooks.at,
       }),
     },

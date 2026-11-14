@@ -3,6 +3,7 @@ import type { Processor } from "../workers";
 import { drainConversation, type TurnDeps } from "./drain";
 import { type JanitorDeps, runJanitor } from "./janitor";
 
+export * from "./autonomy";
 export * from "./drain";
 export * from "./event-scope";
 export * from "./handoff-summary";
