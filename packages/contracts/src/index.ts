@@ -15,6 +15,7 @@ export * from "./message";
 export * from "./models";
 export * from "./node";
 export * from "./platform";
+export * from "./portable";
 export * from "./references";
 export * from "./runtime";
 export * from "./seed";

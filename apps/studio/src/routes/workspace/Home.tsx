@@ -16,7 +16,7 @@ import {
   Tr,
   useTilt,
 } from "@wakeel/ui";
-import { Bot, Plus } from "lucide-react";
+import { Bot, Plus, Upload } from "lucide-react";
 import { type CSSProperties, type FormEvent, useState } from "react";
 import { fieldErrors } from "../../api/client";
 import { useBots, useCreateBot, useWorkspace } from "../../api/queries";
@@ -25,6 +25,7 @@ import { AppShell } from "../../shell/AppShell";
 import { Page, PageHeader } from "../../shell/PageHeader";
 import { ProblemBanner } from "../../shell/ProblemBanner";
 import { WorkspaceSwitcher } from "../../shell/WorkspaceSwitcher";
+import { ImportBotDialog } from "./ImportBotDialog";
 
 const COLUMNS = ["Name", "Status", "Conversations (7 d)", "Last published", "Updated"];
 
@@ -45,6 +46,7 @@ export function Home({ workspaceId }: { workspaceId: string }) {
   const workspace = useWorkspace(workspaceId);
   const bots = useBots(workspaceId);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const canCreate = workspace.data?.permissions.includes("bot.create") ?? false;
   const error = workspace.error ?? bots.error;
   const loading = workspace.isPending || bots.isPending;
@@ -64,13 +66,21 @@ export function Home({ workspaceId }: { workspaceId: string }) {
           description={summary ?? "Every bot in this workspace, with its status and last change."}
           actions={
             canCreate ? (
-              <Button
-                variant="primary"
-                icon={<Plus className="size-icon" strokeWidth={1.75} aria-hidden="true" />}
-                onClick={() => setCreating(true)}
-              >
-                New bot
-              </Button>
+              <>
+                <Button
+                  icon={<Upload className="size-icon" strokeWidth={1.75} aria-hidden="true" />}
+                  onClick={() => setImporting(true)}
+                >
+                  Import bot
+                </Button>
+                <Button
+                  variant="primary"
+                  icon={<Plus className="size-icon" strokeWidth={1.75} aria-hidden="true" />}
+                  onClick={() => setCreating(true)}
+                >
+                  New bot
+                </Button>
+              </>
             ) : null
           }
         />
@@ -120,6 +130,7 @@ export function Home({ workspaceId }: { workspaceId: string }) {
         )}
       </Page>
       <NewBotDialog workspaceId={workspaceId} open={creating} onOpenChange={setCreating} />
+      <ImportBotDialog workspaceId={workspaceId} open={importing} onOpenChange={setImporting} />
     </AppShell>
   );
 }

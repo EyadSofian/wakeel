@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useCanvasStore } from "../canvas/context";
 import { useIssues } from "../canvas/issues";
+import { waitForSaved } from "../emulator/run-from";
 import { CommandPalette } from "./CommandPalette";
 import { IssuesPanel } from "./IssuesPanel";
 import { issueKey, orderIssues, stepIssue } from "./issue-order";
@@ -94,11 +95,29 @@ function ShellKeys() {
 
 /** The shell's own palette actions: workflows and issues. */
 function ShellActions() {
-  const { store, issues } = useShell();
+  const { store, issues, workspaceId, botId } = useShell();
   const canvas = useCanvasStore();
+  /** Export bot (task 7.6, ADR-038): saves the draft, then downloads the export file. */
+  const exportBot = async () => {
+    try {
+      await waitForSaved(canvas);
+      const url = `/v1/workspaces/${workspaceId}/bots/${botId}/export`;
+      const res = await fetch(url, { credentials: "same-origin" });
+      if (!res.ok) throw new Error(`export failed with ${res.status}`);
+      const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "bot.wakeel.json";
+      const href = URL.createObjectURL(await res.blob());
+      const a = Object.assign(document.createElement("a"), { href, download: name });
+      a.click();
+      URL.revokeObjectURL(href);
+    } catch (error) {
+      store.getState().set({ dialog: { kind: "failed", title: "The bot was not exported", error } });
+    }
+  };
   // Read when an action runs, so the list is rebuilt only when "is there an issue" changes.
   const stepNow = useStepIssue();
   const requestsNow = useWorkflowRequests();
+  const exporter = useRef(exportBot);
+  exporter.current = exportBot;
   const step = useRef(stepNow);
   step.current = stepNow;
   const requests = useRef(requestsNow);
@@ -159,6 +178,12 @@ function ShellActions() {
         keywords: "release version live",
         keys: ["⇧", "⌘", "P"],
         run: () => store.getState().set({ publish: true }),
+      },
+      {
+        id: "shell.export",
+        label: "Export bot",
+        keywords: "download json backup copy",
+        run: () => void exporter.current(),
       },
       {
         id: "shell.issues",

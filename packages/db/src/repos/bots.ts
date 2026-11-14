@@ -1,4 +1,12 @@
-import { AppError, BotManifest, BotRecordSettings, newId, seedBot, Workflow } from "@wakeel/contracts";
+import {
+  AppError,
+  type BotDefinition,
+  BotManifest,
+  BotRecordSettings,
+  newId,
+  seedBot,
+  Workflow,
+} from "@wakeel/contracts";
 import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Tx } from "../client";
 import { botDraftDocs, bots } from "../schema/bots";
@@ -106,6 +114,51 @@ export async function createBot(
       doc: Workflow.parse(seeded.main),
       updatedBy: input.createdBy,
     },
+  ]);
+  return toBot(row);
+}
+
+/**
+ * Creates a bot whose draft is `definition` (task 7.6 import). The caller regenerates element ids
+ * first, so the new bot shares none with the one it came from. The manifest takes the new name.
+ */
+export async function createBotFromDefinition(
+  tx: Tx,
+  input: { name: string; slug: string; definition: BotDefinition; createdBy: string | null },
+): Promise<Bot> {
+  const manifest = BotManifest.parse({ ...input.definition.manifest, name: input.name });
+  const [row] = await tx
+    .insert(bots)
+    .values({
+      id: newId("bot"),
+      workspaceId: currentWorkspace,
+      name: input.name,
+      slug: input.slug,
+      defaultLocale: manifest.defaultLocale,
+      settings: BotRecordSettings.parse({}),
+    })
+    .returning()
+    .catch(rethrowUnique(slugConstraint));
+  if (!row) throw new Error("insert returned no row");
+  await tx.insert(botDraftDocs).values([
+    {
+      workspaceId: currentWorkspace,
+      botId: row.id,
+      kind: "manifest",
+      docId: "manifest",
+      rev: 0,
+      doc: manifest,
+      updatedBy: input.createdBy,
+    },
+    ...input.definition.workflows.map((w) => ({
+      workspaceId: currentWorkspace,
+      botId: row.id,
+      kind: "workflow",
+      docId: w.id,
+      rev: 0,
+      doc: Workflow.parse(w),
+      updatedBy: input.createdBy,
+    })),
   ]);
   return toBot(row);
 }
