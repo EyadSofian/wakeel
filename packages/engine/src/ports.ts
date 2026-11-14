@@ -82,8 +82,17 @@ export interface StepCommit {
   user?: { vars?: Record<string, Json>; attributes?: Record<string, Json> };
   /** For spans (§4.4 "Every failure writes a span"). */
   failures: StepFailure[];
+  /** Log card lines and code `log.*` calls, for the conversation log and the trace. */
+  logs: StepLog[];
   /** The card or node that ran; absent when the commit holds only the effects of the inbound event. */
   step?: StepLocation & { outcome: StepOutcome["type"] };
+}
+
+/** A line for the conversation log and the trace (Log card, `log.*` in code). */
+export interface StepLog {
+  level: "info" | "warn" | "error";
+  message: string;
+  data?: Json;
 }
 
 /** What a card executor (or an autonomous iteration) returns: one outcome and its side effects. */
@@ -92,6 +101,11 @@ export interface StepResult {
   messages?: BotMessagePayload[];
   /** Validated by the engine against each variable's declared scope and type before anything is applied. */
   writes?: StepEffects["writes"];
+  logs?: StepLog[];
+  /** The whole new `turn` scratch object, when code changed it. */
+  turn?: Record<string, Json>;
+  /** Set Timeout card: the conversation's new inactivity timeout; 0 means never. */
+  inactivityTimeoutMinutes?: number;
 }
 
 /** What a card executor receives. */
@@ -101,6 +115,7 @@ export interface CardContext<C extends Card = Card> {
   definition: BotDefinition;
   scopes: ExpressionScopes;
   sandbox: SandboxPort;
+  code: CodePort;
   /** Present when this card is resumed by the user's reply to the wait it set. */
   reply?: { wait: WaitSpec; event: EventScope };
   turnId: string;
@@ -148,8 +163,62 @@ export interface AutonomyPort {
   step(input: AutonomyStepInput): Promise<AutonomyStepResult>;
 }
 
+/** One scope's writes from a code run, by top-level variable name (§5.2 `scopePatches`). */
+export interface CodeScopePatch {
+  set?: Record<string, Json>;
+  unset?: string[];
+}
+
+export type CodeScope = "workflow" | "conversation" | "user" | "turn";
+
+export interface CodeRequest {
+  /** The body of the Code card. */
+  source: string;
+  scopes: ExpressionScopes;
+  timeoutMs: number;
+  memoryMb: number;
+  /** `ctx.idempotencyKey` in the guest (§4.4). */
+  idempotencyKey: string;
+  /** `env` keys whose values are secret, so the sandbox redacts them from logs. */
+  secretKeys: string[];
+}
+
+export interface CodeLog {
+  level: "info" | "warn" | "error";
+  args: unknown[];
+}
+
+/** How a code run ended. `said` holds the guest's `say(...)` arguments in order, not yet validated. */
+export type CodeOutcome =
+  | {
+      ok: true;
+      value: Json | null;
+      patches: Partial<Record<CodeScope, CodeScopePatch>>;
+      said: unknown[];
+      logs: CodeLog[];
+    }
+  | {
+      ok: false;
+      code: "code_error" | "code_syntax_error" | "code_timeout" | "code_memory_exceeded" | "internal_error";
+      message: string;
+      line?: number;
+      column?: number;
+      said: unknown[];
+      logs: CodeLog[];
+    };
+
+/**
+ * Runs builder code in the sandbox (ADR-003, §5). The real adapter is `createCodePort` in
+ * `@wakeel/sandbox-client`; the engine never runs builder code itself. Rejects only when the run
+ * could not start (the sandbox refused or was unreachable).
+ */
+export interface CodePort {
+  run(request: CodeRequest): Promise<CodeOutcome>;
+}
+
 export interface EnginePorts {
   sandbox: SandboxPort;
+  code: CodePort;
   clock: ClockPort;
   /**
    * Commits one step atomically, fenced by the conversation lease. If it rejects (the lease was
