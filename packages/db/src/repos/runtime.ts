@@ -1,7 +1,16 @@
 import { AppError, ConversationState, type Json, newId } from "@wakeel/contracts";
 import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import type { Tx } from "../client";
-import { conversations, endUsers, inboundEvents, messages, outboxEvents, turns } from "../schema/runtime";
+import {
+  bridgeConnections,
+  conversations,
+  endUsers,
+  inboundEvents,
+  messages,
+  outboxEvents,
+  turns,
+  webhookDeliveries,
+} from "../schema/runtime";
 import { currentWorkspace } from "./scope";
 
 /**
@@ -329,13 +338,18 @@ export interface NewOutboxEvent {
 /**
  * Appends events to the conversation's outbox. Ordered events take `next_out_seq` in turn; the
  * counter moves under the lease fence. Ephemeral events have no seq.
+ *
+ * In the same transaction, each event the connection subscribes to gets a pending first delivery
+ * attempt, due at `at` (ADR-028 §1): only when the connection has a webhook URL and the
+ * conversation is not an eval run. Returns how many deliveries were created, so the caller knows
+ * whether to wake the `webhook` queue.
  */
 export async function appendOutbox(
   tx: Tx,
-  input: { conversationId: string; connectionId: string; epoch: number },
+  input: { conversationId: string; connectionId: string; epoch: number; at?: Date },
   events: readonly NewOutboxEvent[],
-): Promise<void> {
-  if (events.length === 0) return;
+): Promise<number> {
+  if (events.length === 0) return 0;
   const ordered = events.filter((e) => !e.ephemeral).length;
   let next = 0;
   if (ordered > 0) {
@@ -347,18 +361,46 @@ export async function appendOutbox(
     if (!rows[0]) throw new LeaseLostError(input.conversationId);
     next = rows[0].next - ordered;
   }
-  await tx.insert(outboxEvents).values(
-    events.map((e) => ({
-      id: newId("out"),
+  const rows = events.map((e) => ({
+    id: newId("out"),
+    workspaceId: currentWorkspace,
+    connectionId: input.connectionId,
+    conversationId: input.conversationId,
+    seq: e.ephemeral ? null : next++,
+    type: e.type,
+    payload: e.payload,
+    ephemeral: e.ephemeral ?? false,
+  }));
+  await tx.insert(outboxEvents).values(rows);
+
+  const [target] = await tx
+    .select({
+      url: bridgeConnections.webhookUrl,
+      subscribed: bridgeConnections.subscribedEvents,
+      mode: conversations.mode,
+    })
+    .from(conversations)
+    .innerJoin(bridgeConnections, eq(bridgeConnections.id, conversations.connectionId))
+    .where(eq(conversations.id, input.conversationId));
+  if (!target?.url || target.mode === "eval") return 0;
+  const subscribed = new Set(target.subscribed);
+  const due = input.at ?? new Date();
+  const deliveries = rows
+    .filter((r) => subscribed.has(r.type))
+    .map((r) => ({
+      id: newId("dlv"),
       workspaceId: currentWorkspace,
-      connectionId: input.connectionId,
-      conversationId: input.conversationId,
-      seq: e.ephemeral ? null : next++,
-      type: e.type,
-      payload: e.payload,
-      ephemeral: e.ephemeral ?? false,
-    })),
-  );
+      connectionId: r.connectionId,
+      conversationId: r.conversationId,
+      outboxEventId: r.id,
+      seq: r.seq,
+      ephemeral: r.ephemeral,
+      attempt: 1,
+      status: "pending",
+      nextAttemptAt: due,
+    }));
+  if (deliveries.length > 0) await tx.insert(webhookDeliveries).values(deliveries);
+  return deliveries.length;
 }
 
 export async function updateEndUser(

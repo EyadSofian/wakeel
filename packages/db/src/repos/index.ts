@@ -9,4 +9,5 @@ export * from "./scope";
 export * from "./secret-values";
 export * from "./secrets";
 export * from "./traces";
+export * from "./webhooks";
 export * from "./workspaces";

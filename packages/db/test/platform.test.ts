@@ -264,11 +264,15 @@ describe("lookups (ADR-015)", () => {
   test("every lookup function returns only id columns", async () => {
     const { rows } = await query(
       urls.superuser,
-      `select p.proname, coalesce(p.proargnames[2:], array[]::text[]) as outs, format_type(p.prorettype, null) as ret,
+      // Output columns only: the names whose mode is OUT or TABLE (inputs come first and vary in number).
+      `select p.proname,
+              array(select u.n from unnest(p.proargnames, p.proargmodes::text[]) as u(n, m) where u.m in ('o', 't')) as outs,
+              format_type(p.prorettype, null) as ret,
               p.proretset
        from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'lookup' order by 1`,
     );
-    // Each new lookup is added here on purpose, and reviewed (ADR-015). 0006 adds the turn worker's three.
+    // Each new lookup is added here on purpose, and reviewed (ADR-015). 0006 adds the turn worker's
+    // three; 0009 adds the webhook janitor's (ADR-028).
     expect(rows.map((r) => r.proname)).toEqual([
       "api_key_by_prefix",
       "conversation_workspace",
@@ -276,6 +280,7 @@ describe("lookups (ADR-015)", () => {
       "conversations_to_wake",
       "invitation_by_token_hash",
       "user_workspace_ids",
+      "webhook_streams_due",
     ]);
     for (const r of rows) {
       const outs = r.outs as string[];
@@ -293,7 +298,7 @@ describe("lookups (ADR-015)", () => {
        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where p.prosecdef and n.nspname not in ('pg_catalog', 'information_schema')`,
     );
-    expect(rows.length).toBe(6);
+    expect(rows.length).toBe(7);
     for (const r of rows) {
       expect(r, r.fn).toMatchObject({ owner: "app_lookup", public_exec: false, rw_exec: true });
       expect(r.config).toEqual(["search_path=pg_catalog, public"]);

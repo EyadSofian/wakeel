@@ -90,6 +90,11 @@ export const ERRORS = {
   not_handed_off: { status: 409, title: "This conversation is not handed off", fix: "Nothing to release." },
   webhook_url_blocked: { status: 422, title: "That webhook address cannot be used", fix: "Use a public https address." },
   connection_disabled: { status: 409, title: "This connection is turned off after repeated delivery failures", fix: "Fix the receiving endpoint, then turn the connection back on." },
+  // Webhook delivery attempts (ADR-028).
+  webhook_rejected: { status: 502, title: "The webhook endpoint did not accept the event", fix: "Make the endpoint answer with a 2xx status within 10 seconds. The response status is shown with the attempt." },
+  webhook_redirected: { status: 502, title: "The webhook endpoint answered with a redirect", fix: "Webhooks do not follow redirects. Set the connection's webhook URL to the final address." },
+  webhook_secret_missing: { status: 409, title: "This connection has no signing secret", fix: "Generate a signing secret for the connection, then replay the event." },
+  webhook_stale: { status: 410, title: "A typing event was dropped because it was too old to send", fix: "Nothing to do. Typing events are best-effort." },
 
   internal_error: { status: 500, title: "Something went wrong on our side", fix: "Try again. If it continues, contact support with request id {requestId}." },
 } as const satisfies Record<string, { status: number; title: string; fix: string }>;

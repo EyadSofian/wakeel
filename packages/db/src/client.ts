@@ -56,6 +56,8 @@ export interface Lookups {
   conversationsToWake(limit: number): Promise<{ conversationId: string; workspaceId: string }[]>;
   /** Waiting conversations past their inactivity deadline with no timeout pending. */
   conversationsExpired(limit: number): Promise<{ conversationId: string; workspaceId: string }[]>;
+  /** Conversations with a due, unleased pending webhook delivery on an active connection (ADR-028 §4). */
+  webhookStreamsDue(now: Date, limit: number): Promise<{ conversationId: string; workspaceId: string }[]>;
 }
 
 /** Opens a pool for the app_rw role. The pool itself is never exposed. */
@@ -136,6 +138,13 @@ export function createDatabase(options: DatabaseOptions): Database {
         const { rows } = await pool.query<{ conversationId: string; workspaceId: string }>(
           'select conversation_id as "conversationId", workspace_id as "workspaceId" from lookup.conversations_expired($1)',
           [limit],
+        );
+        return rows;
+      },
+      async webhookStreamsDue(now, limit) {
+        const { rows } = await pool.query<{ conversationId: string; workspaceId: string }>(
+          'select conversation_id as "conversationId", workspace_id as "workspaceId" from lookup.webhook_streams_due($1, $2)',
+          [now, limit],
         );
         return rows;
       },
