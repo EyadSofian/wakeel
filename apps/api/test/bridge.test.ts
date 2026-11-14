@@ -365,7 +365,9 @@ describe("sendMessage", () => {
       "select seq, kind, payload->>'turnId' as turn_id, idempotency_key from inbound_events where conversation_id = $1",
       [accepted.conversationId],
     );
-    expect(event).toMatchObject({ seq: "1", kind: "message", turn_id: accepted.turnId, idempotency_key: null });
+    // No Idempotency-Key was sent, so the message is de-duplicated by its externalMessageId (ADR-024).
+    expect(event).toMatchObject({ seq: "1", kind: "message", turn_id: accepted.turnId });
+    expect(String(event?.["idempotency_key"])).toMatch(/^xmid:/);
     const conversation = (await call(shared.a.key, "GET", `/conversations/${conv}`)).json();
     expect(conversation).toMatchObject({
       externalId: conv,
@@ -495,6 +497,51 @@ describe("Idempotency-Key", () => {
     const a = await send(shared.a.key, ext(), hello(), "", { "idempotency-key": key });
     const b = await send(shared.b.key, ext(), hello(), "", { "idempotency-key": key });
     expect((a.json() as Accepted).conversationId).not.toBe((b.json() as Accepted).conversationId);
+  });
+});
+
+describe("externalMessageId without an Idempotency-Key (ADR-024)", () => {
+  test("a repeated externalMessageId returns the original response and stores nothing twice", async () => {
+    const conv = ext();
+    const body = { ...hello(), externalMessageId: `wa-${randomBytes(4).toString("hex")}` };
+    const first = await send(shared.a.key, conv, body);
+    const again = await send(shared.a.key, conv, { ...body });
+    expect(first.statusCode).toBe(202);
+    expect(again.json()).toEqual(first.json());
+    const [counts] = await superuserQuery(
+      pg.urls,
+      `select (select count(*)::int from inbound_events where conversation_id = $1) as events,
+              (select count(*)::int from messages where conversation_id = $1) as messages`,
+      [(first.json() as Accepted).conversationId],
+    );
+    expect(counts).toEqual({ events: 1, messages: 1 });
+  });
+
+  test("the same externalMessageId with different content is idempotency_mismatch", async () => {
+    const conv = ext();
+    const externalMessageId = `wa-${randomBytes(4).toString("hex")}`;
+    await send(shared.a.key, conv, { ...hello("الأولى"), externalMessageId });
+    const res = await send(shared.a.key, conv, { ...hello("التانية"), externalMessageId });
+    expect(res.json()).toMatchObject({ status: 409, code: "idempotency_mismatch" });
+  });
+
+  test("the same externalMessageId in another conversation is a new message", async () => {
+    const externalMessageId = `wa-${randomBytes(4).toString("hex")}`;
+    const a = await send(shared.a.key, ext(), { ...hello(), externalMessageId });
+    const b = await send(shared.a.key, ext(), { ...hello(), externalMessageId });
+    expect((a.json() as Accepted).messageId).not.toBe((b.json() as Accepted).messageId);
+  });
+
+  test("an explicit Idempotency-Key takes precedence over externalMessageId", async () => {
+    const conv = ext();
+    const externalMessageId = `wa-${randomBytes(4).toString("hex")}`;
+    const a = await send(shared.a.key, conv, { ...hello(), externalMessageId }, "", {
+      "idempotency-key": `k-one${externalMessageId}`,
+    });
+    const b = await send(shared.a.key, conv, { ...hello(), externalMessageId }, "", {
+      "idempotency-key": `k-two${externalMessageId}`,
+    });
+    expect((a.json() as Accepted).messageId).not.toBe((b.json() as Accepted).messageId);
   });
 });
 

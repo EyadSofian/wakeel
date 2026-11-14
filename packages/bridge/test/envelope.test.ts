@@ -1,6 +1,14 @@
 import { API_VERSION, newId } from "@wakeel/contracts";
 import { describe, expect, test } from "vitest";
-import { canonicalJson, eventIdOf, requestFingerprint, sseFrame, toBridgeEvent, toMessage } from "../src/index";
+import {
+  canonicalJson,
+  eventIdOf,
+  externalMessageKey,
+  requestFingerprint,
+  sseFrame,
+  toBridgeEvent,
+  toMessage,
+} from "../src/index";
 
 const ctx = {
   connectionId: newId("conn"),
@@ -94,6 +102,16 @@ describe("idempotency fingerprints", () => {
     expect(requestFingerprint("sendMessage", { userId: "u", message: { text: "مرحبا", type: "text" } })).toBe(a);
     expect(requestFingerprint("sendEvent", { userId: "u", message: { text: "مرحبا", type: "text" } })).not.toBe(a);
     expect(requestFingerprint("sendMessage", { userId: "u", message: { text: "مرحبا!", type: "text" } })).not.toBe(a);
+  });
+
+  test("externalMessageKey is stable per conversation, differs across conversations, and fits the key column", () => {
+    const a = externalMessageKey("chat-1", "wa:ABCD");
+    expect(externalMessageKey("chat-1", "wa:ABCD")).toBe(a);
+    expect(externalMessageKey("chat-2", "wa:ABCD")).not.toBe(a);
+    // The length prefix keeps ids that contain the separator apart.
+    expect(externalMessageKey("a", "b\nc")).not.toBe(externalMessageKey("a\nb", "c"));
+    expect(a).toMatch(/^xmid:[A-Za-z0-9_-]{43}$/);
+    expect(externalMessageKey("x".repeat(255), "y".repeat(255)).length).toBeLessThanOrEqual(255);
   });
 });
 

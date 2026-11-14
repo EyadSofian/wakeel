@@ -16,3 +16,16 @@ export function requestFingerprint(operation: string, body: unknown): string {
     .update(`${operation}\n${canonicalJson(body)}`)
     .digest("hex");
 }
+
+/**
+ * The de-duplication key for a message sent with `externalMessageId` and no `Idempotency-Key`
+ * (OpenAPI `SendMessageRequest.externalMessageId`, ADR-024). It is stored in the same per-connection
+ * key column, so the conversation's external id is part of it: a channel's message ids are only
+ * unique within a conversation. Hashed so two 255-character ids still fit the 255-character column.
+ */
+export function externalMessageKey(externalConversationId: string, externalMessageId: string): string {
+  const digest = createHash("sha256")
+    .update(`${externalConversationId.length}:${externalConversationId}\n${externalMessageId}`)
+    .digest("base64url");
+  return `xmid:${digest}`;
+}

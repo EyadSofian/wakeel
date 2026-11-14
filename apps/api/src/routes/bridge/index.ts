@@ -1,4 +1,4 @@
-import { requestFingerprint, sseFrame, toBridgeEvent, toMessage } from "@wakeel/bridge";
+import { externalMessageKey, requestFingerprint, sseFrame, toBridgeEvent, toMessage } from "@wakeel/bridge";
 import { API_LIMITS } from "@wakeel/config";
 import {
   Accepted,
@@ -183,7 +183,7 @@ interface InboundInput {
 
 /**
  * The inbound path (§4.2): in one transaction, upsert the user and the conversation by their
- * external ids, refuse or replay a repeated `Idempotency-Key`, append the inbox event (and the user
+ * external ids, refuse or replay a repeated `Idempotency-Key` (or `externalMessageId`), append the inbox event (and the user
  * message), then enqueue the turn and answer `202`, wait for the turn, or stream it.
  */
 async function inbound(
@@ -196,7 +196,14 @@ async function inbound(
   const externalId = ExternalId.parse((request.params as { externalConversationId: string }).externalConversationId);
   const { wait } = WaitQuery.parse(request.query);
   const keyHeader = request.headers["idempotency-key"];
-  const idempotencyKey = keyHeader === undefined ? undefined : IdempotencyKey.parse(keyHeader);
+  // An explicit key wins; without one, `externalMessageId` de-duplicates the message (ADR-024).
+  const externalMessageId = input.message?.externalId;
+  const idempotencyKey =
+    keyHeader !== undefined
+      ? IdempotencyKey.parse(keyHeader)
+      : externalMessageId !== undefined
+        ? externalMessageKey(externalId, externalMessageId)
+        : undefined;
   const fingerprint = requestFingerprint(input.operation, input.body);
   if (input.user?.attributes && bytes(input.user.attributes) > LIMITS.userAttributesBytes)
     throw new AppError("payload_too_large", { limit: "16 KB of attributes" });
