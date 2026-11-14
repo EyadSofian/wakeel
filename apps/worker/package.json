@@ -12,11 +12,17 @@
   "dependencies": {
     "@wakeel/config": "workspace:*",
     "@wakeel/contracts": "workspace:*",
+    "@wakeel/db": "workspace:*",
+    "@wakeel/engine": "workspace:*",
+    "@wakeel/sandbox-client": "workspace:*",
     "@wakeel/telemetry": "workspace:*",
-    "bullmq": "6.7.6"
+    "bullmq": "6.7.6",
+    "ioredis": "6.0.0"
   },
   "devDependencies": {
+    "@testcontainers/postgresql": "12.2.1",
     "@testcontainers/redis": "12.2.1",
+    "@wakeel/testing": "workspace:*",
     "testcontainers": "12.2.1"
   }
 }

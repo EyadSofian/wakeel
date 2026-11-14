@@ -252,6 +252,19 @@ export const egressEnv = defineEnv({
   },
 });
 
+/**
+ * The turn worker's way to the sandbox (task 4.4): the service URL, and the key it signs each exec's
+ * egress capability token with (ADR-023 §4).
+ */
+export const sandboxClientEnv = defineEnv({
+  sandboxUrl: {
+    env: "SANDBOX_URL",
+    schema: z.url({ protocol: /^https?$/ }).default("http://127.0.0.1:4300"),
+    description: "Base URL of the sandbox service, for example http://sandbox:4300.",
+  },
+  egressCapabilityKey,
+});
+
 /** Services that send tenant URLs out through egress: sandbox (3.3), worker webhook and KB fetch. */
 export const egressClientEnv = defineEnv({
   egressToken,

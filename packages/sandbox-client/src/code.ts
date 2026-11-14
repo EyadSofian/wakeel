@@ -47,8 +47,11 @@ export interface CodePort {
 }
 
 export interface CodePortOptions {
-  /** Mints the egress capability token for one run (ADR-023 §4); without it the guest's fetch is refused. */
-  capabilityToken?: () => string | undefined;
+  /**
+   * Mints the egress capability token for one run (ADR-023 §4), given its exec id. Without it the
+   * guest's `fetch` is refused by egress.
+   */
+  capabilityToken?: (execId: string) => Promise<string | undefined> | string | undefined;
 }
 
 /**
@@ -61,10 +64,11 @@ export function createCodePort(client: SandboxClient, options: CodePortOptions =
     run: async (request) => {
       const said: unknown[] = [];
       const logs: CodeLog[] = [];
-      const token = options.capabilityToken?.();
+      const execId = newRequestId();
+      const token = await options.capabilityToken?.(execId);
       const outcome = await client.exec(
         {
-          execId: newRequestId(),
+          execId,
           kind: "code",
           source: request.source,
           scopes: request.scopes,
