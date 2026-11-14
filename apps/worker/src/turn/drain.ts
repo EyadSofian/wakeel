@@ -1,3 +1,4 @@
+import type { Span } from "@wakeel/contracts";
 import {
   AppError,
   type BotDefinition,
@@ -19,6 +20,7 @@ import {
   insertBotMessages,
   LeaseLostError,
   listDraftDocs,
+  listTurnSpans,
   type NewOutboxEvent,
   nextUnprocessedEvent,
   recordTurnProgress,
@@ -29,6 +31,7 @@ import {
   type Tx,
   unprocessedEventsAfter,
   updateEndUser,
+  upsertSpans,
   writeConversation,
 } from "@wakeel/db";
 import {
@@ -42,7 +45,7 @@ import {
   type TurnResult,
   toStepError,
 } from "@wakeel/engine";
-import type { Logger } from "@wakeel/telemetry";
+import { type Logger, type TraceBefore, TraceBuilder, type TraceContext } from "@wakeel/telemetry";
 import { eventScope, isTextMessage } from "./event-scope";
 import { botMessageId } from "./message-id";
 
@@ -68,7 +71,20 @@ export interface TurnDeps {
   leaseMs?: number;
   /** 0 turns the heartbeat off (tests that simulate a dead worker). */
   heartbeatMs?: number;
+  /** Writes trace spans; defaults to `upsertSpans`. Tests pass one that fails. */
+  writeSpans?(workspaceId: string, spans: readonly Span[]): Promise<void>;
 }
+
+/** The turn span's trigger for each inbound kind (ADR-026). */
+const TRIGGERS: Record<string, TraceContext["trigger"]> = {
+  message: "message",
+  event: "event",
+  user_update: "user_update",
+  tool_result: "tool_result",
+  handoff_release: "handoff_release",
+  timeout: "timeout",
+  run_from: "run_from",
+};
 
 export interface DrainResult {
   /** Turns finished by this call. */
@@ -120,6 +136,9 @@ export async function drainConversation(deps: TurnDeps, conversationId: string):
 class ConversationRun {
   readonly #log: Logger;
   #heartbeat: NodeJS.Timeout | undefined;
+  /** The open turn's trace (task 4.7) and the values before the next step, for its variable diff. */
+  #trace: TraceBuilder | undefined;
+  #before: TraceBefore | undefined;
 
   constructor(
     readonly deps: TurnDeps,
@@ -203,6 +222,29 @@ class ConversationRun {
     log.info("turn started");
 
     const clock = this.deps.clock ?? { now: () => Date.now() };
+    // The trace (ADR-026): a resumed turn continues from the spans the last worker stored.
+    const turnId = turn.id;
+    const stored = loaded.turn
+      ? await this.#tx((tx) => listTurnSpans(tx, turnId)).catch((err: unknown) => {
+          log.warn({ err }, "trace read failed; the resumed trace starts again");
+          return [] as Span[];
+        })
+      : [];
+    this.#trace = new TraceBuilder(
+      {
+        workspaceId: this.workspaceId,
+        botId: conversation.botId,
+        conversationId: this.conversationId,
+        turnId,
+        mode: conversation.mode as TraceContext["mode"],
+        trigger: TRIGGERS[event.kind] ?? "event",
+        versionId: conversation.versionId,
+      },
+      definition,
+      stored,
+    );
+    this.#before = { state, user: { vars: user.vars, attributes: user.attributes } };
+    await this.#writeSpans(this.#trace.turnStarted(new Date(clock.now())));
     const sandbox = this.deps.enginePorts({
       workspaceId: this.workspaceId,
       conversationId: this.conversationId,
@@ -287,6 +329,13 @@ class ConversationRun {
       });
     }
 
+    await this.#writeSpans(
+      this.#trace.turnFinished(
+        { status: result?.status ?? "failed", stepSeq: result?.stepSeq ?? turn.stepCount },
+        new Date(clock.now()),
+      ),
+    );
+    this.#trace = undefined;
     await this.#notify();
     const status = result?.status ?? "failed";
     for (const e of events) {
@@ -312,6 +361,20 @@ class ConversationRun {
       group.push(next);
     }
     return group;
+  }
+
+  /**
+   * Writes spans outside any step transaction (ADR-009): a failing trace store is logged and the
+   * turn goes on. Readers are told afterwards with the step's own notification.
+   */
+  async #writeSpans(spans: readonly Span[]): Promise<void> {
+    if (spans.length === 0) return;
+    try {
+      if (this.deps.writeSpans) await this.deps.writeSpans(this.workspaceId, spans);
+      else await this.#tx((tx) => upsertSpans(tx, spans));
+    } catch (err) {
+      this.#log.warn({ err, spans: spans.length, code: "trace_write_failed" }, "trace spans were not written");
+    }
   }
 
   /** Best-effort: SSE readers also poll, so a lost notification only delays them. */
@@ -380,6 +443,19 @@ class ConversationRun {
       if (commit.user) await updateEndUser(tx, conversation.endUserId, commit.user);
       await recordTurnProgress(tx, turnId, commit.stepSeq);
     });
+    // The step's spans, after its commit: an uncommitted step never appears in the trace.
+    if (this.#trace && this.#before) {
+      await this.#writeSpans(
+        this.#trace.stepCommitted(commit, this.#before, new Date((this.deps.clock ?? Date).now())),
+      );
+      this.#before = {
+        state: commit.state,
+        user: {
+          vars: commit.user?.vars ?? this.#before.user.vars,
+          attributes: commit.user?.attributes ?? this.#before.user.attributes,
+        },
+      };
+    }
     await this.#notify();
   }
 }
