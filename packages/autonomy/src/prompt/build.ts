@@ -27,6 +27,7 @@ ${M}exit <name> [json]        leave through that exit, with data matching its sc
 ${M}end                       closes your response. Always end with it.
 
 Rules:
+- Every reply ends with a ${M}run block or an ${M}exit, then ${M}end. To wait for the user's answer, use ${M}exit listen.
 - Message bodies are final text. There is no interpolation.
 - If your ${M}run block returns a value, you get another step with that value, and any ${M}exit in the same response is ignored. A ${M}run block without return may be followed by ${M}exit.
 - Call only the functions on \`tools\`. Read variables from the variables block; write a variable by assigning it in ${M}run (for example \`conversation.topic = "refund"\`), only if you are allowed to.

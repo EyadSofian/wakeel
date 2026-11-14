@@ -137,6 +137,18 @@ describe("goto", () => {
     expect(result.state.autonomy).toHaveProperty(`${a.def.manifest.mainWorkflowId}:${h.autonomyCalls[0]?.node.id}`);
   });
 
+  test("the exit's data is event.exit for the cards after it (task 6.5)", async () => {
+    const a = agentBot(true);
+    const h = harness({
+      autonomy: () =>
+        outcome({ type: "goto", port: `exit:${a.exitId}` }, { exit: { name: "done", data: { amount: 2500 } } }),
+    });
+    const s = scripted();
+    await run({ def: a.def, h, executors: s.executors });
+    const event = s.calls[0]?.scopes.event as { exit?: unknown } | undefined;
+    expect(event?.exit).toEqual({ name: "done", data: { amount: 2500 } });
+  });
+
   test("an unconnected autonomous exit is no_route", async () => {
     const a = agentBot(false);
     const h = harness({ autonomy: () => outcome({ type: "goto", port: `exit:${a.exitId}` }) });

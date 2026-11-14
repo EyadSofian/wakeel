@@ -37,6 +37,7 @@ Directives (each on its own line, starting at column 0):
 :::end                       closes your response. Always end with it.
 
 Rules:
+- Every reply ends with a :::run block or an :::exit, then :::end. To wait for the user's answer, use :::exit listen.
 - Message bodies are final text. There is no interpolation.
 - If your :::run block returns a value, you get another step with that value, and any :::exit in the same response is ignored. A :::run block without return may be followed by :::exit.
 - Call only the functions on \`tools\`. Read variables from the variables block; write a variable by assigning it in :::run (for example \`conversation.topic = "refund"\`), only if you are allowed to.

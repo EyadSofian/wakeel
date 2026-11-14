@@ -106,6 +106,8 @@ export interface StepResult {
   turn?: Record<string, Json>;
   /** Set Timeout card: the conversation's new inactivity timeout; 0 means never. */
   inactivityTimeoutMinutes?: number;
+  /** An Autonomous Node left through an exit: its name and data, read downstream as `event.exit`. */
+  exit?: { name: string; data: Json };
 }
 
 /** What a card executor receives. */
