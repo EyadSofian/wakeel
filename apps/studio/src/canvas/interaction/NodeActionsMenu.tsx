@@ -1,8 +1,10 @@
 import { enterTransition, Kbd, useMotionTokens } from "@wakeel/ui";
-import { type LucideIcon, Pencil, Play } from "lucide-react";
+import { Copy, type LucideIcon, Pencil, Play, Trash2 } from "lucide-react";
 import { motion } from "motion/react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { useRunFrom } from "../../emulator/run-from";
+import { useCanvas } from "../context";
+import { isFixedNode, useNodeActions } from "./node-actions";
 import { useUiStore } from "./ui-store";
 
 interface Action {
@@ -11,11 +13,14 @@ interface Action {
   icon: LucideIcon;
   shortcut: string;
   run: () => void;
+  /** Destructive actions are drawn in the error colour and come last. */
+  danger?: boolean;
 }
 
 /**
- * The node menu (design system §5.1 shortcut table): Run from here and Rename. Arrows move, `Enter`
- * picks, `Esc` or a click outside closes. Each item names its keyboard shortcut.
+ * The node menu (design system §5.1 shortcut table): Run from here, Rename, Duplicate and Delete
+ * (the last two not for Start and entry nodes). Arrows move, `Enter` picks, `Esc` or a click
+ * outside closes. Each item names its keyboard shortcut.
  */
 export function NodeActionsMenu({
   nodeId,
@@ -29,6 +34,12 @@ export function NodeActionsMenu({
   const tokens = useMotionTokens();
   const ui = useUiStore();
   const runFrom = useRunFrom();
+  const { duplicate, remove } = useNodeActions();
+  const fixed = useCanvas((s) => {
+    const wf = s.activeWorkflowId ? s.workflows[s.activeWorkflowId]?.doc : undefined;
+    const node = wf?.nodes.find((n) => n.id === nodeId);
+    return node === undefined || isFixedNode(node);
+  });
   const root = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   const actions: Action[] = [
@@ -36,6 +47,12 @@ export function NodeActionsMenu({
       ? [{ id: "run-from", label: "Run from here", icon: Play, shortcut: "⌘↵", run: () => runFrom(nodeId) }]
       : []),
     { id: "rename", label: "Rename", icon: Pencil, shortcut: "F2", run: () => ui.getState().set({ renaming: nodeId }) },
+    ...(fixed
+      ? []
+      : [
+          { id: "duplicate", label: "Duplicate", icon: Copy, shortcut: "⌘D", run: () => duplicate([nodeId]) },
+          { id: "delete", label: "Delete", icon: Trash2, shortcut: "⌫", run: () => remove([nodeId]), danger: true },
+        ]),
   ];
 
   useEffect(() => {
@@ -84,9 +101,13 @@ export function NodeActionsMenu({
           tabIndex={i === active ? 0 : -1}
           onMouseEnter={() => setActive(i)}
           onClick={() => pick(a)}
-          className={`flex h-control items-center gap-4 rounded-sm px-3 text-body text-primary ${i === active ? "bg-accent-subtle" : ""}`}
+          className={`wk-press flex h-control items-center gap-4 rounded-sm px-3 text-body ${a.danger ? "text-error" : "text-primary"} ${i === active ? (a.danger ? "bg-error-subtle" : "bg-accent-subtle") : ""}`}
         >
-          <a.icon className="size-icon text-secondary" strokeWidth={1.75} aria-hidden="true" />
+          <a.icon
+            className={`size-icon ${a.danger ? "text-error" : "text-secondary"}`}
+            strokeWidth={1.75}
+            aria-hidden="true"
+          />
           <span className="flex-1 text-start">{a.label}</span>
           <Kbd>{a.shortcut}</Kbd>
         </button>

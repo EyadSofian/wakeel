@@ -43,7 +43,7 @@ const KINDS = [
 ] as const;
 
 /** Variables a card may write to: not bot variables (read-only at run time) and not inputs. */
-function useWritable() {
+export function useWritable() {
   return useVariables().filter((v) => v.id !== "" && v.scope !== "bot");
 }
 
@@ -65,7 +65,7 @@ const CAPTURE_TYPES: Record<string, VariableType> = {
  * VariablePicker for a card field (task 2.7). Picking commits the card; creating adds a workflow
  * variable of `createType` and stores into it in the same undo step.
  */
-function VariableSelect({
+export function VariableSelect({
   label,
   help,
   value,

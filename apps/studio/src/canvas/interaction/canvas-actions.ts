@@ -7,12 +7,10 @@ import { useCanvasStore } from "../context";
 import { type Command, commands } from "../store/commands";
 import type { CanvasRFNode } from "../view/CanvasNode";
 import { FIT_VIEW } from "../view/viewport";
-import { copyFragment } from "./clipboard";
 import { tidyLayout } from "./layout";
+import { deletableNodeIds, duplicateCommand } from "./node-actions";
 import { SHORTCUTS } from "./shortcuts";
 import { useUiStore } from "./ui-store";
-
-const DUPLICATE_OFFSET = 32;
 
 /**
  * What the canvas can do without a pointer gesture (task 2.8). The keyboard (`useCanvasKeyboard`)
@@ -90,27 +88,16 @@ export function useCanvasActions({
       undo: () => store.getState().undo(),
       redo: () => store.getState().redo(),
       duplicate() {
-        const wf = workflow();
-        const fragment = wf ? copyFragment(wf, selected()) : undefined;
-        if (!fragment) return false;
-        const xs = Object.values(fragment.layout);
-        const command = commands.paste(fragment, {
-          x: Math.min(...xs.map((p) => p.x)) + DUPLICATE_OFFSET,
-          y: Math.min(...xs.map((p) => p.y)) + DUPLICATE_OFFSET,
-        });
-        if (!run(command)) return false;
+        const command = duplicateCommand(workflow(), selected());
+        if (!command || !run(command)) return false;
         ui.getState().markFresh(command.created);
         store.getState().select({ nodeIds: command.created, edgeIds: [], card: undefined });
         return true;
       },
       deleteSelection() {
-        const wf = workflow();
         const s = store.getState().selection;
         // The one entry point of a workflow is never deleted (as on the canvas).
-        const nodes = s.nodeIds.filter((id) => {
-          const n = wf?.nodes.find((x) => x.id === id);
-          return n !== undefined && n.type !== "start" && n.type !== "entry";
-        });
+        const nodes = deletableNodeIds(workflow(), s.nodeIds);
         if (nodes.length === 0 && s.edgeIds.length === 0) return false;
         return run(commands.deleteSelection(nodes, s.edgeIds));
       },

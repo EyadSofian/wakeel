@@ -11,11 +11,14 @@ import { NodeActionsMenu } from "./NodeActionsMenu";
 import { type PickerItem, PickerMenu } from "./PickerMenu";
 import { useUi, useUiStore } from "./ui-store";
 
-/** The card menu's entries, grouped by what they are for (MVP card set). */
+/** The card menu's entries, grouped by what they are for (MVP card set and the AI cards). */
 const CARD_ENTRIES: { type: MenuCardType; group: string; description: string }[] = [
   { type: "say", group: "Messages", description: "Sends a message: text, choices or media" },
   { type: "capture", group: "Messages", description: "Asks a question and saves the answer" },
   { type: "branch", group: "Logic", description: "Goes one way or another by a rule" },
+  { type: "ai_branch", group: "AI", description: "Lets the model choose which way to go" },
+  { type: "ai_generate", group: "AI", description: "Writes text with a model" },
+  { type: "ai_extract", group: "AI", description: "Pulls fields out of text with a model" },
   { type: "set_variable", group: "Logic", description: "Writes values to variables" },
   { type: "code", group: "Logic", description: "Runs JavaScript in the sandbox" },
   { type: "log", group: "Logic", description: "Writes a line to the trace" },

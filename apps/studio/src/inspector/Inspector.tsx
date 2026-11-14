@@ -1,9 +1,10 @@
 import type { Card, DefinitionIssue, Node } from "@wakeel/contracts";
 import { Button, Count, IconTile, Switch, useMotionTokens } from "@wakeel/ui";
-import { ArrowLeft, CircleAlert, Plus, Trash2, TriangleAlert, X } from "lucide-react";
+import { ArrowLeft, CircleAlert, Copy, Plus, Trash2, TriangleAlert, X } from "lucide-react";
 import { AnimatePresence, motion, useIsPresent } from "motion/react";
 import { type KeyboardEvent, type ReactNode, useId, useState } from "react";
 import { useCanvas, useCanvasStore } from "../canvas/context";
+import { isFixedNode, useNodeActions } from "../canvas/interaction/node-actions";
 import { useUiStore } from "../canvas/interaction/ui-store";
 import { commands } from "../canvas/store/commands";
 import {
@@ -17,7 +18,9 @@ import {
   summarizeCard,
 } from "../canvas/view/summaries";
 import { type AgentView, AutonomousSections } from "./autonomous/AutonomousSections";
+import { AiConditionForm, ExtractDataForm, GenerateTextForm } from "./cards/AiCardForms";
 import { AskForm, CodeForm, ConditionForm, EndForm, LogForm, SayForm, SetVariableForm } from "./cards/CardForms";
+import { HandoffForm, RunWorkflowForm } from "./cards/FlowCardForms";
 import { IssuesContext, Section, StringField, useCommitCard, useDraft } from "./fields";
 
 /**
@@ -259,7 +262,30 @@ function NodeConfigure({ node, wfId, summary }: { node: Node; wfId: string; summ
           />
         </Section>
       ) : null}
+      {agentSub || isFixedNode(node) ? null : <NodeFooter nodeId={node.id} />}
     </>
+  );
+}
+
+/** Duplicate and Delete at the end of a node's form, the same actions as the node menu. */
+function NodeFooter({ nodeId }: { nodeId: string }) {
+  const { duplicate, remove } = useNodeActions();
+  return (
+    <div className="flex gap-4 px-6 py-7">
+      <Button
+        icon={<Copy className="size-icon" strokeWidth={1.75} aria-hidden="true" />}
+        onClick={() => duplicate([nodeId])}
+      >
+        Duplicate node
+      </Button>
+      <Button
+        variant="danger"
+        icon={<Trash2 className="size-icon" strokeWidth={1.75} aria-hidden="true" />}
+        onClick={() => remove([nodeId])}
+      >
+        Delete node
+      </Button>
+    </div>
   );
 }
 
@@ -367,7 +393,23 @@ function CardsSection({ node, summary }: { node: Extract<Node, { type: "standard
   );
 }
 
-/** The card sub-view: the card's form, its switch, and delete. Other card types arrive with their tasks. */
+/** Card types with a form here. Search knowledge, Table and Set timeout arrive with their tasks. */
+const EDITABLE_CARDS: readonly Card["type"][] = [
+  "say",
+  "capture",
+  "branch",
+  "set_variable",
+  "log",
+  "end",
+  "code",
+  "ai_branch",
+  "ai_generate",
+  "ai_extract",
+  "handoff",
+  "call_workflow",
+];
+
+/** The card sub-view: the card's form, its switch, and delete. */
 function CardView({
   node,
   card,
@@ -409,7 +451,12 @@ function CardView({
         {card.type === "log" ? <LogForm card={card} {...props} /> : null}
         {card.type === "end" ? <EndForm card={card} {...props} /> : null}
         {card.type === "code" ? <CodeForm card={card} {...props} /> : null}
-        {["say", "capture", "branch", "set_variable", "log", "end", "code"].includes(card.type) ? null : (
+        {card.type === "ai_branch" ? <AiConditionForm card={card} {...props} /> : null}
+        {card.type === "ai_generate" ? <GenerateTextForm card={card} {...props} /> : null}
+        {card.type === "ai_extract" ? <ExtractDataForm card={card} {...props} /> : null}
+        {card.type === "handoff" ? <HandoffForm card={card} {...props} /> : null}
+        {card.type === "call_workflow" ? <RunWorkflowForm card={card} {...props} /> : null}
+        {EDITABLE_CARDS.includes(card.type) ? null : (
           <p className="rounded-md border border-dashed border-hairline px-5 py-6 text-center text-small text-secondary">
             This card's settings are not editable here yet.
           </p>
