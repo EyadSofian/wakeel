@@ -190,7 +190,7 @@ export function Suggestions({
       id={id}
       role="listbox"
       aria-label="Variables"
-      className="absolute inset-x-0 top-full z-20 mt-1 flex max-h-picker-height flex-col overflow-auto rounded-md border border-hairline bg-surface p-2 shadow-pop"
+      className="absolute inset-x-0 top-full z-20 mt-1 flex max-h-picker-height flex-col overflow-auto wk-glass rounded-md border border-hairline bg-surface p-2"
     >
       {items.map((v, i) => (
         <div

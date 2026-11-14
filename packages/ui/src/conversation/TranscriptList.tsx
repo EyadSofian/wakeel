@@ -113,7 +113,7 @@ export function TranscriptList({
         <button
           type="button"
           onClick={toBottom}
-          className="absolute inset-x-0 bottom-4 mx-auto flex h-control-sm w-fit items-center gap-2 rounded-full border border-hairline bg-surface px-5 text-small font-medium text-primary shadow-pop"
+          className="absolute inset-x-0 bottom-4 mx-auto flex h-control-sm w-fit items-center gap-2 rounded-full border border-hairline bg-surface px-5 text-small font-medium text-primary wk-glass wk-press"
         >
           <ArrowDown className="size-icon-sm" strokeWidth={1.75} aria-hidden="true" />
           New messages

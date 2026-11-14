@@ -143,7 +143,7 @@ function CardMenu({
 function ConnectHint() {
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-12 z-30 flex justify-center">
-      <p className="flex items-center gap-4 rounded-md border border-hairline bg-surface px-6 py-4 text-body text-primary shadow-pop">
+      <p className="flex items-center gap-4 rounded-md wk-glass border border-hairline bg-surface px-6 py-4 text-body text-primary">
         Choose a node
         <span className="flex items-center gap-1 text-secondary">
           <Kbd>←</Kbd>

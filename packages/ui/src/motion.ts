@@ -57,6 +57,17 @@ export const typing = { loop: 1.2, appearAfter: 0.3 } as const;
 export const travel = { min: 4, max: 8 } as const;
 export const EXIT_DURATION_FACTOR = 0.75;
 
+/**
+ * ADR-033 interaction motion. `press` and `lift` are mirrored in tokens.css for CSS transitions (a
+ * test checks); `pop` is where dialogs and the palette scale in from; `tilt` is the most a bot tile
+ * leans toward the pointer; `run` is the flowing dash on the transitions a test followed.
+ */
+export const press = { scale: 0.97 } as const;
+export const lift = { y: -2 } as const;
+export const pop = { scale: 0.96 } as const;
+export const tilt = { max: 8 } as const;
+export const run = { loop: 1.2, sweep: 1.2 } as const;
+
 /** The bounce ceiling: nothing overshoots visibly. */
 export const MAX_BOUNCE = 0.1;
 
@@ -81,6 +92,10 @@ export interface MotionTokens {
   readonly travel: number;
   /** Pan inertia after a flick (§5.1); off when motion is reduced. */
   readonly panInertia: boolean;
+  /** Scale an entering dialog or palette starts from (ADR-033); 1 when motion is reduced. */
+  readonly popScale: number;
+  /** Degrees a tile may tilt toward the pointer (ADR-033); 0 when motion is reduced. */
+  readonly tiltMax: number;
 }
 
 const reducedTransition: Transition = { type: "tween", duration: duration.instant, ease: ease.out };
@@ -91,7 +106,18 @@ const reducedTransition: Transition = { type: "tween", duration: duration.instan
  */
 export function motionTokens(reduced: boolean): MotionTokens {
   if (!reduced) {
-    return { reduced, duration, spring, ease, stagger, typing, travel: travel.max, panInertia: true };
+    return {
+      reduced,
+      duration,
+      spring,
+      ease,
+      stagger,
+      typing,
+      travel: travel.max,
+      panInertia: true,
+      popScale: pop.scale,
+      tiltMax: tilt.max,
+    };
   }
   return {
     reduced,
@@ -102,6 +128,8 @@ export function motionTokens(reduced: boolean): MotionTokens {
     typing: { loop: null, appearAfter: typing.appearAfter },
     travel: 0,
     panInertia: false,
+    popScale: 1,
+    tiltMax: 0,
   };
 }
 

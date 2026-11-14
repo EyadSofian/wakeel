@@ -36,8 +36,8 @@ const DESTINATIONS: {
 /** The active destination is a filled accent tile (ADR-017); the rest stay quiet. */
 const railClasses = (active: boolean) =>
   [
-    "flex size-tile-lg items-center justify-center rounded-md transition-colors",
-    active ? "bg-accent text-on-accent" : "text-secondary hover:bg-subtle hover:text-primary",
+    "wk-press flex size-tile-lg items-center justify-center rounded-md",
+    active ? "wk-primary bg-accent text-on-accent" : "text-secondary hover:bg-subtle hover:text-primary",
   ].join(" ");
 
 function RailButton({ label, icon: Icon, active = false }: { label: string; icon: LucideIcon; active?: boolean }) {
@@ -96,7 +96,7 @@ export function LeftRail({ active, workspaceId, botId }: { active?: string; work
   return (
     <nav
       aria-label="Studio"
-      className="flex w-rail shrink-0 flex-col items-center gap-3 border-e border-hairline bg-surface py-5"
+      className="flex w-rail shrink-0 flex-col items-center gap-3 wk-glass-bar border-e border-hairline py-5"
     >
       {workspaceId === undefined ? (
         <RailButton label="Home" icon={House} active={active === "Home"} />

@@ -32,7 +32,7 @@ export function AppShell({
   children: ReactNode;
 }) {
   return (
-    <div className="flex h-dvh flex-col bg-canvas text-primary">
+    <div className="wk-ambient flex h-dvh flex-col text-primary">
       <TopBar title={title} actions={actions} {...(workspaceId === undefined ? {} : { workspaceId })} />
       <div className="flex min-h-0 flex-1">
         <LeftRail

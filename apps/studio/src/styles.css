@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "@wakeel/ui/theme.css";
 @import "@wakeel/ui/fonts.css";
+@import "@wakeel/ui/effects.css";
 /* xyflow's layout-only stylesheet; its colours are set below from tokens. */
 @import "@xyflow/react/dist/base.css";
 
@@ -13,15 +14,16 @@
  */
 
 .wk-canvas .react-flow {
-  --xy-background-color: var(--bg-canvas);
+  /* Transparent so the ambient backdrop (ADR-033) shows faintly behind the dots. */
+  --xy-background-color: transparent;
   --xy-edge-stroke-default: var(--border-strong);
   --xy-connectionline-stroke-default: var(--accent-border);
-  --xy-minimap-background-color-default: var(--bg-surface);
+  --xy-minimap-background-color-default: var(--glass-surface);
   --xy-minimap-mask-background-color-default: var(--bg-muted);
   --xy-minimap-node-background-color-default: var(--text-tertiary);
   --xy-selection-background-color-default: var(--accent-subtle);
   --xy-selection-border-default: 1px solid var(--accent-border);
-  background: var(--bg-canvas);
+  background: transparent;
 }
 
 .wk-grid .react-flow__background-pattern circle {
@@ -131,10 +133,14 @@
 }
 
 .wk-minimap {
-  border: 1px solid var(--border-hairline);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: var(--shadow-pop);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--shadow-pop);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 
 .wk-minimap .wk-mm-trigger {

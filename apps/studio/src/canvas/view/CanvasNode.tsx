@@ -381,6 +381,8 @@ function CanvasNodeView({ id, data, selected }: NodeProps<CanvasRFNode>) {
   const rows = useMemo(() => nodeRows(node), [node]);
   const cardCount = node.type === "standard" ? node.cards.length : 0;
   const nodeIssue = issues?.node;
+  // ADR-033: nodes the last test went through get one sweep of light, then a quiet accent ring.
+  const ranNode = useRunOverlay().nodes.has(id);
   const hasBody =
     !compact && (node.type === "standard" || node.type === "autonomous" || (node.type === "note" && node.text));
 
@@ -399,8 +401,11 @@ function CanvasNodeView({ id, data, selected }: NodeProps<CanvasRFNode>) {
       fresh={fresh}
       aria-label={`${node.name}, ${NODE_TYPE_LABELS[node.type].toLowerCase()}${node.type === "standard" ? `, ${cardCount} ${cardCount === 1 ? "card" : "cards"}` : ""}`}
       className={[
-        "flex w-node flex-col overflow-visible rounded-lg border bg-surface shadow-node transition-colors",
-        selected ? "border-accent outline-2 outline-accent outline-offset-1" : `${classes.border} hover:border-strong`,
+        "wk-lift flex w-node flex-col overflow-visible rounded-lg border bg-surface shadow-node",
+        selected
+          ? "wk-halo border-accent outline-2 outline-accent outline-offset-1"
+          : `${classes.border} hover:border-strong`,
+        ranNode && !selected ? "wk-ran-node" : "",
         nodeIssue?.severity === "error" && !selected ? "border-error" : "",
         target ? "wk-drop-target" : "",
       ].join(" ")}

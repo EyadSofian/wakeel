@@ -104,7 +104,7 @@ export function PickerMenu({
       style={{ left, top }}
       initial={{ opacity: 0, y: -tokens.travel }}
       animate={{ opacity: 1, y: 0, transition: enterTransition(tokens, "snappy") }}
-      className="nodrag nowheel fixed z-50 flex max-h-picker-height w-picker flex-col overflow-hidden rounded-lg border border-hairline bg-surface shadow-pop"
+      className="nodrag nowheel fixed z-50 flex max-h-picker-height w-picker flex-col overflow-hidden wk-glass rounded-lg border border-hairline bg-surface"
       onKeyDown={onKeyDown}
     >
       <label className="relative block border-b border-hairline transition-colors focus-within:border-accent">

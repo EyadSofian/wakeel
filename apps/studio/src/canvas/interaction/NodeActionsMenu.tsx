@@ -73,7 +73,7 @@ export function NodeActionsMenu({
       style={{ left: at.x, top: at.y }}
       initial={{ opacity: 0, y: -tokens.travel }}
       animate={{ opacity: 1, y: 0, transition: enterTransition(tokens, "snappy") }}
-      className="nodrag nowheel fixed z-50 flex w-picker flex-col rounded-md border border-hairline bg-surface p-2 shadow-pop"
+      className="nodrag nowheel fixed z-50 flex w-picker flex-col wk-glass rounded-md border border-hairline bg-surface p-2"
       onKeyDown={onKeyDown}
     >
       {actions.map((a, i) => (
