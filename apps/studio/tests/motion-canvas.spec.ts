@@ -27,9 +27,13 @@ test.skip(
 );
 test.use({ viewport: { width: 1440, height: 900 } });
 
-async function open(page: Page, reducedMotion: "reduce" | "no-preference") {
+async function open(
+  page: Page,
+  reducedMotion: "reduce" | "no-preference",
+  fixture: "typical" | "issues" | "code" = "typical",
+) {
   await page.emulateMedia({ reducedMotion });
-  await mockApi(page, "default", "typical");
+  await mockApi(page, "default", fixture);
   await page.goto(ROUTE);
   await expect(page.locator('[data-validated="true"]')).toBeVisible();
   // Off-screen nodes are not rendered until the initial fit-view has run; wait for all six.
@@ -136,6 +140,54 @@ for (const mode of MODES) {
       await canvas.screenshot({ path: `${DIR}/${kind}-${mode.id}-released.png` });
     });
   }
+}
+
+// Task 2.8 (design system §5.15, §5.16): the palette opens on spring.gentle (scale 0.98 → 1 and a
+// fade) and closes in 120 ms; the Issues sheet travels in from the end edge on spring.smooth.
+for (const mode of MODES) {
+  test(`palette open and close ${mode.id}`, async ({ page }) => {
+    mkdirSync(DIR, { recursive: true });
+    await open(page, mode.reducedMotion);
+    await page.keyboard.press("ControlOrMeta+k");
+    const palette = page.getByRole("dialog", { name: "Command palette" });
+    const opened = await frames(palette, `${DIR}/palette-open-${mode.id}`);
+    expect(opened.total).toBeLessThanOrEqual(mode.id === "reduced" ? 200 : 600);
+    // Let the opening run out on its own (Motion keeps its own state), then close.
+    await palette.evaluate((el) => {
+      for (const a of el.getAnimations({ subtree: true })) a.play();
+    });
+    await expect.poll(() => palette.evaluate((el) => el.getAnimations({ subtree: true }).length)).toBe(0);
+    await page.keyboard.press("Escape");
+    const closed = await frames(palette, `${DIR}/palette-close-${mode.id}`);
+    expect(closed.total).toBeLessThanOrEqual(120);
+  });
+
+  test(`issues sheet open ${mode.id}`, async ({ page }) => {
+    mkdirSync(DIR, { recursive: true });
+    await open(page, mode.reducedMotion, "issues");
+    await page.getByRole("button", { name: /Show issues$/ }).click();
+    await frames(page.getByRole("dialog", { name: "Issues" }), `${DIR}/issues-open-${mode.id}`);
+  });
+}
+
+// Task 2.9 (design system §5.2): the code drawer slides up with spring.smooth; reduced motion fades.
+for (const mode of MODES) {
+  test(`code drawer open ${mode.id}`, async ({ page }) => {
+    mkdirSync(DIR, { recursive: true });
+    await open(page, mode.reducedMotion, "code");
+    await page.locator(".react-flow__node [data-card] > div:first-child").nth(4).click();
+    // Load Monaco first, so the frames show the drawer moving rather than the editor arriving.
+    await page.getByRole("complementary").getByRole("button", { name: "Edit code" }).click();
+    const drawer = page.getByRole("region", { name: /^Code of Run code in / });
+    await expect(drawer.locator(".monaco-editor")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(drawer).toHaveCount(0);
+    await page.getByRole("complementary").getByRole("button", { name: "Edit code" }).click();
+    const { timing } = await frames(page.locator(".wk-canvas").locator(".."), `${DIR}/code-drawer-open-${mode.id}`);
+    const props = timing.flatMap((t) => t.props);
+    if (mode.id === "reduced") expect(props).not.toContain("transform");
+    else expect(props).toContain("transform");
+  });
 }
 
 test.describe("videos", () => {

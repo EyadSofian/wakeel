@@ -307,6 +307,27 @@ describe("findUsages", () => {
   });
 });
 
+describe("findUsages of a workflow (task 2.8)", () => {
+  test("run workflow cards and workflow tools that call it, nothing else", () => {
+    const def = fixture();
+    const agent = main(def).nodes.find((n) => n.id === ids.agent);
+    if (agent?.type !== "autonomous") throw new Error("no agent");
+    agent.tools.push({
+      id: newElementId("tool"),
+      type: "workflow",
+      name: "lookup",
+      description: "Looks the order up.",
+      workflowId: ids.sub,
+    });
+    const usages = findUsages(def, { kind: "workflow", workflowId: ids.sub });
+    expect(usages.map((u) => [u.nodeId, u.cardId, u.field, u.via])).toEqual([
+      [ids.cards, ids.call, "workflowId", "id"],
+      [ids.agent, undefined, "tools[1].workflowId", "id"],
+    ]);
+    expect(findUsages(def, { kind: "workflow", workflowId: main(def).id })).toEqual([]);
+  });
+});
+
 describe("renames", () => {
   test("renaming a workflow variable rewrites every reference and leaves zero issues behind", () => {
     const def = fixture();

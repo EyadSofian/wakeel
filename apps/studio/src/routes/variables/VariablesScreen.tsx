@@ -5,11 +5,11 @@ import { Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { ApiError } from "../../api/client";
 import { useCanvas, useCanvasStore } from "../../canvas/context";
-import { useIssues } from "../../canvas/issues";
 import { AppShell } from "../../shell/AppShell";
 import { Page, PageHeader } from "../../shell/PageHeader";
 import { ProblemBanner } from "../../shell/ProblemBanner";
-import { Breadcrumb, TopBarStatus } from "../bot/BotCanvas";
+import { TopBarStatus } from "../../shell/TopBarStatus";
+import { Breadcrumb } from "../bot/BotCanvas";
 import { useLoadState } from "../bot/BotLayout";
 import { DeleteDialog, IoDialog, type Subject, UsagesDialog, VariableDialog } from "./Dialogs";
 import { formatDefault, TYPE_LABELS, usageCounts, usesLabel, type VariableGroup, variableGroups } from "./model";
@@ -24,7 +24,6 @@ import { formatDefault, TYPE_LABELS, usageCounts, usesLabel, type VariableGroup,
  */
 export function VariablesScreen({ workspaceId, botId }: { workspaceId: string; botId: string }) {
   const state = useLoadState();
-  const result = useIssues();
   const ready = state === "ready";
   return (
     <AppShell
@@ -32,7 +31,7 @@ export function VariablesScreen({ workspaceId, botId }: { workspaceId: string; b
       active="Variables"
       workspaceId={workspaceId}
       botId={botId}
-      actions={ready ? <TopBarStatus issues={result ?? []} validated={result !== undefined} /> : null}
+      actions={ready ? <TopBarStatus /> : null}
     >
       <Page>
         <PageHeader

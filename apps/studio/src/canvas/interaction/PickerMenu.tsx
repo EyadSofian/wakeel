@@ -128,7 +128,7 @@ export function PickerMenu({
           }}
           placeholder="Search"
           dir="auto"
-          className="h-control-lg w-full bg-transparent pe-5 ps-10 text-body text-primary outline-hidden placeholder:text-tertiary"
+          className="wk-focus-underline h-control-lg w-full bg-transparent pe-5 ps-10 text-body text-primary outline-hidden placeholder:text-tertiary"
         />
       </label>
       <div id={listId} role="listbox" aria-label={label} className="flex flex-col gap-1 overflow-auto p-3">

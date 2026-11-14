@@ -15,7 +15,8 @@
       "!**/.turbo",
       "!**/coverage",
       "!**/dist",
-      "!examples/bridge-receiver-node/src/verify.mjs"
+      "!examples/bridge-receiver-node/src/verify.mjs",
+      "!**/__snapshots__"
     ]
   },
   "css": {

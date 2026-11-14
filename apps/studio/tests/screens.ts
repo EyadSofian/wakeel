@@ -46,7 +46,25 @@ export type ScreenState =
   | "agent"
   | "agent-rtl"
   | "agent-tool"
-  | "agent-exit";
+  | "agent-exit"
+  // Task 2.8: the command palette, the Issues panel and the Workflows panel with its menu and dialog.
+  | "palette"
+  | "palette-search"
+  | "issues-panel"
+  | "issues-panel-rtl"
+  | "issues-panel-empty"
+  | "workflows"
+  | "workflow-menu"
+  | "workflow-delete"
+  | "workflows-rtl"
+  | "save-offline"
+  // Task 2.9: the Run code form and the code drawer.
+  | "card-code"
+  | "code-drawer"
+  | "code-drawer-rtl"
+  | "code-drawer-loading"
+  | "code-drawer-error"
+  | "code-drawer-empty";
 
 export interface Screen {
   id: string;
@@ -178,6 +196,22 @@ SCREENS.push({
     "agent-rtl",
     "agent-tool",
     "agent-exit",
+    "palette",
+    "palette-search",
+    "issues-panel",
+    "issues-panel-rtl",
+    "issues-panel-empty",
+    "workflows",
+    "workflow-menu",
+    "workflow-delete",
+    "workflows-rtl",
+    "save-offline",
+    "card-code",
+    "code-drawer",
+    "code-drawer-rtl",
+    "code-drawer-loading",
+    "code-drawer-error",
+    "code-drawer-empty",
   ],
   sizes: DESKTOP,
   mock: true,

@@ -1,34 +1,28 @@
 import { Link } from "@tanstack/react-router";
 import type { DefinitionIssue } from "@wakeel/contracts";
-import { Badge, Banner, Button, Skeleton } from "@wakeel/ui";
+import { Badge, Banner, Skeleton } from "@wakeel/ui";
 import { ReactFlowProvider } from "@xyflow/react";
-import { CircleAlert, CircleCheck, LoaderCircle, Play, Rocket, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useStore } from "zustand";
-import { createStore } from "zustand/vanilla";
 import { ApiError } from "../../api/client";
 import { useWorkspace } from "../../api/queries";
 import { useAddNode } from "../../canvas/add-node";
 import { useCanvas, useCanvasStore } from "../../canvas/context";
 import { createUiStore, UiStoreContext } from "../../canvas/interaction/ui-store";
-import { groupIssues, useIssues } from "../../canvas/issues";
+import { groupIssues } from "../../canvas/issues";
 import { NodeLibrary } from "../../canvas/library/NodeLibrary";
-import { isDirty } from "../../canvas/store/store";
 import { useSummaryContext } from "../../canvas/use-summary";
 import { Canvas } from "../../canvas/view/Canvas";
+import { CodeDrawer } from "../../code/CodeDrawer";
 import { emulatorBase, fetchTransport } from "../../emulator/api";
-import {
-  createEmulatorStore,
-  EmulatorStoreContext,
-  useEmulator,
-  useEmulatorStoreOptional,
-} from "../../emulator/controller";
+import { createEmulatorStore, EmulatorStoreContext, useEmulator } from "../../emulator/controller";
 import { EmulatorPanel } from "../../emulator/EmulatorPanel";
 import { waitForSaved } from "../../emulator/run-from";
 import { InspectorWorkspace } from "../../inspector/autonomous/ModelSection";
 import { Inspector } from "../../inspector/Inspector";
 import { AppShell } from "../../shell/AppShell";
 import { ProblemBanner } from "../../shell/ProblemBanner";
+import { useShell } from "../../shell/shell-store";
+import { TopBarStatus } from "../../shell/TopBarStatus";
 import { RunOverlayProvider } from "../../trace/overlay";
 import { type LoadState, useLoadState } from "./BotLayout";
 
@@ -78,7 +72,7 @@ function SidePanel({ issues, summary }: { issues: DefinitionIssue[]; summary: Re
 }
 
 function Frame({ workspaceId, botId, state }: { workspaceId: string; botId: string; state: LoadState }) {
-  const result = useIssues();
+  const result = useShell().issues;
   const issues = useMemo(() => result ?? [], [result]);
   const active = useCanvas((s) => s.activeWorkflowId);
   const grouped = useMemo(() => groupIssues(issues, active), [issues, active]);
@@ -91,7 +85,7 @@ function Frame({ workspaceId, botId, state }: { workspaceId: string; botId: stri
       active="Workflows"
       workspaceId={workspaceId}
       botId={botId}
-      actions={ready ? <TopBarStatus issues={issues} validated={result !== undefined} /> : null}
+      actions={ready ? <TopBarStatus /> : null}
       panel={ready ? <NodeLibrary onAdd={(type) => addNode(type)} /> : null}
       inspector={
         ready ? (
@@ -104,7 +98,11 @@ function Frame({ workspaceId, botId, state }: { workspaceId: string; botId: stri
       {state === "loading" ? (
         <CanvasSkeleton />
       ) : ready ? (
-        <Canvas issues={grouped} />
+        <div className="relative h-full">
+          {/* A workflow opens with its own viewport: fitted, or centred on what a jump selected. */}
+          <Canvas key={active} issues={grouped} />
+          <CodeDrawer />
+        </div>
       ) : (
         <div className="mx-auto max-w-page px-9 py-9">
           {state.error instanceof ApiError ? (
@@ -164,92 +162,6 @@ export function Breadcrumb({ workspaceId, ready, page }: { workspaceId: string; 
     </nav>
   );
 }
-
-/** Save state (§4 SaveIndicator) and the issue count. */
-export function TopBarStatus({ issues: all, validated }: { issues: DefinitionIssue[]; validated: boolean }) {
-  const manifest = useCanvas((s) => s.manifest);
-  const workflows = useCanvas((s) => s.workflows);
-  const docs = [manifest, ...Object.values(workflows)];
-  const errors = all.filter((i) => i.severity === "error").length;
-  const warnings = all.length - errors;
-  const conflict = docs.some((d) => d?.conflict);
-  const failed = docs.some((d) => d?.error);
-  const saving = docs.some((d) => d?.saving || (d && isDirty(d)));
-  const label = conflict
-    ? "Changed elsewhere"
-    : failed
-      ? "Offline — changes kept locally"
-      : saving
-        ? "Saving…"
-        : "Saved";
-  return (
-    <div className="flex items-center gap-6" data-validated={validated}>
-      <span
-        role="status"
-        aria-live="polite"
-        className={`flex items-center gap-2 text-small ${conflict || failed ? "text-warning" : "text-secondary"}`}
-      >
-        {conflict || failed ? null : saving ? (
-          <LoaderCircle className="size-icon-sm" strokeWidth={1.75} aria-hidden="true" />
-        ) : (
-          <CircleCheck className="size-icon-sm text-success" strokeWidth={1.75} aria-hidden="true" />
-        )}
-        {label}
-      </span>
-      {all.length > 0 ? (
-        <span
-          role="img"
-          className="flex items-center gap-3 text-small text-secondary"
-          aria-label={`${errors} errors, ${warnings} warnings`}
-        >
-          {errors > 0 ? (
-            <span className="flex items-center gap-1">
-              <CircleAlert className="size-icon-sm text-error" strokeWidth={1.5} aria-hidden="true" />
-              <span className="tabular-nums">{errors}</span>
-            </span>
-          ) : null}
-          {warnings > 0 ? (
-            <span className="flex items-center gap-1">
-              <TriangleAlert className="size-icon-sm text-warning" strokeWidth={1.5} aria-hidden="true" />
-              <span className="tabular-nums">{warnings}</span>
-            </span>
-          ) : null}
-        </span>
-      ) : null}
-      <span aria-hidden="true" className="h-control-sm border-s border-hairline" />
-      <TestButton />
-      {/* Publishing arrives with versions (7.1). */}
-      <Button
-        variant="primary"
-        icon={<Rocket className="size-icon" strokeWidth={1.75} aria-hidden="true" />}
-        disabled
-        title="Publishing is not available yet"
-      >
-        Publish
-      </Button>
-    </div>
-  );
-}
-
-/** Opens and closes the emulator (§5.3); off the canvas, where there is none, it is disabled. */
-function TestButton() {
-  const emulator = useEmulatorStoreOptional();
-  const open = useStore(emulator ?? NO_EMULATOR, (s) => s.open);
-  return (
-    <Button
-      icon={<Play className="size-icon" strokeWidth={1.75} aria-hidden="true" />}
-      aria-pressed={emulator ? open : undefined}
-      disabled={!emulator}
-      title={emulator ? (open ? "Close the emulator" : "Test the draft in the emulator") : "Open the canvas to test"}
-      onClick={() => emulator?.getState().setOpen(!open)}
-    >
-      Test
-    </Button>
-  );
-}
-
-/** Stands in for a missing emulator so the hook order stays the same. */
-const NO_EMULATOR = createStore(() => ({ open: false }));
 
 /** Node-shaped placeholders while the draft loads: header tile and two lines, then rows. */
 function NodeSkeleton({ rows }: { rows: number }) {

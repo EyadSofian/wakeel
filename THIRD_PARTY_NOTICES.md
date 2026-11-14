@@ -21,9 +21,9 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 
 <!-- BEGIN GENERATED: pnpm licences --write -->
 
-410 packages installed by `pnpm install` (runtime and development), not counting platform builds.
+414 packages installed by `pnpm install` (runtime and development), not counting platform builds.
 
-### MIT (307)
+### MIT (310)
 
 - @babel/helper-string-parser 7.29.14 — https://babel.dev/docs/en/next/babel-helper-string-parser
 - @babel/helper-validator-identifier 7.29.7
@@ -113,6 +113,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - @types/ssh2 0.5.52 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/ssh2
 - @types/ssh2 1.15.6 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/ssh2
 - @types/ssh2-streams 0.1.13 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/ssh2-streams
+- @types/trusted-types 2.0.7 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/trusted-types
 - @vitejs/plugin-react 6.3.0 — https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#readme
 - @vitest/coverage-v8 5.1.0 — https://vitest.dev/guide/coverage
 - @vitest/istanbul-lib-coverage 2.1.0 — https://vitest.dev/
@@ -213,8 +214,10 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - luxon 3.7.2
 - magic-string 1.4.5
 - magicast 0.5.5
+- marked 14.0.0 — https://marked.js.org
 - mkdirp 3.0.1
 - mkdirp-classic 0.5.3 — https://github.com/mafintosh/mkdirp-classic
+- monaco-editor 0.57.0 — https://github.com/microsoft/monaco-editor
 - motion 14.13.0
 - motion-dom 14.13.0
 - motion-utils 14.7.0
@@ -453,6 +456,10 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 ### (AFL-2.1 OR BSD-3-Clause) (1)
 
 - json-schema 0.4.0
+
+### (MPL-2.0 OR Apache-2.0) (1)
+
+- dompurify 3.4.15 — https://github.com/cure53/DOMPurify
 
 ### 0BSD (1)
 

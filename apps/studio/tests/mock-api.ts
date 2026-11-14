@@ -12,7 +12,7 @@ import type {
   WorkspaceSummary,
 } from "@wakeel/contracts";
 import { SCREENSHOT_FIXTURES } from "@wakeel/testing/fixtures/rtl";
-import { BOT, type CanvasFixture, canvasDraft, variablesDraft } from "./canvas-fixtures";
+import { BOT, type CanvasFixture, canvasDraft, codeDraft, variablesDraft, workflowsDraft } from "./canvas-fixtures";
 import { type EmulatorScenario, emulatorState, sseBody, turnEvents, turnSpans } from "./emulator-fixtures";
 
 /**
@@ -332,7 +332,7 @@ const json = (route: Route, status: number, body: unknown) =>
 export async function mockApi(
   page: Page,
   state: MockState,
-  canvas: CanvasFixture | "variables" = "typical",
+  canvas: CanvasFixture | "variables" | "workflows" | "code" | "code-empty" = "typical",
   emulator: EmulatorScenario = "conversation",
 ): Promise<void> {
   let turns = 0;
@@ -340,7 +340,11 @@ export async function mockApi(
   const draft =
     canvas === "variables"
       ? variablesDraft(state === "rtl" ? "rtl" : state === "empty" ? "empty" : "default")
-      : canvasDraft(state === "rtl" ? "rtl" : canvas);
+      : canvas === "workflows"
+        ? workflowsDraft(state === "rtl")
+        : canvas === "code" || canvas === "code-empty"
+          ? codeDraft(state === "rtl", canvas === "code-empty")
+          : canvasDraft(state === "rtl" && canvas === "typical" ? "rtl" : canvas);
   let rev = 3;
   await page.route("**/v1/**", async (route) => {
     const url = new URL(route.request().url());
@@ -406,6 +410,38 @@ export async function mockApi(
           ...draft.workflows.map((w) => ({ kind: "workflow", docId: w.id, rev, name: w.name, updatedAt: T0 })),
         ],
       });
+    }
+    if (path === `${botBase}/workflows` && route.request().method() === "POST") {
+      // Task 2.8: the server seeds an Entry wired to an Exit; fixed ids keep shots deterministic.
+      const name = (JSON.parse(route.request().postData() ?? "{}") as { name: string }).name;
+      const n = draft.workflows.length + 1;
+      const wf = `wf_${String(n).padStart(10, "0")}`;
+      const entry = `node_${String(9000 + n).padStart(10, "0")}`;
+      const exit = `node_${String(9100 + n).padStart(10, "0")}`;
+      const doc = {
+        id: wf,
+        name,
+        kind: "sub",
+        inputs: [],
+        outputs: [],
+        variables: [],
+        nodes: [
+          { id: entry, name: "Entry", type: "entry" },
+          { id: exit, name: "Exit", type: "exit", outputs: {} },
+        ],
+        edges: [
+          {
+            id: `edge_${String(9000 + n).padStart(10, "0")}`,
+            from: { nodeId: entry, port: "next" },
+            to: { nodeId: exit },
+          },
+        ],
+        layout: { [entry]: { x: 0, y: 0 }, [exit]: { x: 360, y: 0 } },
+      };
+      return json(route, 201, { kind: "workflow", docId: wf, rev: 1, doc });
+    }
+    if (path.startsWith(`${botBase}/workflows/`) && route.request().method() === "DELETE") {
+      return route.fulfill({ status: 204 });
     }
     if (path.startsWith(`${botBase}/docs/`)) {
       const [kind, docId] = path.slice(`${botBase}/docs/`.length).split("/");
