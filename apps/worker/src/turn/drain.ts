@@ -4,6 +4,7 @@ import {
   BotDefinition as BotDefinitionSchema,
   type BotManifest,
   type Json,
+  TurnId,
   type Workflow,
 } from "@wakeel/contracts";
 import {
@@ -77,6 +78,15 @@ export interface DrainResult {
 }
 
 export const turnDoneChannel = (conversationId: string, seq: number) => `turn-done:${conversationId}:${seq}`;
+
+/** Published after every commit that wrote outbox rows, so SSE readers fetch them at once (§9.3). */
+export const conversationEventsChannel = (conversationId: string) => `conversation-events:${conversationId}`;
+
+/** The turn id the Bridge API minted for this event and returned in its 202, if it is a valid one. */
+function plannedTurnId(event: InboundEventRecord): string | undefined {
+  const id = event.payload["turnId"];
+  return typeof id === "string" && TurnId.safeParse(id).success ? id : undefined;
+}
 
 const realSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -180,6 +190,7 @@ class ConversationRun {
           versionId: conversation.versionId,
           epoch: this.epoch,
           eventIds: group.map((e) => e.id),
+          ...(plannedTurnId(event) ? { id: plannedTurnId(event) } : {}),
         }),
       );
     }
@@ -201,12 +212,14 @@ class ConversationRun {
       ...sandbox,
       clock,
       commitStep: (commit) => this.#commitStep(commit, conversation, turn.id),
-      emitEphemeral: (e) =>
-        this.#tx((tx) =>
+      emitEphemeral: async (e) => {
+        await this.#tx((tx) =>
           appendOutbox(tx, this.#outboxAt(conversation), [
             { type: e.type, payload: { turnId: turn.id, data: e.data } as Record<string, Json>, ephemeral: true },
           ]),
-        ),
+        );
+        await this.#notify();
+      },
     };
 
     let result: TurnResult | undefined;
@@ -274,6 +287,7 @@ class ConversationRun {
       });
     }
 
+    await this.#notify();
     const status = result?.status ?? "failed";
     for (const e of events) {
       await this.deps
@@ -298,6 +312,13 @@ class ConversationRun {
       group.push(next);
     }
     return group;
+  }
+
+  /** Best-effort: SSE readers also poll, so a lost notification only delays them. */
+  async #notify(): Promise<void> {
+    await this.deps
+      .publish(conversationEventsChannel(this.conversationId), "")
+      .catch((err: unknown) => this.#log.warn({ err }, "conversation-events publish failed"));
   }
 
   #outboxAt(conversation: { connectionId: string }) {
@@ -359,6 +380,7 @@ class ConversationRun {
       if (commit.user) await updateEndUser(tx, conversation.endUserId, commit.user);
       await recordTurnProgress(tx, turnId, commit.stepSeq);
     });
+    await this.#notify();
   }
 }
 
