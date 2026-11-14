@@ -51,11 +51,11 @@ export async function startStack(
     studioOrigin: STUDIO,
     signInFailuresPerMinute: API_LIMITS.signInFailuresPerMinute,
   });
-  const deps: StudioDeps = { auth, studioOrigin: STUDIO, db, now: options.now ?? (() => new Date()) };
+  const keyring: Keyring = { current: { version: 1, key: new Uint8Array(randomBytes(32)) } };
+  const deps: StudioDeps = { auth, studioOrigin: STUDIO, db, now: options.now ?? (() => new Date()), keyring };
   const jobs: string[] = [];
   const autoWork = { on: false };
   const webhook: Stack["webhook"] = { sent: [], answer: { kind: "response", status: 200 }, jobs: [] };
-  const keyring: Keyring = { current: { version: 1, key: new Uint8Array(randomBytes(32)) } };
   // The Bridge deps, for routes that run the inbound path (the Studio emulator, ADR-025).
   const publisher = options.bridge ? new Redis(redisContainer.getConnectionUrl()) : undefined;
   const subscriber = options.bridge ? new Redis(redisContainer.getConnectionUrl()) : undefined;

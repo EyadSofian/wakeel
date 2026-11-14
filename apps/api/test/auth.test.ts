@@ -38,7 +38,7 @@ beforeAll(async () => {
   app = buildApp({
     role: "all",
     logger: createLogger({ service: "api", level: "silent" }),
-    studio: { auth: service, studioOrigin: STUDIO, db },
+    studio: { auth: service, studioOrigin: STUDIO, db, keyring: { current: { version: 1, key: new Uint8Array(32) } } },
   });
   await app.ready();
 });

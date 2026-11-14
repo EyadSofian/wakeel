@@ -32,7 +32,11 @@ export const WorkspaceName = z.string().trim().min(1, "Enter a name").max(100, "
  * `workspaces.settings`. No settings are defined yet; the schema is closed so nothing unreviewed
  * lands in the column. Add fields here, with their defaults, when a task needs one.
  */
-export const WorkspaceSettings = z.strictObject({});
+export const WorkspaceSettings = z.strictObject({
+  /** Task 6.2: the model a step uses when it names none, and the cheap one for summaries and checks. */
+  defaultModel: z.string().min(1).max(100).optional(),
+  utilityModel: z.string().min(1).max(100).optional(),
+});
 export type WorkspaceSettings = z.infer<typeof WorkspaceSettings>;
 
 /** `audit_log.meta`: what changed, as small JSON values. Never secrets, never message content. */

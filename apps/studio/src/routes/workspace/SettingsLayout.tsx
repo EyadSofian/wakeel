@@ -5,12 +5,13 @@ import { AppShell } from "../../shell/AppShell";
 import { Page, PageHeader } from "../../shell/PageHeader";
 import { WorkspaceSwitcher } from "../../shell/WorkspaceSwitcher";
 
-export type SettingsTab = "general" | "members" | "api-keys";
+export type SettingsTab = "general" | "members" | "api-keys" | "models";
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "general", label: "General" },
   { id: "members", label: "Members" },
   { id: "api-keys", label: "API keys" },
+  { id: "models", label: "Models" },
 ];
 
 /**
@@ -34,7 +35,7 @@ export function SettingsLayout({
         <div className="flex flex-col gap-6">
           <PageHeader
             title="Settings"
-            description="The workspace's name, who can work in it, and the keys that call its API."
+            description="The workspace's name, who can work in it, the keys that call its API, and the models its bots use."
             actions={actions}
           />
           <nav aria-label="Settings" className="flex gap-7 border-b border-hairline">

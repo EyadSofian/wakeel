@@ -17,6 +17,7 @@ import { BotLayout } from "./routes/bot/BotLayout";
 import { ConnectionDetail, type ConnectionTab } from "./routes/connections/ConnectionDetail";
 import { ConnectionsScreen } from "./routes/connections/ConnectionsScreen";
 import { Gallery } from "./routes/Gallery";
+import { ModelsSettings } from "./routes/settings/models/ModelsSettings";
 import { VariablesScreen } from "./routes/variables/VariablesScreen";
 import { ApiKeys } from "./routes/workspace/ApiKeys";
 import { General } from "./routes/workspace/General";
@@ -203,6 +204,16 @@ const apiKeysRoute = createRoute({
   },
 });
 
+/** Settings → Models (task 6.2): provider keys and the default models. */
+const modelsRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: "/settings/models",
+  component: function ModelsRoute() {
+    const { workspaceId } = workspaceRoute.useParams();
+    return <RequireSession>{() => <ModelsSettings workspaceId={workspaceId} />}</RequireSession>;
+  },
+});
+
 const galleryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/__gallery",
@@ -243,6 +254,7 @@ export const router = createRouter({
       generalRoute,
       membersRoute,
       apiKeysRoute,
+      modelsRoute,
     ]),
     galleryRoute,
     errorPreviewRoute,

@@ -1,5 +1,6 @@
 import { type AuthService, can, type Permission, parseKey, type SessionView, secretMatches } from "@wakeel/auth";
 import { AppError, WorkspaceId } from "@wakeel/contracts";
+import type { Keyring } from "@wakeel/db";
 import {
   type ApiKeyRecord,
   type Database,
@@ -19,6 +20,8 @@ export interface StudioDeps {
   db: Database;
   /** Defaults to the system clock; tests pass a fake one. */
   now: () => Date;
+  /** Seals workspace secrets such as model provider keys (tasks 1.5, 6.2). */
+  keyring: Keyring;
 }
 
 export interface MemberContext {

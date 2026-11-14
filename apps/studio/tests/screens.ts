@@ -250,6 +250,16 @@ SCREENS.push(
   },
 );
 
+// Settings → Models (task 6.2): keys and defaults, and the key dialog open (`edit`).
+SCREENS.push({
+  id: "settings-models",
+  route: `/w/${WS}/settings/models`,
+  states: ["default", "focus", "empty", "loading", "error", "rtl", "edit"],
+  sizes: DESKTOP,
+  mock: true,
+  interactions: [],
+});
+
 export const THEMES = ["light", "dark"] as const;
 
 /** Screens selected by REVIEW_SCREEN (set by `--screen <id>`), or all. */
