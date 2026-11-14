@@ -37,6 +37,7 @@ export const ENTITY_PREFIXES = [
   "sec",
   "aud",
   "dlv",
+  "usg",
 ] as const;
 export type EntityPrefix = (typeof ENTITY_PREFIXES)[number];
 

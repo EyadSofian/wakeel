@@ -35,6 +35,7 @@ export const ApiKeyId = entityId("key");
 export const SecretId = entityId("sec");
 export const AuditEntryId = entityId("aud");
 export const WebhookDeliveryId = entityId("dlv");
+export const UsageEventId = entityId("usg");
 
 export const WorkflowId = elementId("wf");
 export const NodeId = elementId("node");

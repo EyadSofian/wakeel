@@ -131,7 +131,7 @@ All have `created_at`; mutable ones have `updated_at`. `W` = has `workspace_id` 
 
 **Observability, metering, evals**
 - `trace_spans W (id, bot_id, conversation_id, turn_id, parent_id?, seq int, kind, name, status, started_at, duration_ms, attrs jsonb, payload_key?)` range-partitioned monthly on `started_at`
-- `usage_events W (id, bot_id?, kind, quantity numeric, unit, model?, cost_micro_usd bigint, mode, conversation_id?, turn_id?, at)` range-partitioned monthly; `usage_daily W (day, bot_id, kind, model, mode, quantity, cost_micro_usd)`
+- `usage_events W (id, bot_id?, kind, quantity numeric, unit, model?, cost_micro_usd bigint, mode, conversation_id?, turn_id?, detail jsonb, at)` range-partitioned monthly; `usage_daily W (day, bot_id, kind, model, mode, quantity, cost_micro_usd)`
 - `eval_suites W`, `eval_cases W (suite_id, name, script jsonb)`, `eval_runs W (suite_id, target, status, summary jsonb)`, `eval_results W (run_id, case_id, status, detail jsonb, conversation_id)`
 - `files W (id, bot_id?, purpose, key, mime, size, sha256)`
 

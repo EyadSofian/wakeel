@@ -21,9 +21,9 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 
 <!-- BEGIN GENERATED: pnpm licences --write -->
 
-398 packages installed by `pnpm install` (runtime and development), not counting platform builds.
+410 packages installed by `pnpm install` (runtime and development), not counting platform builds.
 
-### MIT (306)
+### MIT (307)
 
 - @babel/helper-string-parser 7.29.14 — https://babel.dev/docs/en/next/babel-helper-string-parser
 - @babel/helper-validator-identifier 7.29.7
@@ -181,6 +181,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - estree-walker 3.0.3
 - event-target-shim 5.0.1 — https://github.com/mysticatea/event-target-shim
 - events 3.3.0
+- eventsource-parser 3.1.1 — https://github.com/rexxars/eventsource-parser#readme
 - fast-decode-uri-component 1.0.1 — https://github.com/delvedor/fast-decode-uri-component#readme
 - fast-deep-equal 3.1.3 — https://github.com/epoberezkin/fast-deep-equal#readme
 - fast-fifo 1.3.2 — https://github.com/mafintosh/fast-fifo
@@ -332,6 +333,46 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - zustand 4.5.7 — https://github.com/pmndrs/zustand
 - zustand 5.0.16 — https://github.com/pmndrs/zustand
 
+### Apache-2.0 (37)
+
+- @ai-sdk/anthropic 4.0.105 — https://ai-sdk.dev/docs
+- @ai-sdk/gateway 4.0.146 — https://ai-sdk.dev/docs
+- @ai-sdk/google 4.0.121 — https://ai-sdk.dev/docs
+- @ai-sdk/openai 4.0.118 — https://ai-sdk.dev/docs
+- @ai-sdk/openai-compatible 3.0.92 — https://ai-sdk.dev/docs
+- @ai-sdk/provider 4.0.38 — https://ai-sdk.dev/docs
+- @ai-sdk/provider-utils 5.0.81 — https://ai-sdk.dev/docs
+- @balena/dockerignore 1.0.2
+- @grpc/grpc-js 1.14.7 — https://grpc.io/
+- @grpc/proto-loader 0.7.15 — https://grpc.io/
+- @grpc/proto-loader 0.8.1 — https://grpc.io/
+- @playwright/test 1.65.0 — https://playwright.dev
+- @vercel/oidc 3.2.0 — https://vercel.com
+- @workflow/serde 4.1.0
+- ai 7.0.173 — https://ai-sdk.dev/docs
+- b4a 1.9.0 — https://github.com/holepunchto/b4a#readme
+- bare-buffer 3.7.2 — https://github.com/holepunchto/bare-buffer#readme
+- bare-events 2.9.2 — https://github.com/holepunchto/bare-events#readme
+- bare-fs 4.8.4 — https://github.com/holepunchto/bare-fs#readme
+- bare-path 3.1.3 — https://github.com/holepunchto/bare-path#readme
+- bare-stream 2.13.4 — https://github.com/holepunchto/bare-stream#readme
+- bare-url 2.5.7 — https://github.com/holepunchto/bare-url
+- cluster-key-slot 1.1.1 — https://github.com/Salakar/cluster-key-slot#readme
+- crc-32 1.2.2 — https://sheetjs.com/
+- denque 2.1.0 — https://docs.page/invertase/denque
+- detect-libc 2.1.2
+- docker-modem 5.0.7
+- dockerode 5.0.1
+- drizzle-orm 0.45.4 — https://orm.drizzle.team
+- events-universal 1.0.1 — https://github.com/holepunchto/events-universal#readme
+- expect-type 1.4.0 — https://github.com/mmkal/expect-type#readme
+- long 5.3.2
+- playwright 1.65.0 — https://playwright.dev
+- playwright-core 1.65.0 — https://playwright.dev
+- readdir-glob 1.1.3 — https://github.com/Yqnn/node-readdir-glob
+- text-decoder 1.2.7 — https://github.com/holepunchto/text-decoder#readme
+- typescript 5.9.3 — https://www.typescriptlang.org/
+
 ### ISC (34)
 
 - @isaacs/cliui 8.0.2
@@ -368,36 +409,6 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - y18n 5.0.8 — https://github.com/yargs/y18n
 - yaml 2.9.1 — https://eemeli.org/yaml/
 - yargs-parser 21.1.1
-
-### Apache-2.0 (27)
-
-- @balena/dockerignore 1.0.2
-- @grpc/grpc-js 1.14.7 — https://grpc.io/
-- @grpc/proto-loader 0.7.15 — https://grpc.io/
-- @grpc/proto-loader 0.8.1 — https://grpc.io/
-- @playwright/test 1.65.0 — https://playwright.dev
-- b4a 1.9.0 — https://github.com/holepunchto/b4a#readme
-- bare-buffer 3.7.2 — https://github.com/holepunchto/bare-buffer#readme
-- bare-events 2.9.2 — https://github.com/holepunchto/bare-events#readme
-- bare-fs 4.8.4 — https://github.com/holepunchto/bare-fs#readme
-- bare-path 3.1.3 — https://github.com/holepunchto/bare-path#readme
-- bare-stream 2.13.4 — https://github.com/holepunchto/bare-stream#readme
-- bare-url 2.5.7 — https://github.com/holepunchto/bare-url
-- cluster-key-slot 1.1.1 — https://github.com/Salakar/cluster-key-slot#readme
-- crc-32 1.2.2 — https://sheetjs.com/
-- denque 2.1.0 — https://docs.page/invertase/denque
-- detect-libc 2.1.2
-- docker-modem 5.0.7
-- dockerode 5.0.1
-- drizzle-orm 0.45.4 — https://orm.drizzle.team
-- events-universal 1.0.1 — https://github.com/holepunchto/events-universal#readme
-- expect-type 1.4.0 — https://github.com/mmkal/expect-type#readme
-- long 5.3.2
-- playwright 1.65.0 — https://playwright.dev
-- playwright-core 1.65.0 — https://playwright.dev
-- readdir-glob 1.1.3 — https://github.com/Yqnn/node-readdir-glob
-- text-decoder 1.2.7 — https://github.com/holepunchto/text-decoder#readme
-- typescript 5.9.3 — https://www.typescriptlang.org/
 
 ### BSD-3-Clause (18)
 
@@ -438,6 +449,10 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 
 - isbot 5.2.3 — https://isbot.js.org
 - tweetnacl 0.14.5 — https://tweetnacl.js.org
+
+### (AFL-2.1 OR BSD-3-Clause) (1)
+
+- json-schema 0.4.0
 
 ### 0BSD (1)
 
