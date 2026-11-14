@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import {
   httpParser,
+  OCR_INSTRUCTION,
+  OCR_SYSTEM,
   ocrEstimate,
   type ParserPort,
   type ParserResponse,
@@ -10,6 +12,7 @@ import {
   parseText,
   parseWithParser,
   scoreQuality,
+  visionOcr,
 } from "../src/index";
 
 /** Task 8.2, the worker's side: HTML via Readability, text and CSV, the OCR tier and quality. */
@@ -182,6 +185,36 @@ describe("parseWithParser and the OCR tier", () => {
   });
 });
 
+describe("Arabic pages and the OCR tier (ADR-040)", () => {
+  const input = { body: new Uint8Array([1]), mime: "application/pdf", name: "دليل.pdf" };
+  const arabicPage = {
+    number: 1,
+    markdown: "1 رقم منتج | متوفر غير",
+    chars: 600,
+    image: png,
+    ocrReason: "arabic" as const,
+  };
+
+  test("an Arabic page goes to the vision model even though it has plenty of text", async () => {
+    const doc = await parseWithParser(input, {
+      parser: { parse: async () => response([arabicPage]) },
+      ocr: { ocrPage: async () => "| منتج رقم 1 | غير متوفر |" },
+      maxOcrPages: 50,
+    });
+    expect(doc.markdown).toBe("| منتج رقم 1 | غير متوفر |");
+    expect(doc.quality.warnings).not.toContain("rtl_order");
+  });
+
+  test("without a vision model, the Arabic page keeps Docling's text and is flagged rtl_order", async () => {
+    const doc = await parseWithParser(input, {
+      parser: { parse: async () => response([arabicPage]) },
+      maxOcrPages: 50,
+    });
+    expect(doc.markdown).toBe("1 رقم منتج | متوفر غير");
+    expect(doc.quality.warnings).toContain("rtl_order");
+  });
+});
+
 describe("httpParser", () => {
   test("sends the bytes with the token, type and an encoded name; validates the answer", async () => {
     let seen: { url: string; init: RequestInit } | undefined;
@@ -236,5 +269,66 @@ describe("httpParser", () => {
       fetch: async () => Response.json({}),
     });
     await expect(bad.parse({ body: new Uint8Array(), mime: "application/pdf", name: "a.pdf" })).rejects.toThrow();
+  });
+});
+
+describe("visionOcr", () => {
+  test("sends fixed instructions with the page and unwraps a fenced answer", async () => {
+    const calls: { system: string; instruction: string; mediaType: string }[] = [];
+    const ocr = visionOcr(async (input) => {
+      calls.push(input);
+      return { text: "```markdown\n# إيصال استلام\n\nمبلغ ١٥٠٠ جنيه\n```" };
+    });
+    expect(await ocr.ocrPage({ png: new Uint8Array([1]), page: 1 })).toBe("# إيصال استلام\n\nمبلغ ١٥٠٠ جنيه");
+    expect(calls[0]).toMatchObject({ system: OCR_SYSTEM, instruction: OCR_INSTRUCTION, mediaType: "image/png" });
+    expect(OCR_SYSTEM).toMatch(/right to left/);
+  });
+
+  test("an unfenced answer is kept as is, trimmed", async () => {
+    const ocr = visionOcr(async () => ({ text: "  نص الصفحة  " }));
+    expect(await ocr.ocrPage({ png: new Uint8Array([1]), page: 1 })).toBe("نص الصفحة");
+  });
+});
+
+describe("edge cases", () => {
+  test("a parser error without a JSON body reports the HTTP status", async () => {
+    const p = httpParser({
+      url: "http://p",
+      token: "x".repeat(32),
+      timeoutMs: 1000,
+      fetch: async () => new Response("<html>bad gateway</html>", { status: 502 }),
+    });
+    await expect(p.parse({ body: new Uint8Array(), mime: "application/pdf", name: "a.pdf" })).rejects.toMatchObject({
+      detail: "HTTP 502",
+    });
+  });
+
+  test("an HTML fragment with no title and no article keeps its text and has no title", () => {
+    const d = parseHtml("<p>سطر</p>");
+    expect(d.title).toBeNull();
+    expect(d.markdown).toContain("سطر");
+    expect(d.markdown.startsWith("#")).toBe(false);
+  });
+
+  test("a CSV without a final newline keeps its last row", () => {
+    expect(parseCsv("a,b\n1,2")).toEqual([
+      ["a", "b"],
+      ["1", "2"],
+    ]);
+  });
+
+  test("an empty OCR answer leaves the page empty, not Docling's text", async () => {
+    const doc = await parseWithParser(
+      { body: new Uint8Array([1]), mime: "application/pdf", name: "a.pdf" },
+      {
+        parser: {
+          parse: async () => response([{ number: 1, markdown: "x", chars: 1, image: png, ocrReason: "low_text" }]),
+        },
+        ocr: { ocrPage: async () => "   " },
+        maxOcrPages: 5,
+      },
+    );
+    expect(doc.markdown).toBe("");
+    expect(doc.pages[0]).toEqual({ number: 1, chars: 0, ocr: true });
   });
 });

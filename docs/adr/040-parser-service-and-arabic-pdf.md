@@ -1,6 +1,6 @@
 # ADR-040 — The parser service, and what to do when Arabic PDF text comes out broken
 
-Status: proposed (blocks finishing task 8.2) · Date: 2026-11-15
+Status: accepted (Eyad chose option A on 2026-11-15) · Date: 2026-11-15
 
 ## Context
 
@@ -34,7 +34,8 @@ D. **A different PDF engine** (for example MuPDF, which is AGPL and so refused b
 
 ## Consequences
 
-- Ingesting an Arabic PDF costs model calls. Usage is recorded as `kind = "ocr"` with the KB's bot, and is billable as live usage only for live ingestion.
+- Ingesting an Arabic PDF costs model calls. Each page is one `readImage` call in `packages/llm`, recorded as `llm_tokens` with purpose `kb_ocr`, so it needs no new usage kind. A model without vision is refused with `model_lacks_vision`.
+- The cap is `KB_LIMITS.maxOcrPagesPerDocument` (50). Per-workspace override arrives with the quota work in Phase 11.
 - Emulator and eval traffic is unaffected. Ingestion is not conversation traffic.
 - The worker needs a vision-capable model configured; with none, Arabic PDF pages fall back to Docling's text with the `rtl_order` warning shown on the document.
 - Python dependencies are not covered by `pnpm licences` yet. Docling (MIT), FastAPI (MIT), Uvicorn (BSD-3) and their tree (including PyTorch, BSD-3) need a Python licence check before 8.2 merges.

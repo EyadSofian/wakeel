@@ -90,3 +90,11 @@ export const FILE_LIMITS = {
   uploadUrlSeconds: 15 * 60,
   downloadUrlSeconds: 5 * 60,
 } as const;
+
+/** Knowledge base ingestion (tasks 8.2, 8.4; ADR-040). */
+export const KB_LIMITS = {
+  /** Pages per document sent to the vision model; the Studio shows the estimate before ingestion. */
+  maxOcrPagesPerDocument: 50,
+  /** The parser's own limits are its env (PARSER_MAX_*); this is the worker's wait for an answer. */
+  parserTimeoutMs: 200_000,
+} as const;

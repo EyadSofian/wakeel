@@ -30,6 +30,9 @@ class Page:
     markdown: str
     chars: int
     image: bytes | None = None
+    #: Why the page image is attached: "low_text" (a scan) or "arabic" (ADR-040: Arabic text layers
+    #: come out of every PDF backend in visual order or fragmented, so the vision model reads them).
+    ocr_reason: str | None = None
 
 
 @dataclass
@@ -127,9 +130,11 @@ def convert(body: bytes, mime: str, name: str, limits: Limits) -> Result:
             md = doc.export_to_markdown(page_no=number, escape_underscores=False)
             chars = _chars(md)
             page = Page(number=number, markdown=md, chars=chars)
+            reason = "low_text" if chars < limits.low_text_chars else ("arabic" if _mostly_arabic(md) else None)
             img = doc.pages[number].image
-            if chars < limits.low_text_chars and img is not None and img.pil_image is not None:
+            if reason is not None and img is not None and img.pil_image is not None:
                 page.image = _png(img.pil_image)
+                page.ocr_reason = reason
             result.pages.append(page)
     else:
         md = doc.export_to_markdown(escape_underscores=False)
@@ -142,6 +147,15 @@ def convert(body: bytes, mime: str, name: str, limits: Limits) -> Result:
 def _page_of(item: object) -> int | None:
     prov = getattr(item, "prov", None) or []
     return prov[0].page_no if prov else None
+
+
+def _mostly_arabic(markdown: str) -> bool:
+    """At least a third of the page's letters are Arabic: enough for broken extraction to matter."""
+    letters = [ch for ch in markdown if ch.isalpha()]
+    if not letters:
+        return False
+    arabic = sum(1 for ch in letters if "\u0600" <= ch <= "\u06ff" or "\u0750" <= ch <= "\u077f")
+    return arabic * 3 >= len(letters)
 
 
 def _chars(markdown: str) -> int:

@@ -23,7 +23,14 @@ function countMatches(text: string, re: RegExp): number {
   return text.match(re)?.length ?? 0;
 }
 
-export function scoreQuality(input: { text: string; pageChars: number[]; ocrPages?: number; ocrCapped?: boolean }) {
+export function scoreQuality(input: {
+  text: string;
+  pageChars: number[];
+  ocrPages?: number;
+  ocrCapped?: boolean;
+  /** Arabic PDF pages that could not go to OCR and kept the backend's text (ADR-040). */
+  arabicFallback?: boolean;
+}) {
   const { text } = input;
   const letters = [...text].filter((c) => /[\p{L}\p{N}]/u.test(c));
   const total = Math.max(1, letters.length);
@@ -48,7 +55,7 @@ export function scoreQuality(input: { text: string; pageChars: number[]; ocrPage
   const warnings: ParseWarning[] = [];
   if (textDensity < 0.15) warnings.push("low_text");
   if (replacementRatio > 0.02) warnings.push("replacement_characters");
-  if (rtlDisorder > 0.1) warnings.push("rtl_order");
+  if (rtlDisorder > 0.1 || input.arabicFallback) warnings.push("rtl_order");
   if ((input.ocrPages ?? 0) > 0) warnings.push("ocr_used");
   if (input.ocrCapped) warnings.push("ocr_capped");
 

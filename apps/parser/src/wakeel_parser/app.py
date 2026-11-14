@@ -112,7 +112,11 @@ async def parse(request: Request) -> JSONResponse:
                     "number": p.number,
                     "markdown": p.markdown,
                     "chars": p.chars,
-                    **({"image": base64.b64encode(p.image).decode("ascii")} if p.image is not None else {}),
+                    **(
+                        {"image": base64.b64encode(p.image).decode("ascii"), "ocrReason": p.ocr_reason}
+                        if p.image is not None
+                        else {}
+                    ),
                 }
                 for p in result.pages
             ],

@@ -101,6 +101,8 @@ export async function parseWithParser(
       pageChars: pages.map((p) => p.chars),
       ocrPages: ocrTargets.length,
       ocrCapped: needing.length > ocrTargets.length,
+      // ADR-040: an Arabic page that kept Docling's text is likely in visual order or fragmented.
+      arabicFallback: res.pages.some((p) => p.ocrReason === "arabic" && !ocrText.has(p.number)),
     }),
   };
 }

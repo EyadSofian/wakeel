@@ -18,7 +18,9 @@ export function parseHtml(html: string, options: { url?: string } = {}): ParsedD
   const article = new Readability(document as unknown as ConstructorParameters<typeof Readability>[0], {
     charThreshold: 100,
   }).parse();
-  const content = article?.content ?? document.body?.innerHTML ?? "";
+  // No article (a fragment, a list page): keep the whole input. Readability has mutated `document`,
+  // so fall back to the original string; Turndown still drops scripts, styles and forms.
+  const content = article?.content ?? html;
   const title = article?.title?.trim() || pageTitle;
   // Readability demotes the article's own <h1> to <h2>; restore it as the one top-level heading.
   const body = toMarkdown(content).replace(/^#{1,6}\s+(.+)\n*/, (line, text: string) =>

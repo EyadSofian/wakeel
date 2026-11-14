@@ -7,6 +7,8 @@ export const ParserPage = z.object({
   chars: z.number().int().nonnegative(),
   /** Base64 PNG, for the OCR tier. */
   image: z.string().optional(),
+  /** Why the image is attached (ADR-040): a scan, or Arabic text the PDF backends extract broken. */
+  ocrReason: z.enum(["low_text", "arabic"]).optional(),
 });
 export type ParserPage = z.infer<typeof ParserPage>;
 
