@@ -580,7 +580,7 @@ export const CASES: ParserCase[] = [
   { name: "listen given data", input: ':::exit listen {"a":1}', issue: "exit_data_invalid" },
   {
     name: "JSON on the line after the exit",
-    input: lines(":::exit order_found", '{"orderId":"1"}', ":::end"),
+    input: lines(":::exit done", '{"reason":"finished"}', ":::end"),
     issue: "exit_body",
     issueLine: 2,
   },
