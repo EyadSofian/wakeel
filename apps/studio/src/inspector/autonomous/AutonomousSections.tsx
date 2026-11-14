@@ -1,9 +1,9 @@
-import { checkJsonSchema, type Exit, type Node, newElementId, type Tool, type VariableAccess } from "@wakeel/contracts";
+import { type Exit, type Node, newElementId, type Tool, type VariableAccess } from "@wakeel/contracts";
 import { Button, IconTile, Input, Select, Switch, Textarea } from "@wakeel/ui";
 import { ArrowLeft, BookOpen, Braces, LogOut, Plus, Table2, Trash2, Workflow } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useId, useMemo } from "react";
 import { useCanvas } from "../../canvas/context";
-import { FieldShell, Section, StringField, useDraft, useVariables } from "../fields";
+import { FieldShell, SchemaField, Section, StringField, useDraft, useVariables } from "../fields";
 import { ModelField } from "./ModelSection";
 
 /**
@@ -475,7 +475,7 @@ function AdvancedSection({ node, edit }: { node: Auto; edit: Edit }) {
   return (
     <Section id="advanced" nodeType={node.type} title="Advanced">
       <ModelField
-        node={node}
+        value={node.model}
         onChange={(model) =>
           edit((n) => {
             const { model: _old, ...rest } = n;
@@ -626,64 +626,6 @@ function TextField({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={() => !problem && draft.trim() !== value && onCommit(draft.trim())}
-        />
-      )}
-    </FieldShell>
-  );
-}
-
-type Schema = Record<string, unknown>;
-
-function SchemaField({
-  label,
-  help,
-  value,
-  required,
-  onCommit,
-}: {
-  label: string;
-  help: string;
-  value: Schema | undefined;
-  required?: boolean;
-  onCommit: (v: Schema | undefined) => void;
-}) {
-  const shown = value ? JSON.stringify(value, null, 2) : "";
-  const [draft, setDraft] = useDraft(shown);
-  let parsed: Schema | undefined;
-  let problem: Problem | undefined;
-  if (draft.trim() === "") {
-    if (required) problem = { message: `${label} needs a schema.`, fix: 'Start from {"type": "object"}.' };
-  } else {
-    try {
-      const json: unknown = JSON.parse(draft);
-      const issues = checkJsonSchema(json);
-      if (issues.length > 0) {
-        const first = issues[0];
-        problem = {
-          message: `${first?.path ? `${first.path}: ` : ""}${first?.message ?? "This is not a valid schema."}`,
-          fix: "Fix the schema; only the supported JSON Schema keywords are allowed.",
-        };
-      } else parsed = json as Schema;
-    } catch {
-      problem = { message: "This is not valid JSON.", fix: "Check the quotes, commas and brackets." };
-    }
-  }
-  return (
-    <FieldShell label={label} help={help} problem={problem}>
-      {({ invalid, ...p }) => (
-        <Textarea
-          {...p}
-          dir="ltr"
-          rows={4}
-          spellCheck={false}
-          className="font-mono text-code-small"
-          aria-invalid={invalid || undefined}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => {
-            if (problem || draft === shown) return;
-            onCommit(parsed);
-          }}
         />
       )}
     </FieldShell>

@@ -60,6 +60,14 @@ export type ScreenState =
   | "save-offline"
   // Task 2.9: the Run code form and the code drawer.
   | "card-code"
+  | "node-actions"
+  | "card-run-workflow"
+  | "card-ai-condition"
+  | "card-generate"
+  | "card-generate-rtl"
+  | "card-extract"
+  | "card-handoff"
+  | "card-handoff-rtl"
   | "code-drawer"
   | "code-drawer-rtl"
   | "code-drawer-loading"
@@ -212,6 +220,14 @@ SCREENS.push({
     "code-drawer-loading",
     "code-drawer-error",
     "code-drawer-empty",
+    "node-actions",
+    "card-run-workflow",
+    "card-ai-condition",
+    "card-generate",
+    "card-generate-rtl",
+    "card-extract",
+    "card-handoff",
+    "card-handoff-rtl",
   ],
   sizes: DESKTOP,
   mock: true,

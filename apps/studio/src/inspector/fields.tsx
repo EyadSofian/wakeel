@@ -1,5 +1,13 @@
-import { Card, type DefinitionIssue, makeIssue, type Node, parseExpression, parseTemplate } from "@wakeel/contracts";
-import { ExpressionInput, TemplateInput, type VariableOption } from "@wakeel/ui";
+import {
+  Card,
+  checkJsonSchema,
+  type DefinitionIssue,
+  makeIssue,
+  type Node,
+  parseExpression,
+  parseTemplate,
+} from "@wakeel/contracts";
+import { ExpressionInput, TemplateInput, Textarea, type VariableOption } from "@wakeel/ui";
 import { ChevronDown } from "lucide-react";
 import { createContext, type ReactNode, useContext, useEffect, useId, useMemo, useState } from "react";
 import { useCanvas, useCanvasStore } from "../canvas/context";
@@ -263,5 +271,69 @@ export function Section({
       </div>
       {open ? <div className="flex flex-col gap-6 px-6 pb-6">{children}</div> : null}
     </section>
+  );
+}
+
+type Schema = Record<string, unknown>;
+
+/** A JSON Schema typed as JSON, checked as you type; commits on blur only when valid. */
+export function SchemaField({
+  label,
+  help,
+  value,
+  required,
+  path,
+  onCommit,
+}: {
+  label: string;
+  help: string;
+  value: Schema | undefined;
+  required?: boolean;
+  /** Issue path of the field, when it is part of a card. */
+  path?: string;
+  onCommit: (v: Schema | undefined) => void;
+}) {
+  const shown = value ? JSON.stringify(value, null, 2) : "";
+  const [draft, setDraft] = useDraft(shown);
+  const stored = useIssueAt(path ?? "");
+  let parsed: Schema | undefined;
+  let problem: Problem | undefined;
+  if (draft.trim() === "") {
+    if (required) problem = { message: `${label} needs a schema.`, fix: 'Start from {"type": "object"}.' };
+  } else {
+    try {
+      const json: unknown = JSON.parse(draft);
+      const issues = checkJsonSchema(json);
+      if (issues.length > 0) {
+        const first = issues[0];
+        problem = {
+          message: `${first?.path ? `${first.path}: ` : ""}${first?.message ?? "This is not a valid schema."}`,
+          fix: "Fix the schema; only the supported JSON Schema keywords are allowed.",
+        };
+      } else parsed = json as Schema;
+    } catch {
+      problem = { message: "This is not valid JSON.", fix: "Check the quotes, commas and brackets." };
+    }
+  }
+  if (!problem && draft === shown && path) problem = stored;
+  return (
+    <FieldShell label={label} help={help} problem={problem} {...(path ? { path } : {})}>
+      {({ invalid, ...p }) => (
+        <Textarea
+          {...p}
+          dir="ltr"
+          rows={4}
+          spellCheck={false}
+          className="font-mono text-code-small"
+          aria-invalid={invalid || undefined}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => {
+            if (problem || draft === shown) return;
+            onCommit(parsed);
+          }}
+        />
+      )}
+    </FieldShell>
   );
 }

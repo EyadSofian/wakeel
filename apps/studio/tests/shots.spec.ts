@@ -24,7 +24,16 @@ const mockStateFor = (screen: Screen, state: ScreenState): MockState => {
   if (screen.id === "emulator") return "default";
   if (state === "empty" && screen.id === "canvas") return "default";
   if (
-    ["card-rtl", "agent-rtl", "palette-search", "workflows-rtl", "issues-panel-rtl", "code-drawer-rtl"].includes(state)
+    [
+      "card-rtl",
+      "agent-rtl",
+      "palette-search",
+      "workflows-rtl",
+      "issues-panel-rtl",
+      "code-drawer-rtl",
+      "card-generate-rtl",
+      "card-handoff-rtl",
+    ].includes(state)
   )
     return "rtl";
   return MOCK_STATES.find((m) => m === state) ?? "default";
@@ -33,22 +42,29 @@ const mockStateFor = (screen: Screen, state: ScreenState): MockState => {
 const canvasFor = (
   screen: Screen,
   state: ScreenState,
-): CanvasFixture | "variables" | "workflows" | "code" | "code-empty" =>
+): CanvasFixture | "variables" | "workflows" | "code" | "code-empty" | "ai" =>
   screen.id === "variables"
     ? "variables"
-    : state === "code-drawer-empty"
-      ? "code-empty"
-      : state === "card-code" || state.startsWith("code-drawer")
-        ? "code"
-        : state === "dense-300" || state === "issues" || state === "empty"
-          ? state
-          : state === "issues-panel"
-            ? "issues"
-            : state === "issues-panel-rtl"
-              ? "issues-rtl"
-              : state.startsWith("workflow")
-                ? "workflows"
-                : "typical";
+    : state === "card-run-workflow"
+      ? "code"
+      : state.startsWith("card-ai") ||
+          state.startsWith("card-generate") ||
+          state === "card-extract" ||
+          state.startsWith("card-handoff")
+        ? "ai"
+        : state === "code-drawer-empty"
+          ? "code-empty"
+          : state === "card-code" || state.startsWith("code-drawer")
+            ? "code"
+            : state === "dense-300" || state === "issues" || state === "empty"
+              ? state
+              : state === "issues-panel"
+                ? "issues"
+                : state === "issues-panel-rtl"
+                  ? "issues-rtl"
+                  : state.startsWith("workflow")
+                    ? "workflows"
+                    : "typical";
 
 /** Which card row of the first standard node each inspector state opens. */
 const CARD_ROW: Partial<Record<ScreenState, number>> = {
@@ -65,6 +81,14 @@ const CARD_ROW: Partial<Record<ScreenState, number>> = {
   "code-drawer-loading": 4,
   "code-drawer-error": 4,
   "code-drawer-empty": 4,
+  "card-run-workflow": 3,
+  // Greeting's cards in the ai fixture: say, ask, condition, run workflow, then the four below.
+  "card-ai-condition": 4,
+  "card-generate": 5,
+  "card-generate-rtl": 5,
+  "card-extract": 6,
+  "card-handoff": 7,
+  "card-handoff-rtl": 7,
 };
 
 const EMULATOR_SCENARIO: Partial<Record<ScreenState, EmulatorScenario>> = {
@@ -194,6 +218,11 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
     if (!pane) throw new Error("no canvas");
     await page.mouse.dblclick(pane.x + 60, pane.y + 140);
     await expect(page.getByRole("dialog", { name: "Add node" })).toBeVisible();
+  }
+  if (state === "node-actions") {
+    // The node's "…" menu (task 2.4, Duplicate and Delete added after 6.9).
+    await page.getByRole("button", { name: "Actions for Greeting" }).click();
+    await settled(page.getByRole("menu"));
   }
   if (state === "card-menu") {
     await page

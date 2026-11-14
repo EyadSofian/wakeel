@@ -77,8 +77,11 @@ export function createCard(type: SimpleCardType): Card {
   }
 }
 
-/** Card types offered by the card menu (the MVP set, contracts `MVP_CARD_TYPES`). */
+/** Card types offered by the card menu: the MVP set (contracts `MVP_CARD_TYPES`) and the AI cards (6.7). */
 export type MenuCardType =
+  | "ai_branch"
+  | "ai_generate"
+  | "ai_extract"
   | "say"
   | "capture"
   | "branch"
@@ -102,8 +105,8 @@ function freeName(wf: Workflow, base: string): string {
   return name;
 }
 
-function workflowVariable(wf: Workflow, base: string): Variable {
-  return { id: newElementId("var"), name: freeName(wf, base), scope: "workflow", type: "string", sensitive: false };
+function workflowVariable(wf: Workflow, base: string, type: Variable["type"] = "string"): Variable {
+  return { id: newElementId("var"), name: freeName(wf, base), scope: "workflow", type, sensitive: false };
 }
 
 /**
@@ -133,6 +136,46 @@ export function createMenuCard(type: MenuCardType, wf: Workflow, workflows: read
     case "set_variable": {
       const variable = workflowVariable(wf, "value");
       return { card: { ...base, type, assignments: [{ variableId: variable.id, value: '""' }] }, variable };
+    }
+    case "ai_branch":
+      return {
+        card: {
+          ...base,
+          type,
+          input: "{{event.text}}",
+          branches: [
+            { id: newElementId("br"), label: "Question", description: "The user asks a question." },
+            { id: newElementId("br"), label: "Complaint", description: "The user reports a problem or is unhappy." },
+          ],
+        },
+      };
+    case "ai_generate": {
+      const variable = workflowVariable(wf, "text");
+      return {
+        card: {
+          ...base,
+          type,
+          instructions: "Write a short, friendly reply to the user's message.",
+          input: "{{event.text}}",
+          into: variable.id,
+          send: false,
+          maxOutputTokens: 800,
+        },
+        variable,
+      };
+    }
+    case "ai_extract": {
+      const variable = workflowVariable(wf, "details", "object");
+      return {
+        card: {
+          ...base,
+          type,
+          input: "{{event.text}}",
+          schema: { type: "object", properties: { name: { type: "string" } } },
+          into: variable.id,
+        },
+        variable,
+      };
     }
     case "kb_search":
       return { unavailable: "Create a knowledge base first" };

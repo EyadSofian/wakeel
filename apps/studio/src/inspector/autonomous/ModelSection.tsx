@@ -1,4 +1,3 @@
-import type { AutonomousNode } from "@wakeel/contracts";
 import { Field } from "@wakeel/ui";
 import { createContext, useContext } from "react";
 import { useModels } from "../../api/models";
@@ -9,33 +8,34 @@ import { ProblemBanner } from "../../shell/ProblemBanner";
 export const InspectorWorkspace = createContext<string | undefined>(undefined);
 
 /**
- * The node's model (task 6.6): its own, or the bot's default when none is chosen. Models whose
- * provider has no key in this workspace are listed but cannot be chosen (task 6.2).
+ * A node's or AI card's model (tasks 6.6, 6.7): its own `provider:model`, or the bot's default when
+ * none is chosen. Models whose provider has no key in this workspace are listed but cannot be chosen
+ * (task 6.2).
  */
 export function ModelField({
-  node,
+  value,
   onChange,
 }: {
-  node: AutonomousNode;
-  onChange: (model: AutonomousNode["model"]) => void;
+  value: string | undefined;
+  onChange: (model: string | undefined) => void;
 }) {
   const workspaceId = useContext(InspectorWorkspace);
   if (!workspaceId) return null;
-  return <Picker workspaceId={workspaceId} node={node} onChange={onChange} />;
+  return <Picker workspaceId={workspaceId} value={value} onChange={onChange} />;
 }
 
 function Picker({
   workspaceId,
-  node,
+  value,
   onChange,
 }: {
   workspaceId: string;
-  node: AutonomousNode;
-  onChange: (model: AutonomousNode["model"]) => void;
+  value: string | undefined;
+  onChange: (model: string | undefined) => void;
 }) {
   const models = useModels(workspaceId);
   // A node names a model as `provider:id`; the registry lists ids.
-  const current = node.model ? node.model.slice(node.model.indexOf(":") + 1) : null;
+  const current = value ? value.slice(value.indexOf(":") + 1) : null;
   return (
     <div className="flex flex-col gap-3">
       {models.isError ? <ProblemBanner error={models.error} /> : null}

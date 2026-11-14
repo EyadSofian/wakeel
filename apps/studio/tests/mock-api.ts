@@ -12,7 +12,15 @@ import type {
   WorkspaceSummary,
 } from "@wakeel/contracts";
 import { SCREENSHOT_FIXTURES } from "@wakeel/testing/fixtures/rtl";
-import { BOT, type CanvasFixture, canvasDraft, codeDraft, variablesDraft, workflowsDraft } from "./canvas-fixtures";
+import {
+  aiDraft,
+  BOT,
+  type CanvasFixture,
+  canvasDraft,
+  codeDraft,
+  variablesDraft,
+  workflowsDraft,
+} from "./canvas-fixtures";
 import { type EmulatorScenario, emulatorState, sseBody, turnEvents, turnSpans } from "./emulator-fixtures";
 
 /**
@@ -332,7 +340,7 @@ const json = (route: Route, status: number, body: unknown) =>
 export async function mockApi(
   page: Page,
   state: MockState,
-  canvas: CanvasFixture | "variables" | "workflows" | "code" | "code-empty" = "typical",
+  canvas: CanvasFixture | "variables" | "workflows" | "code" | "code-empty" | "ai" = "typical",
   emulator: EmulatorScenario = "conversation",
 ): Promise<void> {
   let turns = 0;
@@ -344,7 +352,9 @@ export async function mockApi(
         ? workflowsDraft(state === "rtl")
         : canvas === "code" || canvas === "code-empty"
           ? codeDraft(state === "rtl", canvas === "code-empty")
-          : canvasDraft(state === "rtl" && canvas === "typical" ? "rtl" : canvas);
+          : canvas === "ai"
+            ? aiDraft(state === "rtl")
+            : canvasDraft(state === "rtl" && canvas === "typical" ? "rtl" : canvas);
   let rev = 3;
   await page.route("**/v1/**", async (route) => {
     const url = new URL(route.request().url());
