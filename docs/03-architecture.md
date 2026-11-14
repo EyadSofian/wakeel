@@ -210,6 +210,7 @@ Applying the inbound event:
 | `tool_result` | `waiting_external` | resume the suspended tool call |
 | `handoff_release` | `handed_off` | status `idle`; run Trigger `handoff_released` if present |
 | `timeout` (janitor) | `waiting_*` | run the Main workflow's Trigger node with `on.kind = "inactivity"` if one exists, else end with reason `inactivity` |
+| `run_from` (emulator only, ADR-025) | any | clear the stack and any wait, push a frame at `payload.nodeId` in `payload.workflowId`, run; an unknown node fails with `not_found` |
 
 Step loop: execute the card at the top frame's cursor. A card returns exactly one outcome:
 
@@ -399,7 +400,7 @@ Authenticated by a bridge key (`Authorization: Bearer wk_bridge_…`). Messages 
 
 ### 9.3 Sync and streaming
 - `?wait=<seconds>` (max 55) on the inbound call holds the request until the turn completes and returns the bot's messages and events for that turn. On timeout it returns `202` with `turnId`; the rest arrives by webhook or `GET /turns/{turnId}`.
-- `Accept: text/event-stream` streams the same events as SSE. The emulator uses this.
+- `Accept: text/event-stream` streams the same events as SSE. The emulator uses this, through Studio routes that run the same inbound path for a draft connection per builder session (ADR-025).
 - Webhooks, when configured, are still sent in sync mode; each event carries `turnId` so a caller can de-duplicate.
 
 ### 9.4 Handoff

@@ -32,7 +32,7 @@ Task 4.6 builds the Studio emulator. The design system (§5.3) and architecture 
 
 1(b), 2(a) and 3(a).
 
-**The draft connection per builder session.** Migration `0007` adds `bridge_connections.emulator_session_id`, which references `sessions (id)` with `on delete cascade` and is unique per (session, bot). The first emulator call for a bot in a session creates the connection: `target = draft`, `name = "Emulator"`, no webhook URL, no subscribed events, no keys. Signing out, or the session expiring and being removed, deletes the connection. Its conversations remain as emulator traffic until retention removes them. The connections list (5.5) excludes rows with an `emulator_session_id`.
+**The draft connection per builder session.** Migration `0007` adds `bridge_connections.emulator_session_id`, which references `sessions (id)` with `on delete cascade` and is unique per (session, bot). The first emulator call for a bot in a session creates the connection: `target = draft`, `name = "Emulator"`, no webhook URL, no subscribed events, no keys. Signing out, or the session expiring and being removed, deletes the connection, and with it (by the existing cascades) its test users, conversations and transcripts. They are emulator data, and nothing else refers to them. The connections list (5.5) excludes rows with an `emulator_session_id`.
 
 **Routes** (`apps/api/src/routes/emulator.ts`; permission `bot.update`, because the emulator runs the draft, including its code and model calls):
 
