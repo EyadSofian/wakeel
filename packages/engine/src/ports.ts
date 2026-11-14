@@ -129,6 +129,28 @@ export interface CardContext<C extends Card = Card> {
   deadline: number;
   /** The handoff summary (task 5.4); resolves to "" when no summarizer is configured. */
   summarizeHandoff(reason: string): Promise<string>;
+  /** The model layer for AI cards (task 6.7); absent when none is configured. */
+  ai?: AiPort;
+}
+
+/**
+ * One model call for an AI card (task 6.7). `system` is fixed platform text; the builder's rendered
+ * instructions and any end-user text travel in `messages` (CLAUDE.md §9). `model` is a `ModelRef`
+ * the engine already chose: the card's own, else the bot's default (generation) or utility model
+ * (extraction, classification). The worker resolves the key, records usage and retries.
+ */
+export interface AiRequest {
+  purpose: "ai_generate" | "ai_extract" | "ai_branch" | "capture_extract";
+  model: string;
+  system: string;
+  messages: { role: "user" | "assistant"; content: string }[];
+  temperature?: number;
+  maxOutputTokens?: number;
+  turnId: string;
+}
+
+export interface AiPort {
+  complete(request: AiRequest): Promise<{ text: string }>;
 }
 
 /** Runs one card. Card executors live in `src/cards` (task 4.3). Throwing an `AppError` is a `fail`. */
@@ -239,6 +261,8 @@ export interface EnginePorts {
    * empty.
    */
   handoffSummary?(input: HandoffSummaryRequest): Promise<string>;
+  /** The model layer for AI cards (task 6.7). Absent: AI cards fail with `model_not_configured`. */
+  ai?: AiPort;
 }
 
 /** What the engine asks the handoff summarizer for (task 5.4). */

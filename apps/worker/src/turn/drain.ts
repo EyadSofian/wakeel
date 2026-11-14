@@ -35,6 +35,7 @@ import {
   writeConversation,
 } from "@wakeel/db";
 import {
+  type AiPort,
   type AutonomyPort,
   type ClockPort,
   type CodePort,
@@ -85,8 +86,21 @@ export interface TurnDeps {
    * with a clear code, as before the model layer existed.
    */
   autonomy?(turn: AutonomyTurn, code: CodePort): AutonomyPort;
-  /** Writes handoff summaries (task 5.4). Absent until the model layer exists: summaries are empty. */
-  summarizeHandoff?(input: { workspaceId: string; conversationId: string; reason: string }): Promise<string>;
+  /** Writes handoff summaries (task 5.4). Absent: summaries are empty. */
+  summarizeHandoff?(input: HandoffSummaryInput): Promise<string>;
+  /** The model layer for AI cards (task 6.7). Absent: AI cards fail with `model_not_configured`. */
+  ai?(turn: AutonomyTurn): AiPort;
+}
+
+/** What the worker's handoff summarizer is asked for (task 5.4); `model` is the bot's utility model. */
+export interface HandoffSummaryInput {
+  workspaceId: string;
+  conversationId: string;
+  reason: string;
+  model: string;
+  botId: string;
+  turnId: string;
+  mode: AutonomyTurn["mode"];
 }
 
 /** The turn span's trigger for each inbound kind (ADR-026). */
@@ -266,27 +280,35 @@ class ConversationRun {
       turnId: turn.id,
     });
     const summarize = this.deps.summarizeHandoff;
-    const autonomy = this.deps.autonomy?.(
-      {
-        workspaceId: this.workspaceId,
-        conversationId: this.conversationId,
-        botId: conversation.botId,
-        turnId: turn.id,
-        mode: conversation.mode as AutonomyTurn["mode"],
-        definition,
-        ...(state.summary ? { summary: state.summary.text } : {}),
-        env: {},
-      },
-      sandbox.code,
-    );
+    const modelTurn: AutonomyTurn = {
+      workspaceId: this.workspaceId,
+      conversationId: this.conversationId,
+      botId: conversation.botId,
+      turnId: turn.id,
+      mode: conversation.mode as AutonomyTurn["mode"],
+      definition,
+      ...(state.summary ? { summary: state.summary.text } : {}),
+      env: {},
+    };
+    const autonomy = this.deps.autonomy?.(modelTurn, sandbox.code);
+    const ai = this.deps.ai?.(modelTurn);
     const ports: EnginePorts = {
       ...sandbox,
       ...(autonomy ? { autonomy } : {}),
+      ...(ai ? { ai } : {}),
       clock,
       ...(summarize
         ? {
             handoffSummary: ({ reason }) =>
-              summarize({ workspaceId: this.workspaceId, conversationId: this.conversationId, reason }),
+              summarize({
+                workspaceId: this.workspaceId,
+                conversationId: this.conversationId,
+                reason,
+                model: definition.manifest.settings.models.utility,
+                botId: conversation.botId,
+                turnId: turn.id,
+                mode: modelTurn.mode,
+              }),
           }
         : {}),
       commitStep: (commit) => this.#commitStep(commit, conversation, turn.id),

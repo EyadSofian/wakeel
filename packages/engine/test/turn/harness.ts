@@ -15,6 +15,8 @@ import {
 import { FakeClock } from "@wakeel/testing";
 import type { ExpressionBatch, ExpressionOutcome, SandboxPort } from "../../src/expr/index";
 import type {
+  AiPort,
+  AiRequest,
   AutonomyPort,
   AutonomyStepInput,
   CardContext,
@@ -248,6 +250,8 @@ export interface HarnessOptions {
   code?: (request: CodeRequest) => CodeOutcome | Promise<CodeOutcome>;
   /** The handoff summary port (task 5.4); absent means no summarizer is configured. */
   handoffSummary?: (input: HandoffSummaryRequest) => Promise<string>;
+  /** The model port for AI cards (task 6.7); absent means no model layer. */
+  ai?: (request: AiRequest) => Promise<string>;
 }
 
 export function harness(options: HarnessOptions = {}) {
@@ -266,6 +270,15 @@ export function harness(options: HarnessOptions = {}) {
       }
     : undefined;
   const codeRuns: CodeRequest[] = [];
+  const aiCalls: AiRequest[] = [];
+  const ai: AiPort | undefined = options.ai
+    ? {
+        complete: async (request) => {
+          aiCalls.push(structuredClone(request));
+          return { text: await (options.ai as NonNullable<HarnessOptions["ai"]>)(request) };
+        },
+      }
+    : undefined;
   const ports: EnginePorts = {
     sandbox: box.port,
     code: {
@@ -286,8 +299,9 @@ export function harness(options: HarnessOptions = {}) {
     },
     ...(autonomy ? { autonomy } : {}),
     ...(options.handoffSummary ? { handoffSummary: options.handoffSummary } : {}),
+    ...(ai ? { ai } : {}),
   };
-  return { clock, commits, ephemeral, ports, autonomyCalls, batches: box.batches, codeRuns };
+  return { clock, commits, ephemeral, ports, autonomyCalls, batches: box.batches, codeRuns, aiCalls };
 }
 
 export interface RunInit {

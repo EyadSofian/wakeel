@@ -21,6 +21,7 @@ import { FakeLlm } from "@wakeel/testing";
 import { Queue } from "bullmq";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
+  aiPort,
   autonomyPort,
   botMessageId,
   drainConversation,
@@ -288,7 +289,8 @@ describe("handoff (task 5.4)", () => {
       card({ type: "handoff", reason: "طلب موظف", message: { type: "text", text: "هحولك لزميل" } }),
     ]);
     const llm = new FakeLlm().scriptText("العميل بيسأل عن طلب متأخر وعايز يكلم موظف");
-    const summarizeHandoff = modelHandoffSummary({ db, model: llm, modelName: "test-summary" });
+    // The bot's utility model, as its registry id, with the conversation's context for the usage record.
+    const summarizeHandoff = modelHandoffSummary({ db, model: llm });
     const { d } = deps({ summarizeHandoff });
 
     await send(c, "عايز أكلم حد من خدمة العملاء، طلبي اتأخر");
@@ -303,7 +305,14 @@ describe("handoff (task 5.4)", () => {
       handoff: { reason: "طلب موظف", summary: "العميل بيسأل عن طلب متأخر وعايز يكلم موظف", variables: {} },
     });
     // The customer's words reach the model as messages; the system text is fixed (CLAUDE.md §9).
-    const request = llm.calls[0]?.request as { system: string; messages: { role: string; content: string }[] };
+    const request = llm.calls[0]?.request as {
+      model: string;
+      system: string;
+      messages: { role: string; content: string }[];
+      context: { mode: string; workspaceId: string };
+    };
+    expect(request.model).not.toContain(":");
+    expect(request.context).toMatchObject({ mode: "emulator", workspaceId: c.ws });
     expect(request.system).toBe(SUMMARY_SYSTEM);
     expect(request.messages).toEqual([
       { role: "user", content: "عايز أكلم حد من خدمة العملاء، طلبي اتأخر" },
@@ -933,6 +942,41 @@ describe("workflow tools (task 6.6, ADR-035)", () => {
     expect(await botTexts(c)).toEqual(["تم الدفع"]);
     const request = llm.calls[0]?.request as { messages: { content: string }[] };
     expect(request.messages.at(-1)?.content).toContain('Tool charge finished with {"paid":true}.');
+    llm.expectDone();
+  });
+});
+
+describe("AI cards (task 6.7)", () => {
+  test("Generate text calls the bot's default model with the workspace context and sends the reply", async () => {
+    const into = newElementId("var");
+    const c = await seed([
+      card({
+        type: "ai_generate",
+        instructions: "رد على العميل بجملة واحدة",
+        input: "{{ event.text }}",
+        into,
+        send: true,
+      }),
+    ]);
+    await su(
+      "update bot_draft_docs set doc = jsonb_set(doc, '{variables}', $2::jsonb) where bot_id = $1 and kind = 'manifest'",
+      [c.botId, JSON.stringify([{ id: into, name: "reply", scope: "conversation", type: "string" }])],
+    );
+    const llm = new FakeLlm().scriptText("أهلاً بيك، هنساعدك حالاً.");
+    const { d } = deps({ ai: (turn) => aiPort({ llm: llm as never }, turn) });
+    await send(c, "محتاج مساعدة");
+    await drainConversation(d, c.conversationId);
+    expect(await botTexts(c)).toEqual(["أهلاً بيك، هنساعدك حالاً."]);
+    const request = llm.calls[0]?.request as {
+      model: string;
+      purpose: string;
+      system: string;
+      context: { mode: string; turnId: string };
+    };
+    expect(request.purpose).toBe("ai_generate");
+    expect(request.model).not.toContain(":");
+    expect(request.system).not.toContain("محتاج مساعدة");
+    expect(request.context.mode).toBe("emulator");
     llm.expectDone();
   });
 });

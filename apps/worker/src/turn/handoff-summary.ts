@@ -1,9 +1,9 @@
 import { type Database, recentTranscript } from "@wakeel/db";
+import type { HandoffSummaryInput } from "./drain";
 
 /**
  * The handoff summary (architecture §9.4, task 5.4): a short account of the conversation for the
- * human who takes over. The model layer arrives in Phase 6 (task 6.1); until then the worker runs
- * with no summarizer (an empty summary), and this model-backed one is exercised with the fake LLM.
+ * human who takes over, written by the bot's utility model (task 6.7) with the workspace's own key.
  *
  * The system text is fixed. End-user text and the builder's rendered reason go in messages, never in
  * the system prompt (CLAUDE.md §9).
@@ -16,13 +16,14 @@ export interface SummaryModel {
     system: string;
     messages: { role: "user" | "assistant"; content: string }[];
     purpose: string;
+    context: {
+      workspaceId: string;
+      mode: HandoffSummaryInput["mode"];
+      botId: string;
+      conversationId: string;
+      turnId: string;
+    };
   }): { textStream: AsyncIterable<string>; result: Promise<{ text: string }> };
-}
-
-export interface SummaryInput {
-  workspaceId: string;
-  conversationId: string;
-  reason: string;
 }
 
 export const SUMMARY_SYSTEM =
@@ -35,8 +36,9 @@ const TRANSCRIPT_MESSAGES = 40;
 /** The summary is a note, not a transcript. */
 const MAX_SUMMARY_CHARS = 2_000;
 
-export function modelHandoffSummary(deps: { db: Database; model: SummaryModel; modelName: string }) {
-  return async (input: SummaryInput): Promise<string> => {
+/** `deps.modelName` overrides the bot's utility model; the registry knows models by id. */
+export function modelHandoffSummary(deps: { db: Database; model: SummaryModel; modelName?: string }) {
+  return async (input: HandoffSummaryInput): Promise<string> => {
     const rows = await deps.db.withWorkspace(input.workspaceId, (tx) =>
       recentTranscript(tx, input.conversationId, TRANSCRIPT_MESSAGES),
     );
@@ -46,10 +48,17 @@ export function modelHandoffSummary(deps: { db: Database; model: SummaryModel; m
     }));
     messages.push({ role: "user", content: `Reason for the handoff: ${input.reason || "not given"}` });
     const handle = deps.model.stream({
-      model: deps.modelName,
+      model: deps.modelName ?? modelId(input.model),
       system: SUMMARY_SYSTEM,
       messages,
       purpose: "handoff_summary",
+      context: {
+        workspaceId: input.workspaceId,
+        mode: input.mode,
+        botId: input.botId,
+        conversationId: input.conversationId,
+        turnId: input.turnId,
+      },
     });
     // Streaming clients settle `result` only once the stream has been read.
     for await (const _chunk of handle.textStream) {
@@ -58,4 +67,10 @@ export function modelHandoffSummary(deps: { db: Database; model: SummaryModel; m
     const { text } = await handle.result;
     return text.trim().slice(0, MAX_SUMMARY_CHARS);
   };
+}
+
+/** A `ModelRef` (`provider:id`) as the registry names it. */
+export function modelId(ref: string): string {
+  const colon = ref.indexOf(":");
+  return colon >= 0 ? ref.slice(colon + 1) : ref;
 }

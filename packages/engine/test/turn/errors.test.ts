@@ -1,4 +1,4 @@
-import { AppError, newElementId } from "@wakeel/contracts";
+import { AppError, newId } from "@wakeel/contracts";
 import { describe, expect, test } from "vitest";
 import {
   capture,
@@ -285,12 +285,12 @@ describe("what counts as a failure", () => {
   });
 
   test("the engine's own executors are used by default", async () => {
-    const branches = [{ id: newElementId("br"), label: "Upset", description: "العميل زعلان" }];
-    const bot = linearBot([step(), { id: cardId(), type: "ai_branch", branches }]);
+    const table = { id: cardId(), type: "table", tableId: newId("tbl"), operation: "find" };
+    const bot = linearBot([step(), table]);
     const { result, commits } = await run({ def: bot.def });
-    // The Log card has an executor (4.3); the AI branch card does not have one until Phase 6.
+    // The Log card has an executor (4.3); the Table card does not have one until Phase 9.
     expect(commits.flatMap((c) => c.logs)).toEqual([{ level: "info", message: "step" }]);
-    expect(result.error?.message).toBe("Something went wrong on our side: No executor for ai_branch cards.");
+    expect(result.error?.message).toBe("Something went wrong on our side: No executor for table cards.");
   });
 
   test("an autonomous node with no autonomy port is internal_error", async () => {

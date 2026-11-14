@@ -24,8 +24,10 @@ import { createLogger } from "@wakeel/telemetry";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import {
+  aiPort,
   autonomyPort,
   maintenanceProcessor,
+  modelHandoffSummary,
   recordUsage,
   type TurnDeps,
   turnEnqueuer,
@@ -92,6 +94,9 @@ if (config) {
     },
     enqueueWebhook: webhooks.now,
     autonomy: (turn, code) => autonomyPort({ db, llm, runPort, logger }, turn, code),
+    // AI cards and the handoff summary use the same client: workspace keys, one usage event per call.
+    ai: (turn) => aiPort({ llm }, turn),
+    summarizeHandoff: modelHandoffSummary({ db, model: llm }),
   };
 
   const running = startWorkers({

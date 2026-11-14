@@ -259,11 +259,11 @@ describe("an invalid reply", () => {
   });
 });
 
-describe("kinds not built yet", () => {
-  test("extract fails until the AI cards arrive", async () => {
+describe("kind extract (task 6.7; more in ai-cards.test.ts)", () => {
+  test("an Ask with kind extract and no schema fails with definition_invalid", async () => {
     const c = captureBot({ kind: "extract", type: "object" });
     const { result } = await run({ def: c.def, state: c.waiting(), event: message("اسمي منى") });
-    expect(result.error?.code).toBe("internal_error");
+    expect(result.error?.code).toBe("definition_invalid");
   });
 });
 

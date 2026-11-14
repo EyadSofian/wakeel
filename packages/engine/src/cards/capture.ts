@@ -11,9 +11,10 @@ import { evalExpressions } from "../expr/evaluate";
 import type { ExpressionScopes } from "../expr/sandbox-port";
 import type { CardContext } from "../ports";
 import { fitsType, writeFor } from "../variables";
+import { aiPort, extract, modelFor } from "./ai-prompts";
 import { conditionError } from "./branch";
 import { type CaptureKind, parseReply } from "./capture-parse";
-import { renderMessages, textTemplate } from "./render";
+import { CardEvaluator, renderMessages, textTemplate } from "./render";
 import type { CardOf, ExecutorOf } from "./types";
 
 type Capture = CardOf<"capture">;
@@ -33,13 +34,6 @@ const VALUE_KEY = "$value";
  */
 export const capture: ExecutorOf<"capture"> = async (ctx) => {
   const { card } = ctx;
-  if (card.kind === "extract")
-    throw new AppError(
-      "internal_error",
-      { requestId: ctx.turnId },
-      { detail: "Capture with extraction arrives with the AI cards." },
-    );
-  const kind: CaptureKind = card.kind;
   const index = indexDefinition(ctx.definition);
   const entry = index.variable(card.into);
   if (!entry) throw new AppError("variable_not_found", { name: card.into });
@@ -58,15 +52,17 @@ export const capture: ExecutorOf<"capture"> = async (ctx) => {
 
   const attempts = ctx.reply.wait.kind === "capture" ? ctx.reply.wait.attempts : 0;
   const raw = replyText(ctx.reply.event);
-  const options = kind === "choice" ? await renderedOptions(ctx) : [];
+  const options = card.kind === "choice" ? await renderedOptions(ctx) : [];
   const parsed =
     raw === undefined
       ? { ok: false as const }
-      : parseReply(
-          kind,
-          raw,
-          options.map((o) => o.rendered),
-        );
+      : card.kind === "extract"
+        ? await extractReply(ctx, raw)
+        : parseReply(
+            card.kind as CaptureKind,
+            raw,
+            options.map((o) => o.rendered),
+          );
 
   let valid = parsed.ok;
   let complaint: string | undefined = card.retryMessage;
@@ -96,6 +92,31 @@ export const capture: ExecutorOf<"capture"> = async (ctx) => {
 };
 
 const next: StepOutcome = { type: "next" };
+
+/**
+ * Kind `extract` (task 6.7): the utility model fills the card's schema from the reply, with one
+ * retry. A reply it cannot fill the schema from is an invalid reply, so the card asks again.
+ */
+async function extractReply(
+  ctx: CardContext<Capture>,
+  raw: string,
+): Promise<{ ok: true; value: Json; index?: undefined } | { ok: false }> {
+  const config = ctx.card.extract;
+  if (!config)
+    throw new AppError("definition_invalid", { count: 1 }, { detail: "An Ask with kind extract needs a schema." });
+  let instructions: string | undefined;
+  if (config.instructions !== undefined) {
+    const ev = new CardEvaluator();
+    const slot = ev.template(config.instructions);
+    instructions = (await ev.run(ctx.scopes, ctx.sandbox)).text(slot);
+  }
+  const result = await extract(
+    aiPort(ctx),
+    { purpose: "capture_extract", model: modelFor(ctx.definition, undefined, "utility"), turnId: ctx.turnId },
+    { schema: config.schema as Record<string, unknown>, ...(instructions ? { instructions } : {}), text: raw },
+  );
+  return result.ok ? { ok: true, value: result.value } : { ok: false };
+}
 
 function waitFor(ctx: CardContext<Capture>, attempts: number): StepOutcome {
   return {
