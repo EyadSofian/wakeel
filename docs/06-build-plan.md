@@ -108,7 +108,7 @@ Read before starting any task: `CLAUDE.md`, the sections of `03-architecture.md`
 
 | ID | Task | Files | Acceptance |
 |---|---|---|---|
-| 4.1 | Schema: `bridge_connections, end_users, conversations, inbound_events, turns, messages, outbox_events` | `packages/db/migrations/0004_runtime.sql` | Integration: two-tenant tests; unique constraints on external ids and idempotency keys |
+| 4.1 | Schema: `bridge_connections, end_users, conversations, inbound_events, turns, messages, outbox_events` | `packages/db/migrations/0005_runtime.sql` | Integration: two-tenant tests; unique constraints on external ids and idempotency keys |
 | 4.2 | Engine core (pure): state machine, frames, step loop, outcomes, ports and transitions, limits, error resolution order | `packages/engine/src/**` | Unit: table-driven tests for every row of the event table in architecture §4.4 and every outcome; loop and depth limits; ≥ 90% line coverage |
 | 4.3 | Card executors: say, capture (all kinds except extract; validation; retries; `skipIfFilled`; option outputs), branch, set_variable, code, log, end, set_timeout, call_workflow + Exit node outputs | `packages/engine/src/cards/*` | Unit: per-card tests including failure paths; workflow inputs and outputs round-trip; capture of Arabic-Indic digits as a number works |
 | 4.4 | Turn worker: lease with fencing, inbox drain, per-step transaction, deterministic message ids, turn-done signal, janitor (lease recovery, inactivity timeouts), coalescing window | `apps/worker/src/turn/**` | Integration: kill the worker mid-turn → another resumes at the uncommitted step with no duplicate message; two messages sent 5 ms apart are processed in order; lost Redis job is recovered by the janitor |

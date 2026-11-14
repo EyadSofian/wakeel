@@ -114,7 +114,7 @@ All have `created_at`; mutable ones have `updated_at`. `W` = has `workspace_id` 
 - `bridge_connections W (id, bot_id, name, target, webhook_url?, signing_secrets jsonb(ciphertext[]), subscribed_events text[], status, consecutive_dead int)` target ∈ `production | draft`; status ∈ `active | paused | disabled`
 - `end_users W (id, bot_id, connection_id, external_id, attributes jsonb, vars jsonb)` unique `(connection_id, external_id)`
 - `conversations W (id, bot_id, connection_id, end_user_id, external_id, mode, status, version_id, state jsonb, state_bytes int, next_in_seq bigint, next_out_seq bigint, lease_owner, lease_until, lease_epoch bigint, last_activity_at, expires_at, ended_at, ended_reason, handoff jsonb)` unique `(connection_id, external_id)`; mode ∈ `live | emulator | eval`
-- `inbound_events W (id, conversation_id, seq bigint, kind, payload jsonb, idempotency_key?, received_at, processed_at?, turn_id?)` unique `(conversation_id, seq)`, unique `(connection_id, idempotency_key)`
+- `inbound_events W (id, connection_id, conversation_id, seq bigint, kind, payload jsonb, idempotency_key?, received_at, processed_at?, turn_id?)` unique `(conversation_id, seq)`, unique `(connection_id, idempotency_key)`
 - `turns W (id, conversation_id, bot_id, version_id, trigger_event_id, status, step_count, usage jsonb, error jsonb, started_at, ended_at)`
 - `messages W (id, conversation_id, seq bigint, direction, type, payload jsonb, citations jsonb, turn_id?, external_id?)` direction ∈ `in | out`
 - `outbox_events W (id, connection_id, conversation_id, seq bigint?, type, payload jsonb, ephemeral bool)` 

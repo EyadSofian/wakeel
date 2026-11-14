@@ -6,4 +6,5 @@ export * from "./rls";
 export * from "./roles";
 export * from "./schema/bots";
 export * from "./schema/platform";
+export * from "./schema/runtime";
 export * from "./sql";

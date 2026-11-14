@@ -20,6 +20,7 @@ export const ENTITY_PREFIXES = [
   "msg",
   "evt",
   "turn",
+  "out",
   "span",
   "kb",
   "doc",

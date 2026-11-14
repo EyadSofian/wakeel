@@ -17,6 +17,7 @@ export const ConversationId = entityId("conv");
 export const MessageId = entityId("msg");
 export const EventId = entityId("evt");
 export const TurnId = entityId("turn");
+export const OutboxEventId = entityId("out");
 export const SpanId = entityId("span");
 export const KnowledgeBaseId = entityId("kb");
 export const DocumentId = entityId("doc");
