@@ -1069,7 +1069,7 @@ describe("published versions (task 7.2)", () => {
         doc: {
           ...wf,
           nodes: [start, node],
-          edges: [{ id: newElementId("edge"), from: { nodeId: start?.id, port: "next" }, to: { nodeId: node.id } }],
+          edges: [{ id: newElementId("edge"), from: { nodeId: start?.id, port: "next" }, to: { nodeId: node["id"] } }],
         },
       });
       const m = await getDraftDoc(tx, c.botId, "manifest", "manifest");
