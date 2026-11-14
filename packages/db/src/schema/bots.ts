@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
 
-/** Drizzle mirrors of migration 0004 (task 2.1). The SQL file is the source of truth. */
+/** Drizzle mirrors of migrations 0004 and 0012 (tasks 2.1, 7.1). The SQL files are the source of truth. */
 const at = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
 export const bots = pgTable("bots", {
@@ -33,4 +33,19 @@ export const botDraftDocs = pgTable(
   (t) => [primaryKey({ columns: [t.botId, t.kind, t.docId] })],
 );
 
-export const botTables = { bots, botDraftDocs } as const;
+/** Mirror of migration 0012 (task 7.1). Immutable: app_rw can insert and read only. */
+export const botVersions = pgTable("bot_versions", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull(),
+  botId: text("bot_id").notNull(),
+  number: integer("number").notNull(),
+  label: text("label").notNull(),
+  notes: text("notes").notNull().default(""),
+  definition: jsonb("definition").notNull(),
+  definitionHash: text("definition_hash").notNull(),
+  createdBy: text("created_by"),
+  createdAt: at("created_at").notNull().defaultNow(),
+  publishedAt: at("published_at").notNull().defaultNow(),
+});
+
+export const botTables = { bots, botDraftDocs, botVersions } as const;

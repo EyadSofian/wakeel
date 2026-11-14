@@ -251,6 +251,38 @@ export const DraftDocResponse = z.object({
 export type DraftDocResponse = z.infer<typeof DraftDocResponse>;
 
 /* ------------------------------------------------------------------ */
+/* Versions (task 7.1, ADR-006, ADR-036)                               */
+/* ------------------------------------------------------------------ */
+
+/** `POST …/bots/{botId}/versions`: publish the draft. The label is required (design system §5.8). */
+export const PublishRequest = z.strictObject({
+  label: z.string().trim().min(1, "Enter a label").max(80, "Use 80 characters or fewer"),
+  notes: z.string().max(2_000, "Use 2,000 characters or fewer").optional(),
+});
+export type PublishRequest = z.infer<typeof PublishRequest>;
+
+export const VersionSummary = z.object({
+  id: z.string(),
+  number: z.number().int().positive(),
+  label: z.string(),
+  notes: z.string(),
+  /** SHA-256 of the definition's canonical JSON (ADR-036 §2). */
+  definitionHash: z.string(),
+  createdBy: z.object({ id: z.string(), name: z.string() }).nullable(),
+  createdAt: isoDate,
+  /** This is the version live conversations run. */
+  live: z.boolean(),
+});
+export type VersionSummary = z.infer<typeof VersionSummary>;
+
+export const VersionResponse = VersionSummary.extend({ definition: z.record(z.string(), z.unknown()) });
+export type VersionResponse = z.infer<typeof VersionResponse>;
+
+/** `POST …/versions/{versionId}/restore`: which draft workflows the restore deleted. */
+export const RestoreResponse = z.object({ removedWorkflows: z.array(z.string()) });
+export type RestoreResponse = z.infer<typeof RestoreResponse>;
+
+/* ------------------------------------------------------------------ */
 /* Emulator (task 4.6, ADR-025)                                        */
 /* ------------------------------------------------------------------ */
 

@@ -11,6 +11,7 @@ import {
 import {
   acquireConversationLease,
   appendOutbox,
+  assembleDraft,
   type Database,
   eventsOfTurn,
   finishTurn,
@@ -19,8 +20,8 @@ import {
   type InboundEventRecord,
   insertBotMessages,
   LeaseLostError,
-  listDraftDocs,
   listTurnSpans,
+  loadVersionDefinition,
   type NewOutboxEvent,
   nextUnprocessedEvent,
   recordTurnProgress,
@@ -538,18 +539,9 @@ class ConversationRun {
 }
 
 /**
- * The definition a conversation runs. Until versions exist (task 7.1) every conversation runs the
- * bot's draft, as emulator conversations and `target=draft` connections do (§3.2).
+ * The definition a conversation runs: its pinned version, or the draft when it has none (emulator
+ * conversations and `target=draft` connections, architecture §3.2).
  */
 async function loadDefinition(tx: Tx, botId: string, versionId: string | null): Promise<BotDefinition> {
-  if (versionId !== null)
-    throw new AppError("internal_error", {}, { detail: "Published versions arrive with task 7.1." });
-  const docs = await listDraftDocs(tx, botId);
-  const manifest = docs.find((d) => d.kind === "manifest")?.doc as BotManifest | undefined;
-  if (!manifest) throw new AppError("not_found", {}, { detail: `Bot ${botId} has no draft manifest.` });
-  return BotDefinitionSchema.parse({
-    schemaVersion: 1,
-    manifest,
-    workflows: docs.filter((d) => d.kind === "workflow").map((d) => d.doc as Workflow),
-  });
+  return versionId === null ? assembleDraft(tx, botId) : loadVersionDefinition(tx, versionId);
 }

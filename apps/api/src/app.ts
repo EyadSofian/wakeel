@@ -13,6 +13,7 @@ import { invitationRoutes } from "./routes/invitations";
 import { memberRoutes } from "./routes/members";
 import { modelRoutes } from "./routes/models";
 import { traceRoutes } from "./routes/traces";
+import { versionRoutes } from "./routes/versions";
 import { workspaceRoutes } from "./routes/workspaces";
 import type { StudioDeps } from "./studio";
 
@@ -112,6 +113,7 @@ export function buildApp(options: AppOptions) {
     void app.register(apiKeyRoutes, deps);
     void app.register(auditRoutes, deps);
     void app.register(botRoutes, deps);
+    void app.register(versionRoutes, deps);
     void app.register(traceRoutes, deps);
     void app.register(modelRoutes, { studio: deps, keyring: deps.keyring });
   }
