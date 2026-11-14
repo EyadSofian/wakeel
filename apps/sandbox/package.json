@@ -19,5 +19,9 @@
     "quickjs-emscripten-core": "0.32.0",
     "tsx": "4.23.15",
     "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@wakeel/engine": "workspace:*",
+    "@wakeel/testing": "workspace:*"
   }
 }

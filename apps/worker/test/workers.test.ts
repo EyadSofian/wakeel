@@ -99,11 +99,19 @@ describe("startWorkers", () => {
     const gate = new Promise<void>((r) => {
       release = r;
     });
+    // The processor itself says when the job is in flight. Waiting for QueueEvents' "active" instead
+    // missed the event when it fired before the events stream issued its first read, and the test
+    // then hung until its timeout.
+    let started!: () => void;
+    const inFlight = new Promise<void>((r) => {
+      started = r;
+    });
     const running = startWorkers({
       redisUrl: url,
       queues: ["webhook"],
       processors: {
         webhook: async () => {
+          started();
           await gate;
           finished = true;
         },
@@ -112,15 +120,12 @@ describe("startWorkers", () => {
     });
     await running.ready();
     const queue = new Queue("webhook", { connection: connection() });
-    const events = new QueueEvents("webhook", { connection: connection() });
-    await events.waitUntilReady();
-    const active = new Promise<void>((resolve) => events.once("active", () => resolve()));
     await queue.add("deliver", {});
-    await active;
+    await inFlight;
     const closing = running.close();
     release();
     await closing;
     expect(finished).toBe(true);
-    await Promise.all([queue.close(), events.close()]);
+    await queue.close();
   });
 });
