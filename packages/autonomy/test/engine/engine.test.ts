@@ -506,3 +506,66 @@ describe("resume edge cases", () => {
     expect(r.messages).toBeUndefined();
   });
 });
+
+describe("the iteration's trace (task 6.9)", () => {
+  test("a run that returns: the reply, the code, the value, the model call and the tool calls", async () => {
+    const tool = {
+      name: "lookupOrder",
+      toolType: "code" as const,
+      sideEffects: false,
+      input: { orderNumber: "5678" },
+      output: { status: "shipped" },
+      startedAt: "2026-11-14T10:00:00.000Z",
+      durationMs: 40,
+    };
+    const reply = `${M}run\nreturn await tools.lookupOrder({ orderNumber: "5678" })\n${M}end`;
+    const s = setup([reply], [{ ok: true, returned: true, value: { status: "shipped" }, patches: {}, tools: [tool] }]);
+    const r = await s.autonomy.step(s.input());
+    expect(r.iteration).toMatchObject({
+      index: 1,
+      status: "run_result",
+      code: 'return await tools.lookupOrder({ orderNumber: "5678" })',
+      result: { status: "shipped" },
+      tools: [tool],
+      llm: { finishReason: "stop", usage: { inputTokens: expect.any(Number) } },
+    });
+    expect(r.iteration?.response).toContain(":::run");
+    const prompt = r.iteration?.llm.prompt as { system: string; messages: unknown[] };
+    expect(prompt.system).toContain("You are the reasoning step");
+    expect(prompt.messages.length).toBeGreaterThan(0);
+  });
+
+  test.each([
+    ["an exit", `${M}say text\nتمام\n${M}exit listen\n${M}end`, [], { status: "exit", exit: "listen" }],
+    ["a protocol error", `${M}run\nx\n${M}run\ny\n${M}end`, [], { status: "protocol_error" }],
+    ["an invalid exit", `${M}exit escalate {"amount": "x"}\n${M}end`, [], { status: "exit_invalid" }],
+    ["a recovered reply", "طلبك اتشحن.", [], { status: "recovered", exit: "listen" }],
+    [
+      "code that throws",
+      `${M}run\nthrow 1\n${M}end`,
+      [{ ok: false, error: { message: "boom", line: 1 } }],
+      { status: "run_error", result: { message: "boom", line: 1 } },
+    ],
+    [
+      "a suspending tool",
+      `${M}run\nawait tools.askAddress()\n${M}end`,
+      [
+        {
+          ok: false,
+          suspended: {
+            toolId: "tool_AskAddr000",
+            name: "askAddress",
+            workflowId: "wf_AskAddres0",
+            input: {},
+            toolCallId: "k",
+          },
+        },
+      ],
+      { status: "suspended", result: { tool: "askAddress", toolCallId: "k" } },
+    ],
+  ] as const)("%s is recorded with its status", async (_name, reply, runs, expected) => {
+    const s = setup([reply], [...(runs as unknown as RunOutcome[])]);
+    const r = await s.autonomy.step(s.input());
+    expect(r.iteration).toMatchObject(expected);
+  });
+});

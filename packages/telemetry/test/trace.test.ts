@@ -293,3 +293,158 @@ describe("inlinePayload", () => {
     expect(p.inline === false && p.bytes).toBeGreaterThan(INLINE_PAYLOAD_BYTES);
   });
 });
+
+describe("autonomy spans (task 6.9)", () => {
+  const agent = "node_AGENTAAAAA";
+  const withAgent = BotDefinition.parse({
+    ...definition,
+    workflows: [
+      {
+        ...definition.workflows[0],
+        nodes: [
+          ...(definition.workflows[0]?.nodes ?? []),
+          { id: agent, type: "autonomous", name: "Assistant", instructions: "Help." },
+        ],
+      },
+    ],
+  });
+  const iteration = (index: number, extra: Partial<NonNullable<TraceStep["iteration"]>> = {}) => ({
+    index,
+    status: "run_result" as const,
+    response: ':::run\nreturn await tools.lookupOrder({ number: "5678" })\n:::end',
+    code: 'return await tools.lookupOrder({ number: "5678" })',
+    result: { status: "shipped" },
+    llm: {
+      model: "gpt-4.1-mini",
+      provider: "openai",
+      usage: { inputTokens: 1200, cachedInputTokens: 800, outputTokens: 40 },
+      costMicroUsd: 310,
+      ttftMs: 220,
+      finishReason: "stop",
+      prompt: { system: "You are the reasoning step", messages: [{ role: "user", content: "طلبي فين؟" }] },
+      startedAt: at(5).toISOString(),
+      durationMs: 900,
+    },
+    tools: [
+      {
+        name: "lookupOrder",
+        toolId: "tool_LOOKUPAAAA",
+        toolType: "code" as const,
+        sideEffects: false,
+        input: { number: "5678" },
+        output: { status: "shipped" },
+        startedAt: at(910).toISOString(),
+        durationMs: 60,
+      },
+    ],
+    ...extra,
+  });
+
+  function agentTurn() {
+    const b = new TraceBuilder(ctx, withAgent);
+    const before = { state: state(), user: { vars: {}, attributes: {} } };
+    const batches: Span[][] = [b.turnStarted(T0)];
+    batches.push(b.stepCommitted(step(1, agent, undefined, "next", { iteration: iteration(1) }), before, at(1000)));
+    batches.push(
+      b.stepCommitted(
+        step(2, agent, undefined, "wait", {
+          iteration: iteration(2, {
+            status: "exit",
+            exit: "listen",
+            response: ":::say text\nطلبك اتشحن\n:::exit listen\n:::end",
+            tools: [
+              {
+                name: "lookupOrder",
+                toolType: "code",
+                sideEffects: true,
+                input: { number: "x" },
+                error: '"lookupOrder" failed: no such order',
+                startedAt: at(1500).toISOString(),
+                durationMs: 10,
+              },
+            ],
+          }),
+        }),
+        before,
+        at(1800),
+      ),
+    );
+    batches.push(b.turnFinished({ status: "waiting", stepSeq: 2 }, at(1810)));
+    return store(batches);
+  }
+
+  test("each iteration is a span under the node, with its model call and tool calls under it, in order", () => {
+    const spans = agentTurn();
+    for (const s of spans) expect(Span.safeParse(s).success).toBe(true);
+    const parentOf = (s: Span) => spans.find((p) => p.id === s.parentId);
+    expect(spans.map((s) => [s.kind, s.name, parentOf(s)?.kind ?? null])).toEqual([
+      ["turn", "Turn", null],
+      ["node", "Assistant", "turn"],
+      ["autonomy.iteration", "Iteration 1", "node"],
+      ["llm.call", "gpt-4.1-mini", "autonomy.iteration"],
+      ["tool.call", "lookupOrder", "autonomy.iteration"],
+      ["autonomy.iteration", "Iteration 2", "node"],
+      ["llm.call", "gpt-4.1-mini", "autonomy.iteration"],
+      ["tool.call", "lookupOrder", "autonomy.iteration"],
+    ]);
+  });
+
+  test("payloads: the reply, code and result on the iteration; prompt and completion on the call; input and output on the tool", () => {
+    const spans = agentTurn();
+    const [first] = spans.filter((s) => s.kind === "autonomy.iteration");
+    expect(first).toMatchObject({
+      location: { workflowId: ids.main, nodeId: agent },
+      startedAt: T0.toISOString(),
+      durationMs: 1000,
+      attrs: {
+        index: 1,
+        status: "run_result",
+        code: { inline: true, value: 'return await tools.lookupOrder({ number: "5678" })' },
+        result: { inline: true, value: { status: "shipped" } },
+        response: { inline: true },
+      },
+    });
+    const [call] = spans.filter((s) => s.kind === "llm.call");
+    expect(call).toMatchObject({
+      startedAt: at(5).toISOString(),
+      durationMs: 900,
+      attrs: {
+        purpose: "autonomy",
+        model: "gpt-4.1-mini",
+        provider: "openai",
+        usage: { inputTokens: 1200, cachedInputTokens: 800, outputTokens: 40, costMicroUsd: 310 },
+        ttftMs: 220,
+        finishReason: "stop",
+        prompt: { inline: true, value: { system: "You are the reasoning step" } },
+        completion: { inline: true },
+      },
+    });
+    const tools = spans.filter((s) => s.kind === "tool.call");
+    expect(tools[0]).toMatchObject({
+      status: "ok",
+      location: { nodeId: agent, toolId: "tool_LOOKUPAAAA" },
+      durationMs: 60,
+      attrs: { name: "lookupOrder", toolType: "code", input: { inline: true, value: { number: "5678" } } },
+    });
+    expect(tools[1]).toMatchObject({
+      status: "error",
+      attrs: { sideEffects: true, output: { inline: true, value: { error: '"lookupOrder" failed: no such order' } } },
+    });
+  });
+
+  test("an iteration whose code failed is an error span; one model call without usage counts zero", () => {
+    const b = new TraceBuilder(ctx, withAgent);
+    b.turnStarted(T0);
+    const it = iteration(1, { status: "run_error", result: { message: "boom" }, tools: [] });
+    const { usage: _usage, provider: _provider, costMicroUsd: _cost, ...llm } = it.llm;
+    const spans = b.stepCommitted(
+      step(1, agent, undefined, "next", { iteration: { ...it, llm } }),
+      { state: state(), user: { vars: {}, attributes: {} } },
+      at(50),
+    );
+    expect(spans.find((s) => s.kind === "autonomy.iteration")?.status).toBe("error");
+    expect(spans.find((s) => s.kind === "llm.call")).toMatchObject({
+      attrs: { provider: "unknown", usage: { inputTokens: 0, outputTokens: 0, costMicroUsd: 0 } },
+    });
+  });
+});

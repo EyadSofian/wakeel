@@ -8,6 +8,7 @@ import {
   isToolSuspended,
   type PendingToolCall,
   type RunOutcome,
+  type ToolCallTrace,
 } from "@wakeel/autonomy";
 import {
   AppError,
@@ -28,7 +29,7 @@ import {
   recentTranscript,
 } from "@wakeel/db";
 import type { AiPort, AutonomyPort, CodePort } from "@wakeel/engine";
-import type { LlmClient, UsageEvent } from "@wakeel/llm";
+import { type LlmClient, registry, type UsageEvent } from "@wakeel/llm";
 import type { AutonomyRunPort, BuilderTool } from "@wakeel/sandbox-client";
 import type { Logger } from "@wakeel/telemetry";
 import { modelId } from "./handoff-summary";
@@ -153,6 +154,8 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
       // the exec is stopped, so nothing after it runs, tool calls included.
       const stop = new AbortController();
       let suspended: PendingToolCall | undefined;
+      // Every call the block made, for its `tool.call` spans (§6.5, task 6.9).
+      const tools: ToolCallTrace[] = [];
       let outcome: Awaited<ReturnType<AutonomyRunPort["run"]>>;
       try {
         outcome = await w.runPort.run({
@@ -165,16 +168,35 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
           signal: stop.signal,
           onTool: async (call) => {
             if (suspended) throw new AppError("tool_failed", { tool: call.tool, message: "the block already ended" });
+            const tool = request.node.tools.find((t) => t.name === call.tool);
+            const started = now();
+            const record = (end: { output?: Json; error?: string }) =>
+              tools.push({
+                name: call.tool,
+                ...(tool ? { toolId: tool.id } : {}),
+                toolType: tool?.type ?? "code",
+                sideEffects: tool?.type === "code" ? tool.sideEffects : tool?.type === "workflow",
+                input: call.input,
+                ...end,
+                startedAt: new Date(started).toISOString(),
+                durationMs: Math.max(0, now() - started),
+              });
             try {
-              return await callTool(request.node, call, {
+              const output = await callTool(request.node, call, {
                 definition: turn.definition,
                 code: toolCode(code),
                 scopes: request.scopes,
                 idempotencyKey: request.idempotencyKey,
                 warn: (message, data) => w.logger.warn(data, message),
               });
+              record({ output });
+              return output;
             } catch (error) {
-              if (!isToolSuspended(error)) throw error;
+              if (!isToolSuspended(error)) {
+                record({ error: error instanceof Error ? error.message : String(error) });
+                throw error;
+              }
+              record({});
               suspended = error.pending;
               stop.abort(error);
               return new Promise<never>(() => {});
@@ -182,10 +204,10 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
           },
         });
       } catch (error) {
-        if (suspended) return { ok: false, suspended } satisfies RunOutcome;
+        if (suspended) return { ok: false, suspended, tools } satisfies RunOutcome;
         throw error;
       }
-      if (suspended) return { ok: false, suspended } satisfies RunOutcome;
+      if (suspended) return { ok: false, suspended, tools } satisfies RunOutcome;
       const logs = outcome.logs.map((l) => ({ level: l.level, message: l.args.map(logText).join(" ") }));
       if (!outcome.ok) {
         // A sandbox failure that is not the code's own is ours: never hand it to the model as its bug.
@@ -193,6 +215,7 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
         return {
           ok: false,
           error: { message: outcome.message, ...(outcome.line !== undefined ? { line: outcome.line } : {}) },
+          tools,
         };
       }
       return {
@@ -202,6 +225,7 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
         ...(outcome.value !== null ? { value: outcome.value } : {}),
         patches: outcome.patches,
         logs,
+        tools,
       } satisfies RunOutcome;
     },
   };
@@ -233,12 +257,27 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
               yield* (await started).textStream;
             },
           },
-          result: started.then((h) => h.result),
+          // What answered and what it cost, for the iteration's `llm.call` span (task 6.9).
+          result: started
+            .then((h) => h.result)
+            .then((r) => ({
+              text: r.text,
+              finishReason: r.finishReason,
+              model: r.model,
+              provider: providerOf(r.model),
+              usage: {
+                inputTokens: r.usage.inputTokens + (r.usage.cacheWriteTokens ?? 0),
+                cachedInputTokens: r.usage.cachedInputTokens,
+                outputTokens: r.usage.outputTokens,
+              },
+              costMicroUsd: r.costMicroUsd,
+            })),
         };
       },
     }),
     code: run,
     context,
+    now,
   });
   return { step: (input) => autonomy.step(input as never) as never };
 }
@@ -271,6 +310,14 @@ export function aiPort(w: { llm: LlmClient }, turn: AutonomyTurn): AiPort {
       return { text: (await handle.result).text };
     },
   };
+}
+
+function providerOf(model: string): string | undefined {
+  try {
+    return registry.get(model).provider;
+  } catch {
+    return undefined;
+  }
 }
 
 function manifestEntry(tool: Tool): BuilderTool {
