@@ -333,7 +333,7 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
     await page.getByRole("combobox", { name: "Search variables" }).fill("order");
     await expect(page.getByRole("listbox", { name: "Variables" }).getByRole("option").first()).toBeVisible();
   }
-  if (screen.id === "variables" && !["loading", "error"].includes(state)) {
+  if (screen.id === "variables" && !["loading", "error"].includes(state) && !state.startsWith("secrets")) {
     await expect(page.getByRole("heading", { name: "Conversation" })).toBeVisible();
   }
   if (state === "usages") {

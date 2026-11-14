@@ -149,7 +149,14 @@ function VersionRow({
           <Button size="compact" onClick={onRestore} aria-label={`Restore v${v.number} to the draft`}>
             Restore
           </Button>
-          {v.live ? null : (
+          {v.live ? (
+            // Keeps the column's buttons lined up with the rows that can roll back.
+            <span aria-hidden="true" className="invisible">
+              <Button size="compact" tabIndex={-1}>
+                Roll back
+              </Button>
+            </span>
+          ) : (
             <Button size="compact" onClick={onRollback} aria-label={`Roll back to v${v.number}`}>
               Roll back
             </Button>

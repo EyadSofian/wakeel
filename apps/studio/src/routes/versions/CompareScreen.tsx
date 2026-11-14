@@ -12,7 +12,7 @@ import { useLoadState } from "../bot/BotLayout";
 import { CHANGE_LABELS, CHANGE_TONES, type DiffRow, diffRows } from "./model";
 import { useDraftDefinition } from "./use-draft";
 
-const INDENT = ["ps-0", "ps-6", "ps-9", "ps-11"] as const;
+const INDENT = ["ms-0", "ms-6", "ms-9", "ms-11"] as const;
 
 /**
  * Compare (design system §5.8, task 7.5): a version against the draft or another version, as a
@@ -121,8 +121,8 @@ function ChangeRow({ row }: { row: DiffRow }) {
   const heading = row.kind !== "field";
   return (
     <Tr>
-      <Td className={INDENT[row.depth]}>
-        <span className="flex min-w-0 items-center gap-3">
+      <Td>
+        <span className={`flex min-w-0 items-center gap-3 ${INDENT[row.depth]}`}>
           {heading ? (
             <>
               <bdi className="truncate font-medium text-primary">{row.title}</bdi>
@@ -138,12 +138,9 @@ function ChangeRow({ row }: { row: DiffRow }) {
           )}
         </span>
       </Td>
-      <Td>
-        <Value text={row.before} />
-      </Td>
-      <Td>
-        <Value text={row.after} />
-      </Td>
+      {/* A workflow, node or card heading has no value of its own; its fields follow. */}
+      <Td>{heading && row.kind !== "transition" ? null : <Value text={row.before} />}</Td>
+      <Td>{heading && row.kind !== "transition" ? null : <Value text={row.after} />}</Td>
     </Tr>
   );
 }

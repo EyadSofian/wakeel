@@ -114,8 +114,9 @@ export function SecretsTab({ workspaceId, botId }: { workspaceId: string; botId:
                       {v.key}
                     </span>
                     {v.description ? (
-                      <span dir="auto" className="truncate text-small text-secondary">
-                        {v.description}
+                      // bdi, not dir="auto": Arabic keeps its direction but stays at the column's start.
+                      <span className="truncate text-small text-secondary">
+                        <bdi>{v.description}</bdi>
                       </span>
                     ) : null}
                     {v.declared ? null : <span className="text-small text-warning">Not declared any more</span>}
