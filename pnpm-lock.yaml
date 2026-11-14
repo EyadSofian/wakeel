@@ -189,16 +189,34 @@ importers:
       '@wakeel/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@wakeel/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@wakeel/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@wakeel/sandbox-client':
+        specifier: workspace:*
+        version: link:../../packages/sandbox-client
       '@wakeel/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
       bullmq:
         specifier: 6.7.6
         version: 6.7.6(ioredis@6.0.0)(pg@8.23.1)
+      ioredis:
+        specifier: 6.0.0
+        version: 6.0.0
     devDependencies:
+      '@testcontainers/postgresql':
+        specifier: 12.2.1
+        version: 12.2.1(bare-buffer@3.7.2)
       '@testcontainers/redis':
         specifier: 12.2.1
         version: 12.2.1(bare-buffer@3.7.2)
+      '@wakeel/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
       testcontainers:
         specifier: 12.2.1
         version: 12.2.1(bare-buffer@3.7.2)
