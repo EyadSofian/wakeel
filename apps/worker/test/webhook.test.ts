@@ -19,7 +19,13 @@ import { FakeClock } from "@wakeel/testing";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { createReceiver } from "../../../examples/bridge-receiver-node/src/server.mjs";
 import { runJanitor } from "../src/turn/index";
-import { deliverConversation, type SendResult, type WebhookDeps, type WebhookSender } from "../src/webhook/index";
+import {
+  deliverConversation,
+  type SendResult,
+  type WebhookDeps,
+  type WebhookSender,
+  webhookFollowUp,
+} from "../src/webhook/index";
 
 /**
  * Task 5.2: the delivery worker against real Postgres, with the fake clock and a scripted receiver.
@@ -519,6 +525,31 @@ describe("connection status", () => {
         meta: { consecutiveDead: DEAD_EVENTS_TO_DISABLE },
       },
     ]);
+  });
+});
+
+describe("after a delivery job completes", () => {
+  // The same race as turns: a delivery written while the stream's job (id = the conversation) is
+  // finishing has its wake-up dropped, and would wait for the janitor.
+  const job = (conversationId: string) => ({ data: { conversationId } }) as never;
+
+  test("a due delivery left behind wakes the stream again", async () => {
+    const clock = new FakeClock(new Date());
+    const c = await conversation();
+    await events(c, clock, 1);
+    const woken: string[] = [];
+    const followUp = webhookFollowUp({ db, logger, enqueueWebhook: async (id) => void woken.push(id) });
+    await followUp(job(c.conv), { sent: 0, stopped: "drained" });
+    expect(woken).toEqual([c.conv]);
+  });
+
+  test("an empty stream, or one that is waiting on a retry, is left alone", async () => {
+    const c = await conversation();
+    const woken: string[] = [];
+    const followUp = webhookFollowUp({ db, logger, enqueueWebhook: async (id) => void woken.push(id) });
+    await followUp(job(c.conv), { sent: 0, stopped: "drained" });
+    await followUp(job(c.conv), { sent: 0, stopped: "waiting" });
+    expect(woken).toEqual([]);
   });
 });
 

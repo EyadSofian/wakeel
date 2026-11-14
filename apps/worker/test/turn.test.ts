@@ -31,6 +31,7 @@ import {
   SUMMARY_SYSTEM,
   type TurnDeps,
   turnEnqueuer,
+  turnFollowUp,
   turnProcessor,
 } from "../src/turn/index";
 import { startWorkers } from "../src/workers";
@@ -564,6 +565,53 @@ describe("the janitor", () => {
       expect(result.woken).toBeGreaterThanOrEqual(1);
       expect(await done).toBe(`turn-done:${c.conversationId}:1`);
       expect(await botTexts(c)).toEqual(["وصلت"]);
+    } finally {
+      await running.close();
+      await queue.close();
+    }
+  });
+
+  test("a message that arrives while the last turn's job is finishing is answered without the janitor", async () => {
+    // The race behind slow second replies: the turn-done signal reaches the user before BullMQ
+    // removes the finished job, so the next message's job (same id: the conversation) is dropped.
+    const c = await seed([card({ type: "say", message: { type: "text", text: "تمام" } })]);
+    await send(c, "أول");
+    const connection = { url: redis.getConnectionUrl(), maxRetriesPerRequest: null };
+    const queue = new Queue("turn", { connection });
+    const enqueue = turnEnqueuer(queue);
+    let resolveSecond: (channel: string) => void = () => {};
+    const second = new Promise<string>((resolve) => {
+      resolveSecond = resolve;
+    });
+    const { d } = deps({
+      publish: async (channel) => {
+        if (channel === `turn-done:${c.conversationId}:2`) resolveSecond(channel);
+      },
+    });
+    const base = turnProcessor(d);
+    let injected = false;
+    const running = startWorkers({
+      redisUrl: redis.getConnectionUrl(),
+      queues: ["turn"],
+      processors: {
+        turn: async (job, log) => {
+          const result = await base(job, log);
+          if (!injected) {
+            injected = true;
+            // The job is still active here, so this enqueue is a no-op in BullMQ.
+            await send(c, "تاني");
+            await enqueue(c.conversationId);
+          }
+          return result;
+        },
+      },
+      onCompleted: { turn: turnFollowUp({ db, logger, enqueueTurn: enqueue }) },
+      logger,
+    });
+    await running.ready();
+    try {
+      await enqueue(c.conversationId);
+      expect(await second).toBe(`turn-done:${c.conversationId}:2`);
     } finally {
       await running.close();
       await queue.close();
