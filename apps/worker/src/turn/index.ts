@@ -1,6 +1,8 @@
-import type { Queue } from "bullmq";
+import { type Database, nextUnprocessedEvent } from "@wakeel/db";
+import type { Logger } from "@wakeel/telemetry";
+import type { Job, Queue } from "bullmq";
 import type { Processor } from "../workers";
-import { drainConversation, type TurnDeps } from "./drain";
+import { type DrainResult, drainConversation, type TurnDeps } from "./drain";
 import { type JanitorDeps, runJanitor } from "./janitor";
 
 export * from "./autonomy";
@@ -25,6 +27,30 @@ export function turnEnqueuer(queue: Queue): (conversationId: string) => Promise<
       removeOnComplete: true,
       removeOnFail: true,
     });
+  };
+}
+
+/**
+ * After a `turn` job completes and BullMQ has removed it: if the conversation's inbox is not empty,
+ * enqueue it again. A message that arrived while the job was finishing had its own `add` dropped as
+ * a duplicate of the still-active job (same id), and would otherwise wait for the janitor (30 s).
+ */
+export function turnFollowUp(deps: {
+  db: Database;
+  logger: Logger;
+  enqueueTurn: (conversationId: string) => Promise<void>;
+}): (job: Job, result: unknown) => Promise<void> {
+  return async (job, result) => {
+    const { conversationId } = job.data as TurnJob;
+    const r = result as DrainResult | undefined;
+    // Leased elsewhere or lost: that worker, or the janitor, owns the conversation.
+    if (r?.stopped !== "drained") return;
+    const workspaceId = await deps.db.lookup.conversationWorkspace(conversationId);
+    if (!workspaceId) return;
+    const waiting = await deps.db.withWorkspace(workspaceId, (tx) => nextUnprocessedEvent(tx, conversationId));
+    if (!waiting) return;
+    deps.logger.info({ conversationId }, "message arrived while the turn job finished; enqueued again");
+    await deps.enqueueTurn(conversationId);
   };
 }
 

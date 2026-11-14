@@ -31,10 +31,11 @@ import {
   recordUsage,
   type TurnDeps,
   turnEnqueuer,
+  turnFollowUp,
   turnProcessor,
   workspaceCredentials,
 } from "./turn/index";
-import { egressSender, webhookEnqueuer, webhookProcessor } from "./webhook/index";
+import { egressSender, webhookEnqueuer, webhookFollowUp, webhookProcessor } from "./webhook/index";
 import { startWorkers } from "./workers";
 
 const config = loadConfigOrExit({
@@ -117,6 +118,10 @@ if (config) {
         keyring,
         scheduleWake: webhooks.at,
       }),
+    },
+    onCompleted: {
+      turn: turnFollowUp({ db, logger, enqueueTurn: turnEnqueuer(turnQueue) }),
+      webhook: webhookFollowUp({ db, logger, enqueueWebhook: webhooks.now }),
     },
     logger,
     concurrency: WORKER_LIMITS.concurrentTurnsPerProcess,

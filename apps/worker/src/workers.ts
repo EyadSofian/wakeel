@@ -18,6 +18,11 @@ export interface WorkerOptions {
   logger: Logger;
   /** Jobs in flight per queue in this process (turns are I/O bound; architecture §15). */
   concurrency?: number;
+  /**
+   * Runs after a job has completed and BullMQ has removed it, so a job added from here with the
+   * same id is not dropped as a duplicate of the one that just finished.
+   */
+  onCompleted?: Partial<Record<QueueName, (job: Job, result: unknown) => Promise<void>>>;
 }
 
 export interface RunningWorkers {
@@ -66,6 +71,12 @@ export function startWorkers(options: WorkerOptions): RunningWorkers {
       },
     );
     worker.on("error", (err) => options.logger.error({ err, queue }, "queue connection error"));
+    const after = options.onCompleted?.[queue];
+    if (after) {
+      worker.on("completed", (job, result) => {
+        after(job, result).catch((err) => options.logger.error({ err, queue, jobId: job.id }, "follow-up failed"));
+      });
+    }
     workers.push(worker);
   }
 
