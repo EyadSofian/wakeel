@@ -142,16 +142,6 @@ export class SandboxPool {
    * cannot take it (`validation_failed`, `rate_limited`, `internal_error`) or with the abort reason.
    */
   exec(job: ExecJobInput, options: ExecOptions = {}): Promise<ExecOutcome> {
-    if (job.kind === "autonomy_run") {
-      // `autonomy_run` (Phase 6) needs its guest layer first.
-      return Promise.reject(
-        new AppError(
-          "validation_failed",
-          {},
-          { errors: [{ path: "kind", code: "not_supported", message: `kind ${job.kind} is not supported yet` }] },
-        ),
-      );
-    }
     let expressions: BatchExpression[] | undefined;
     if (job.kind === "expressions") {
       const batch = parseBatch(job.source);

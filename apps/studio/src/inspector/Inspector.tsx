@@ -16,6 +16,7 @@ import {
   type SummaryContext,
   summarizeCard,
 } from "../canvas/view/summaries";
+import { ModelField } from "./autonomous/ModelSection";
 import { AskForm, ConditionForm, EndForm, LogForm, SayForm, SetVariableForm } from "./cards/CardForms";
 import { IssuesContext, Section, StringField, useCommitCard, useDraft } from "./fields";
 
@@ -383,6 +384,16 @@ function AutonomousSections({
         />
       </Section>
       <Section id="advanced" nodeType={node.type} title="Advanced">
+        <ModelField
+          node={node}
+          onChange={(model) =>
+            update((n) => {
+              if (n.type !== "autonomous") return n;
+              const { model: _old, ...rest } = n;
+              return model ? { ...rest, model } : rest;
+            })
+          }
+        />
         <label className="flex flex-col gap-3">
           <span className="text-small font-medium text-primary">Temperature</span>
           <span className="flex items-center gap-5">

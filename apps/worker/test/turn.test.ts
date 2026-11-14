@@ -20,9 +20,12 @@ import { FakeLlm } from "@wakeel/testing";
 import { Queue } from "bullmq";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
+  autonomyPort,
   botMessageId,
+  callTool,
   drainConversation,
   modelHandoffSummary,
+  resolveModel,
   runJanitor,
   SUMMARY_SYSTEM,
   type TurnDeps,
@@ -94,7 +97,7 @@ const card = (extra: Record<string, unknown>) => ({ id: newElementId("card"), ..
 async function seed(
   cards: unknown[],
   settings: Record<string, unknown> = {},
-  extra: { nodes?: unknown[]; edges?: unknown[] } = {},
+  extra: { nodes?: unknown[]; edges?: unknown[]; mainNode?: Record<string, unknown> } = {},
 ) {
   const userId = newId("usr");
   await su("insert into users (id, email, name) values ($1, $2, 'Builder')", [userId, `${userId}@example.test`]);
@@ -124,7 +127,7 @@ async function seed(
         kind: "main",
         nodes: [
           { id: start, type: "start", name: "Start" },
-          { id: node, type: "standard", name: "Reply", cards },
+          { id: node, ...(extra.mainNode ?? { type: "standard", name: "Reply", cards }) },
           ...(extra.nodes ?? []),
         ],
         edges: [
@@ -632,5 +635,171 @@ describe("message ids", () => {
     expect(
       new Set([id, botMessageId(turn, 3, 1), botMessageId(turn, 4, 0), botMessageId(newId("turn"), 3, 0)]).size,
     ).toBe(4);
+  });
+});
+
+describe("the Autonomous Node (task 6.6)", () => {
+  const lookupOrder = {
+    id: newElementId("tool"),
+    type: "code",
+    name: "lookupOrder",
+    description: "Finds an order by its number.",
+    input: { type: "object", properties: { number: { type: "string" } }, required: ["number"] },
+    source: "return { status: 'shipped' };",
+  };
+  const agent = (extra: Record<string, unknown> = {}) => ({
+    type: "autonomous",
+    name: "Assistant",
+    instructions: "You help customers of {{ bot.name }} track their orders.",
+    model: "openai:gpt-4.1-mini",
+    tools: [lookupOrder],
+    ...extra,
+  });
+
+  test("replies through the model and waits for the user; the model is the node's own", async () => {
+    const c = await seed([], {}, { mainNode: agent() });
+    const llm = new FakeLlm().scriptText(":::say text\nأهلاً، ابعتلي رقم الطلب\n:::exit listen\n:::end");
+    const { d } = deps({
+      autonomy: (turn, code) =>
+        autonomyPort(
+          { db, llm: llm as never, runPort: { run: async () => Promise.reject(new Error("no run")) }, logger },
+          turn,
+          code,
+        ),
+    });
+    await send(c, "طلبي اتأخر");
+    await drainConversation(d, c.conversationId);
+    expect(await botTexts(c)).toEqual(["أهلاً، ابعتلي رقم الطلب"]);
+    const [conv] = await query<{ status: string }>("select status from conversations where id = $1", [
+      c.conversationId,
+    ]);
+    expect(conv?.status).toBe("waiting_input");
+    const request = llm.calls[0]?.request as {
+      model: string;
+      system: string;
+      messages: { role: string; content: string }[];
+      context: { mode: string };
+    };
+    expect(request.model).toBe("gpt-4.1-mini");
+    expect(request.context.mode).toBe("emulator");
+    // The customer's words are a message, never system text (CLAUDE.md §9).
+    expect(request.system).not.toContain("طلبي اتأخر");
+    expect(request.messages.map((m) => m.content).join("\n")).toContain("طلبي اتأخر");
+    expect(request.system).toContain("lookupOrder");
+    llm.expectDone();
+  });
+
+  test("a run block calls a code tool; its result is the next iteration's feedback", async () => {
+    const c = await seed([], {}, { mainNode: agent() });
+    const llm = new FakeLlm()
+      .scriptText(':::run\nreturn await tools.lookupOrder({ number: "5678" })\n:::end')
+      .scriptText(":::say text\nطلبك اتشحن\n:::exit listen\n:::end");
+    const codeRuns: CodeRequest[] = [];
+    const code: CodePort = {
+      run: async (r) => {
+        codeRuns.push(r);
+        return { ok: true, value: { status: "shipped" }, patches: {}, said: [], logs: [] };
+      },
+    };
+    const { d } = deps({
+      code,
+      autonomy: (turn, port) =>
+        autonomyPort(
+          {
+            db,
+            llm: llm as never,
+            runPort: {
+              // Stands in for the sandbox: the model's code makes exactly this one call.
+              run: async (r) => {
+                const value = await r.onTool({ tool: "lookupOrder", input: { number: "5678" } });
+                return { ok: true, value, patches: { memo: { set: { looked: true } } }, logs: [] };
+              },
+            },
+            logger,
+          },
+          turn,
+          port,
+        ),
+    });
+    await send(c, "رقم الطلب 5678");
+    await drainConversation(d, c.conversationId);
+    expect(await botTexts(c)).toEqual(["طلبك اتشحن"]);
+    expect(codeRuns).toHaveLength(1);
+    expect(codeRuns[0]?.source.startsWith('const input = {"number":"5678"}; ')).toBe(true);
+    const second = llm.calls[1]?.request as { messages: { content: string }[] };
+    expect(second.messages.at(-1)?.content).toContain('{"status":"shipped"}');
+    expect(second.messages.at(-1)?.content).toContain('"looked"');
+    llm.expectDone();
+  });
+});
+
+describe("tool calls (task 6.6, ADR-032 §2)", () => {
+  const node = {
+    id: newElementId("node"),
+    type: "autonomous" as const,
+    name: "Assistant",
+    instructions: "x",
+    tools: [
+      {
+        id: newElementId("tool"),
+        type: "code" as const,
+        name: "lookupOrder",
+        description: "Finds an order.",
+        input: { type: "object", properties: { number: { type: "string" } }, required: ["number"] },
+        output: { type: "object", properties: { status: { type: "string" } }, required: ["status"] },
+        source: "return 1",
+        sideEffects: false,
+        timeoutMs: 1000,
+      },
+      {
+        id: newElementId("tool"),
+        type: "kb_search" as const,
+        name: "searchHelp",
+        description: "d",
+        kbIds: [newId("kb")],
+        topK: 5,
+      },
+    ],
+    variableAccess: [],
+    exits: [],
+    conversational: true,
+    allowHandoff: false,
+    maxIterations: 6,
+    temperature: 0.3,
+    messageTypes: ["text" as const],
+  };
+  const call = (tool: string, input: unknown, value: unknown = { status: "shipped" }) =>
+    callTool(
+      node as never,
+      { tool, input: input as never },
+      {
+        code: { run: async () => ({ ok: true, value: value as never, patches: {}, said: [], logs: [] }) },
+        scopes: {},
+        idempotencyKey: "k",
+        logger,
+      },
+    );
+
+  test("input that does not match the schema is refused before anything runs", async () => {
+    await expect(call("lookupOrder", { number: 5678 })).rejects.toMatchObject({ code: "tool_input_invalid" });
+  });
+
+  test("output that does not match the schema fails the call", async () => {
+    await expect(call("lookupOrder", { number: "5678" }, { state: "x" })).rejects.toMatchObject({
+      code: "tool_failed",
+    });
+  });
+
+  test("a tool that is not on the node, or not built yet, fails with a message the model can read", async () => {
+    await expect(call("deleteEverything", {})).rejects.toMatchObject({ code: "tool_failed" });
+    await expect(call("searchHelp", "x")).rejects.toMatchObject({ code: "tool_failed" });
+  });
+
+  test("the model: the node's, then the bot's default, as a registry id", () => {
+    const definition = { manifest: { settings: { models: { default: "anthropic:claude-sonnet-5-5" } } } } as never;
+    expect(resolveModel({ ...node, model: "openai:gpt-4.1-mini" } as never, definition, undefined)).toBe(
+      "gpt-4.1-mini",
+    );
+    expect(resolveModel(node as never, definition, "gpt-4.1")).toBe("claude-sonnet-5-5");
   });
 });

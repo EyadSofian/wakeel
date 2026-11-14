@@ -25,6 +25,7 @@ import {
 } from "../../emulator/controller";
 import { EmulatorPanel } from "../../emulator/EmulatorPanel";
 import { waitForSaved } from "../../emulator/run-from";
+import { InspectorWorkspace } from "../../inspector/autonomous/ModelSection";
 import { Inspector } from "../../inspector/Inspector";
 import { AppShell } from "../../shell/AppShell";
 import { ProblemBanner } from "../../shell/ProblemBanner";
@@ -92,7 +93,13 @@ function Frame({ workspaceId, botId, state }: { workspaceId: string; botId: stri
       botId={botId}
       actions={ready ? <TopBarStatus issues={issues} validated={result !== undefined} /> : null}
       panel={ready ? <NodeLibrary onAdd={(type) => addNode(type)} /> : null}
-      inspector={ready ? <SidePanel issues={issues} summary={summary} /> : null}
+      inspector={
+        ready ? (
+          <InspectorWorkspace.Provider value={workspaceId}>
+            <SidePanel issues={issues} summary={summary} />
+          </InspectorWorkspace.Provider>
+        ) : null
+      }
     >
       {state === "loading" ? (
         <CanvasSkeleton />

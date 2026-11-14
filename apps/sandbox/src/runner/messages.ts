@@ -6,6 +6,12 @@ import type { CallAnswer, GuestFetchRequest } from "../guest/index.ts";
 import type { ExecKind, ExecOutcome } from "../protocol.ts";
 
 /** What a caller asks the pool to run, limits already validated and defaulted. */
+/** A builder tool as the guest sees it: a function, or an object of table operations (ADR-032 §1). */
+export interface BuilderTool {
+  name: string;
+  operations?: string[];
+}
+
 export interface ExecJobInput {
   execId: string;
   kind: ExecKind;
@@ -18,6 +24,8 @@ export interface ExecJobInput {
   secretKeys?: string[];
   /** Tables the code may use as `tables.<name>` (ADR-023 §3). */
   tables?: string[];
+  /** `autonomy_run` only: the node's tools, as `tools.<name>` (ADR-032 §1). */
+  tools?: BuilderTool[];
   /** `ctx.idempotencyKey`; the exec id when absent (ADR-022). */
   idempotencyKey?: string;
   /** Sent to egress for the guest `fetch`. Stays on the pool's thread; never reaches a runner. */

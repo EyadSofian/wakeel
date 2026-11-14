@@ -51,9 +51,6 @@ export async function runExec(
   channel: HostChannel,
 ): Promise<RunReport> {
   const started = performance.now();
-  if (job.kind !== "code" && job.kind !== "expressions") {
-    return internal(`kind ${job.kind} has no guest layer yet`, false);
-  }
 
   const runtime = quickjs.newRuntime();
   const ctx = runtime.newContext();

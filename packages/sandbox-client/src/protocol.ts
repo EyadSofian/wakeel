@@ -24,6 +24,21 @@ export type ExecLimits = z.infer<typeof ExecLimits>;
 /** Table names as `tables.<name>` shows them: identifiers only. */
 const TableName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/);
 
+const Name = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/);
+
+/**
+ * A node's tool as the `autonomy_run` guest sees it (ADR-032 §1): `tools.<name>(input)`, or, with
+ * `operations`, `tools.<name>.<operation>(input)`. Calls arrive as `tool.<name>[.<operation>]`.
+ */
+export const BuilderTool = z.object({
+  name: Name,
+  operations: z
+    .array(z.enum(["find", "get", "insert", "update", "upsert", "delete"]))
+    .min(1)
+    .optional(),
+});
+export type BuilderTool = z.infer<typeof BuilderTool>;
+
 export const ExecRequestFrame = z.object({
   execId: z.string().min(1).max(200),
   kind: ExecKind,
@@ -31,8 +46,8 @@ export const ExecRequestFrame = z.object({
   source: z.string(),
   /** `workflow`, `conversation`, `user`, `bot`, `event`, `env`, `turn` (§5.2). */
   scopes: z.record(z.string(), z.unknown()).default({}),
-  /** Builder tools, for `autonomy_run` (Phase 6). Not exposed to `code` or `expressions` (ADR-023 §3). */
-  toolManifest: z.array(z.unknown()).default([]),
+  /** Builder tools, for `autonomy_run` (ADR-032 §1). Not exposed to `code` or `expressions` (ADR-023 §3). */
+  toolManifest: z.array(BuilderTool).max(40).default([]),
   limits: ExecLimits.default({
     timeoutMs: SANDBOX_LIMITS.defaultTimeoutMs,
     memoryMb: SANDBOX_LIMITS.defaultMemoryMb,
@@ -78,10 +93,17 @@ export const ToolCallName = z.enum([
 ]);
 export type ToolCallName = z.infer<typeof ToolCallName>;
 
+/** A call to one of the node's tools from an `autonomy_run` (ADR-032 §1). Never clashes with the names above. */
+export const BuilderCallName = z
+  .string()
+  .regex(/^tool\.[A-Za-z_][A-Za-z0-9_]{0,63}(\.[a-z]+)?$/)
+  .transform((s) => s as `tool.${string}`);
+export type BuilderCallName = z.infer<typeof BuilderCallName>;
+
 export const ToolCallFrame = z.object({
   t: z.literal("tool_call"),
   callId: z.string().min(1),
-  name: ToolCallName,
+  name: z.union([ToolCallName, BuilderCallName]),
   input: z.unknown(),
 });
 export type ToolCallFrame = z.infer<typeof ToolCallFrame>;
@@ -114,6 +136,8 @@ export const ScopePatches = z.strictObject({
   conversation: ScopePatch.optional(),
   user: ScopePatch.optional(),
   turn: ScopePatch.optional(),
+  /** `autonomy_run` only (ADR-032 §1). */
+  memo: ScopePatch.optional(),
 });
 export type ScopePatches = z.infer<typeof ScopePatches>;
 
