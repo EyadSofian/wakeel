@@ -422,14 +422,16 @@ export function visitWorkflowFields(wf: Workflow, visitor: WorkflowVisitor): voi
 /* Usages                                                              */
 /* ------------------------------------------------------------------ */
 
-/** What the Variables screen asks about. */
+/** What the Variables screen and the Workflows panel ask about. */
 export type ReferenceTarget =
   | { kind: "variable"; variableId: string }
   | { kind: "input"; workflowId: string; name: string }
-  | { kind: "output"; workflowId: string; name: string };
+  | { kind: "output"; workflowId: string; name: string }
+  /** Run workflow cards and workflow tools on autonomous nodes that call it (task 2.8). */
+  | { kind: "workflow"; workflowId: string };
 
 export interface ReferenceUsage extends FieldLocation {
-  /** How it is used: read by name in text, stored into by id, or a call/exit mapping key. */
+  /** How it is used: read by name in text, stored into or called by id, or a call/exit mapping key. */
   via: "name" | "id" | "mapping";
 }
 
@@ -468,6 +470,26 @@ export function findUsages(
       });
     }
   };
+
+  if (target.kind === "workflow") {
+    for (const wf of def.workflows) {
+      for (const node of wf.nodes) {
+        if (node.type === "standard") {
+          for (const card of node.cards) {
+            if (card.type === "call_workflow" && card.workflowId === target.workflowId)
+              out.push({ workflowId: wf.id, nodeId: node.id, cardId: card.id, field: "workflowId", via: "id" });
+          }
+        }
+        if (node.type === "autonomous") {
+          node.tools.forEach((tool, i) => {
+            if (tool.type === "workflow" && tool.workflowId === target.workflowId)
+              out.push({ workflowId: wf.id, nodeId: node.id, field: `tools[${i}].workflowId`, via: "id" });
+          });
+        }
+      }
+    }
+    return out;
+  }
 
   if (target.kind === "variable") {
     const found = findVariable(def, target.variableId);

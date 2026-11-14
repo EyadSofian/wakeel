@@ -1,4 +1,4 @@
-import type { Workflow } from "@wakeel/contracts";
+import { seedSubWorkflow, type Workflow } from "@wakeel/contracts";
 import { describe, expect, test } from "vitest";
 import { commands } from "./commands";
 import { createCard, createNode } from "./factories";
@@ -117,5 +117,43 @@ describe("canvas store", () => {
     expect((theirs?.doc as Workflow | undefined)?.name).toBe("Theirs");
     expect(isDirty(theirs as never)).toBe(false);
     expect(store.getState().undo()).toBe(false);
+  });
+
+  test("adding a workflow: clean when it is the server copy, dirty when it carries a duplicate", () => {
+    const { store } = loaded();
+    const seeded = seedSubWorkflow("Refunds");
+    store.getState().addWorkflow({ rev: 1, saved: seeded });
+    expect(isDirty(store.getState().workflows[seeded.id] as never)).toBe(false);
+    const other = seedSubWorkflow("Refunds copy");
+    const filled = { ...other, nodes: other.nodes.map((n) => ({ ...n, name: `${n.name} 2` })) };
+    store.getState().addWorkflow({ rev: 1, saved: other, doc: filled });
+    expect(isDirty(store.getState().workflows[other.id] as never)).toBe(true);
+    expect(store.getState().history[other.id]).toEqual({ past: [], future: [] });
+  });
+
+  test("removing the open workflow opens Main and clears the bot's error workflow pointer", () => {
+    const { store, main } = loaded();
+    const errors: Workflow = { ...seedSubWorkflow("Errors"), kind: "error" };
+    store.getState().addWorkflow({ rev: 1, saved: errors });
+    store.getState().updateManifest((m) => ({ ...m, errorWorkflowId: errors.id }));
+    store.getState().open(errors.id);
+    store.getState().removeWorkflow(errors.id);
+    const s = store.getState();
+    expect(s.workflows[errors.id]).toBeUndefined();
+    expect(s.history[errors.id]).toBeUndefined();
+    expect(s.activeWorkflowId).toBe(main.id);
+    expect(s.manifest?.doc.errorWorkflowId).toBeUndefined();
+  });
+
+  test("renaming a workflow is an undo step; an empty name is rejected", () => {
+    const { store, main } = loaded();
+    expect(store.getState().execute(commands.renameWorkflow("  الرئيسي  "))).toEqual({ ok: true });
+    expect(store.getState().workflows[main.id]?.doc.name).toBe("الرئيسي");
+    expect(store.getState().execute(commands.renameWorkflow(" "))).toEqual({
+      ok: false,
+      reason: "A workflow needs a name.",
+    });
+    store.getState().undo();
+    expect(store.getState().workflows[main.id]?.doc.name).toBe("Main");
   });
 });

@@ -47,6 +47,16 @@ export interface CanvasState {
     workflows: { rev: number; doc: Workflow }[];
   }): void;
   open(workflowId: string): void;
+  /**
+   * Adds a workflow the server just created (task 2.8). `doc` may differ from `saved` (a duplicate
+   * fills a freshly seeded document); autosave then sends the difference like any other edit.
+   */
+  addWorkflow(input: { rev: number; saved: Workflow; doc?: Workflow }): void;
+  /**
+   * Drops a workflow the server deleted, with its history. If it was open, Main opens. The bot's
+   * error workflow pointer is cleared when it was that one, so the manifest never names a ghost.
+   */
+  removeWorkflow(workflowId: string): void;
   /** Runs a command on a workflow (the open one by default). Rejections leave everything as it was. */
   execute(command: Command, workflowId?: string): { ok: true } | { ok: false; reason: string };
   undo(workflowId?: string): boolean;
@@ -153,6 +163,35 @@ export function createCanvasStore(): CanvasStore {
       open(workflowId) {
         if (!get().workflows[workflowId]) return;
         set({ activeWorkflowId: workflowId, selection: emptySelection() });
+      },
+
+      addWorkflow({ rev, saved, doc = saved }) {
+        const s = get();
+        set({
+          workflows: { ...s.workflows, [saved.id]: { ...docState("workflow", saved.id, rev, saved), doc } },
+          history: { ...s.history, [saved.id]: emptyHistory() },
+        });
+      },
+
+      removeWorkflow(workflowId) {
+        const s = get();
+        if (!s.workflows[workflowId]) return;
+        const { [workflowId]: _gone, ...workflows } = s.workflows;
+        const { [workflowId]: _past, ...history } = s.history;
+        const wasOpen = s.activeWorkflowId === workflowId;
+        const manifest =
+          s.manifest && s.manifest.doc.errorWorkflowId === workflowId
+            ? (() => {
+                const { errorWorkflowId: _e, ...doc } = s.manifest.doc;
+                return { ...s.manifest, doc };
+              })()
+            : s.manifest;
+        set({
+          workflows,
+          history,
+          ...(manifest ? { manifest } : {}),
+          ...(wasOpen ? { activeWorkflowId: s.manifest?.doc.mainWorkflowId, selection: emptySelection() } : {}),
+        });
       },
 
       execute(command, workflowId = get().activeWorkflowId) {

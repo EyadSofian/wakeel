@@ -110,7 +110,7 @@ export function Chip({
 /** A keyboard key, for shortcut hints in tooltips, menus and search fields. */
 export function Kbd({ children }: { children: ReactNode }) {
   return (
-    <kbd className="inline-flex h-tile-sm min-w-tile-sm items-center justify-center rounded-xs border border-hairline bg-subtle px-2 text-micro text-secondary">
+    <kbd className="inline-flex h-tile-sm min-w-tile-sm items-center justify-center rounded-xs border border-hairline bg-subtle px-2 font-sans text-micro text-secondary">
       {children}
     </kbd>
   );

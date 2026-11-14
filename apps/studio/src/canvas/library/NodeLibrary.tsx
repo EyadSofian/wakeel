@@ -2,6 +2,7 @@ import type { NodeType, Workflow } from "@wakeel/contracts";
 import { Chip, Count, IconTile } from "@wakeel/ui";
 import { ChevronDown, Search } from "lucide-react";
 import { type DragEvent, useId, useMemo, useState } from "react";
+import { WorkflowsPanel } from "../../shell/WorkflowsPanel";
 import { useCanvas } from "../context";
 import { NODE_CATEGORY, NODE_ICONS, NODE_TYPE_LABELS } from "../view/summaries";
 
@@ -60,7 +61,7 @@ export function NodeLibrary({ onAdd }: { onAdd: (type: NodeType) => void }) {
           </button>
         ))}
       </div>
-      {tab === "nodes" ? <Nodes onAdd={onAdd} /> : <Workflows />}
+      {tab === "nodes" ? <Nodes onAdd={onAdd} /> : <WorkflowsPanel />}
     </aside>
   );
 }
@@ -169,34 +170,5 @@ function Nodes({ onAdd }: { onAdd: (type: NodeType) => void }) {
         })
       )}
     </div>
-  );
-}
-
-function Workflows() {
-  const workflows = useCanvas((s) => s.workflows);
-  const active = useCanvas((s) => s.activeWorkflowId);
-  const open = useCanvas((s) => s.open);
-  const list = Object.values(workflows).map((w) => w.doc);
-  return (
-    <ul className="flex flex-col gap-1 p-5">
-      {list.map((wf) => (
-        <li key={wf.id}>
-          <button
-            type="button"
-            aria-current={wf.id === active ? "page" : undefined}
-            onClick={() => open(wf.id)}
-            className={[
-              "flex h-row w-full items-center gap-4 rounded-sm px-4 text-body transition-colors",
-              wf.id === active ? "bg-accent-subtle text-accent-text" : "text-primary hover:bg-subtle",
-            ].join(" ")}
-          >
-            <span dir="auto" className="min-w-0 flex-1 truncate text-start font-medium">
-              {wf.name}
-            </span>
-            <span className="text-small text-tertiary tabular-nums">{wf.nodes.length}</span>
-          </button>
-        </li>
-      ))}
-    </ul>
   );
 }

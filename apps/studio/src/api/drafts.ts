@@ -38,3 +38,15 @@ export function draftSaver(workspaceId: string, botId: string): SaveDoc {
     return { rev: saved.rev };
   };
 }
+
+/** A new sub-workflow, seeded by the server with an Entry wired to an Exit (task 2.8). */
+export async function createWorkflow(workspaceId: string, botId: string, name: string) {
+  const created = await api<DraftDocResponse>("POST", `/v1/workspaces/${workspaceId}/bots/${botId}/workflows`, {
+    name,
+  });
+  return { rev: created.rev, doc: created.doc as unknown as Workflow };
+}
+
+export async function deleteWorkflow(workspaceId: string, botId: string, workflowId: string): Promise<void> {
+  await api<unknown>("DELETE", `/v1/workspaces/${workspaceId}/bots/${botId}/workflows/${workflowId}`);
+}

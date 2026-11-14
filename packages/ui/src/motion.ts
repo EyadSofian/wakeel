@@ -52,6 +52,19 @@ export const stagger = {
  * nothing has arrived 300 ms after the turn starts. The one looping animation allowed (§2.6).
  */
 export const typing = { loop: 1.2, appearAfter: 0.3 } as const;
+/** Scale a thing starts from when it grows in (§5.1 node add, §5.15 command palette). */
+export const scale = {
+  /** Node add: 0.96 → 1. */
+  node: 0.96,
+  /** Command palette: 0.98 → 1. */
+  palette: 0.98,
+} as const;
+
+/**
+ * A panel that slides in from an edge of the screen travels its own size: the code drawer rises
+ * from below the canvas (§5.2). Everything else enters with `travel`.
+ */
+export const fromEdge = "100%" as const;
 
 /** Enter travels 4–8 px from where the thing came from; exit is a fade at 0.75× the enter time. */
 export const travel = { min: 4, max: 8 } as const;
