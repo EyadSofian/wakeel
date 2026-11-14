@@ -56,7 +56,7 @@ describe("parseHtml", () => {
 
 describe("parseText", () => {
   test("Markdown keeps its first heading as the title", () => {
-    const d = parseText("﻿# الأسئلة الشائعة\r\n\r\nنص", "text/markdown", "faq.md");
+    const d = parseText(`${String.fromCharCode(0xfeff)}# الأسئلة الشائعة\r\n\r\nنص`, "text/markdown", "faq.md");
     expect(d.title).toBe("الأسئلة الشائعة");
     expect(d.markdown).toBe("# الأسئلة الشائعة\n\nنص");
   });

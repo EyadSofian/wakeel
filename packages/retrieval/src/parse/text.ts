@@ -7,7 +7,7 @@ export function parseText(
   mime: "text/plain" | "text/markdown" | "text/csv",
   name: string,
 ): ParsedDocument {
-  const clean = body.replace(/^﻿/, "").replace(/\r\n?/g, "\n");
+  const clean = (body.charCodeAt(0) === 0xfeff ? body.slice(1) : body).replace(/\r\n?/g, "\n");
   const markdown = mime === "text/csv" ? csvToMarkdown(clean) : clean.trim();
   const heading = /^#\s+(.+)$/m.exec(markdown)?.[1]?.trim();
   const chars = [...markdown].filter((c) => /[\p{L}\p{N}]/u.test(c)).length;
