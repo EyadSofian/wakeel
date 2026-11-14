@@ -11,6 +11,7 @@ export * from "./event";
 export * from "./ids";
 export * from "./json-schema";
 export * from "./message";
+export * from "./models";
 export * from "./node";
 export * from "./platform";
 export * from "./references";

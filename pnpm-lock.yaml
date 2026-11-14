@@ -47,6 +47,9 @@ importers:
       '@wakeel/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@wakeel/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
       '@wakeel/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry

@@ -44,6 +44,8 @@ const permissions = [
   "bot.publish",
   "connection.read",
   "connection.manage",
+  "secret.read",
+  "secret.write",
 ];
 
 /** Connection ids the Connections screens open (task 5.5). */
@@ -201,7 +203,7 @@ function data(state: MockState) {
     slug: "engosoft",
     plan: "free",
     region: "default",
-    settings: {},
+    settings: state === "empty" ? {} : { defaultModel: "claude-sonnet-5-5", utilityModel: "claude-haiku-5-5" },
     createdAt: T0,
     updatedAt: T0,
     role: "owner",
@@ -416,6 +418,42 @@ export async function mockApi(
     }
     if (path.endsWith("/api-keys"))
       return json(route, 200, { data: state === "empty" ? [] : d.apiKeys, nextCursor: null });
+    // Settings → Models (task 6.2).
+    if (path === `/v1/workspaces/${WS}/model-keys`) {
+      const set = state !== "empty";
+      return json(route, 200, {
+        data: [
+          { provider: "anthropic", set, last4: set ? "Q2xk" : null, baseUrl: null, updatedAt: set ? T0 : null },
+          { provider: "openai", set: false, last4: null, baseUrl: null, updatedAt: null },
+          { provider: "google", set: false, last4: null, baseUrl: null, updatedAt: null },
+          {
+            provider: "openai-compatible",
+            set,
+            last4: set ? "9fZa" : null,
+            baseUrl: set ? "https://llm.engosoft.com/v1/openai-compatible/with/a/long/path" : null,
+            updatedAt: set ? "2026-11-10T08:00:00.000Z" : null,
+          },
+        ],
+        nextCursor: null,
+      });
+    }
+    if (path === `/v1/workspaces/${WS}/models`) {
+      const keySet = state !== "empty";
+      const model = (id: string, input: number, output: number) => ({
+        id,
+        provider: "anthropic",
+        kind: "chat",
+        contextWindow: 1_000_000,
+        capabilities: { vision: true, caching: true, structuredOutput: true },
+        autonomy: "untested",
+        prices: { inputPerMTok: input, outputPerMTok: output },
+        keySet,
+      });
+      return json(route, 200, {
+        data: [model("claude-opus-5-5", 4, 20), model("claude-sonnet-5-5", 2, 10), model("claude-haiku-5-5", 0.1, 0.5)],
+        nextCursor: null,
+      });
+    }
     // Connections (task 5.5).
     const connBase = `${botBase}/connections`;
     if (path.startsWith(connBase)) {

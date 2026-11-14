@@ -58,10 +58,14 @@ if (config) {
   const subscriber = new Redis(redisUrl);
   const turnQueue = new Queue("turn", { connection: { url: redisUrl, maxRetriesPerRequest: null } });
   const webhookQueue = new Queue("webhook", { connection: { url: redisUrl, maxRetriesPerRequest: null } });
+  const keyring = {
+    current: { version: config.masterKeyVersion, key: config.masterKey.reveal() },
+    previous: config.previousMasterKeys.reveal(),
+  };
   const app = buildApp({
     role: config.role,
     logger,
-    studio: { auth, studioOrigin: config.studioOrigin, db },
+    studio: { auth, studioOrigin: config.studioOrigin, db, keyring },
     bridge: {
       db,
       signals: new Signals(subscriber),
@@ -80,10 +84,7 @@ if (config) {
         );
       },
       sender: egressSender({ egressUrl: config.egressUrl, egressToken: config.egressToken.reveal() }),
-      keyring: {
-        current: { version: config.masterKeyVersion, key: config.masterKey.reveal() },
-        previous: config.previousMasterKeys.reveal(),
-      },
+      keyring,
     },
     readiness: {
       database: async () => void (await db.verify()),

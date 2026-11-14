@@ -194,7 +194,12 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
     await page.getByRole("button", { name: /^conversation\.topic: / }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
   }
-  if (state === "edit") {
+  if (screen.id === "settings-models" && state === "edit") {
+    await page.getByRole("button", { name: "Add the OpenAI key" }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.getByRole("dialog").getByLabel("API key").fill("sk-not-a-real-key-000000");
+  }
+  if (state === "edit" && screen.id !== "settings-models") {
     await page.getByRole("button", { name: "Edit user.plan" }).click();
     await page.getByRole("dialog").getByLabel("Name").fill("tier");
     await expect(page.getByRole("dialog")).toContainText("will change to user.tier");
