@@ -45,7 +45,8 @@ export interface BridgeDeps {
 }
 
 const PREFIX = "/v1/bridge";
-const ExternalId = z
+/** A caller's conversation id in a path (OpenAPI pattern). */
+export const ExternalId = z
   .string()
   .min(1)
   .max(255)
@@ -73,28 +74,7 @@ export async function bridgeRoutes(app: FastifyInstance, deps: BridgeDeps): Prom
 
   app.post(`${PREFIX}/conversations/:externalConversationId/messages`, async (request, reply) => {
     const ctx = await auth(request);
-    const body = SendMessageRequest.parse(request.body);
-    if (body.message.type === "text" && bytes(body.message.text) > LIMITS.inboundTextBytes)
-      throw new AppError("payload_too_large", { limit: "16 KB of message text" });
-    if (body.metadata && bytes(body.metadata) > API_LIMITS.metadataBytes)
-      throw new AppError("payload_too_large", { limit: "8 KB of metadata" });
-    return inbound(deps, ctx, request, reply, {
-      operation: "sendMessage",
-      body,
-      userId: body.userId,
-      user: body.user,
-      kind: "message",
-      payload: {
-        message: body.message as unknown as Json,
-        ...(body.metadata ? { metadata: body.metadata } : {}),
-        ...(body.externalMessageId ? { externalMessageId: body.externalMessageId } : {}),
-      },
-      message: {
-        payload: body.message as unknown as Record<string, Json>,
-        type: body.message.type,
-        externalId: body.externalMessageId,
-      },
-    });
+    return inbound(deps, ctx, request, reply, sendMessageInput(SendMessageRequest.parse(request.body)));
   });
 
   app.post(`${PREFIX}/conversations/:externalConversationId/events`, async (request, reply) => {
@@ -147,18 +127,7 @@ export async function bridgeRoutes(app: FastifyInstance, deps: BridgeDeps): Prom
       .min(1)
       .max(255)
       .parse((request.params as { externalUserId: string }).externalUserId);
-    const data = UserData.parse(request.body);
-    if (data.attributes && bytes(data.attributes) > LIMITS.userAttributesBytes)
-      throw new AppError("payload_too_large", { limit: "16 KB of attributes" });
-    const user = await deps.db.withWorkspace(ctx.workspaceId, (tx) =>
-      upsertEndUser(tx, {
-        connectionId: ctx.connection.id,
-        botId: ctx.connection.botId,
-        externalId,
-        patch: userPatch(data),
-      }),
-    );
-    return userView(user);
+    return updateUser(deps, ctx, externalId, UserData.parse(request.body));
   });
 
   app.get(`${PREFIX}/turns/:turnId`, async (request) => {
@@ -171,12 +140,54 @@ export async function bridgeRoutes(app: FastifyInstance, deps: BridgeDeps): Prom
   });
 }
 
-interface InboundInput {
-  operation: "sendMessage" | "sendEvent";
+/** The inbound input for a `sendMessage` body, after its size limits (also used by the emulator). */
+export function sendMessageInput(body: SendMessageRequest): InboundInput {
+  if (body.message.type === "text" && bytes(body.message.text) > LIMITS.inboundTextBytes)
+    throw new AppError("payload_too_large", { limit: "16 KB of message text" });
+  if (body.metadata && bytes(body.metadata) > API_LIMITS.metadataBytes)
+    throw new AppError("payload_too_large", { limit: "8 KB of metadata" });
+  return {
+    operation: "sendMessage",
+    body,
+    userId: body.userId,
+    user: body.user,
+    kind: "message",
+    payload: {
+      message: body.message as unknown as Json,
+      ...(body.metadata ? { metadata: body.metadata } : {}),
+      ...(body.externalMessageId ? { externalMessageId: body.externalMessageId } : {}),
+    },
+    message: {
+      payload: body.message as unknown as Record<string, Json>,
+      type: body.message.type,
+      externalId: body.externalMessageId,
+    },
+  };
+}
+
+/** `updateUser` for a connection: merge the data into the end user, creating it on first use. */
+export async function updateUser(deps: Pick<BridgeDeps, "db">, ctx: BridgeContext, externalId: string, data: UserData) {
+  if (data.attributes && bytes(data.attributes) > LIMITS.userAttributesBytes)
+    throw new AppError("payload_too_large", { limit: "16 KB of attributes" });
+  const user = await deps.db.withWorkspace(ctx.workspaceId, (tx) =>
+    upsertEndUser(tx, {
+      connectionId: ctx.connection.id,
+      botId: ctx.connection.botId,
+      externalId,
+      patch: userPatch(data),
+    }),
+  );
+  return userView(user);
+}
+
+export interface InboundInput {
+  /** Part of the idempotency fingerprint, so one key cannot be reused across operations. */
+  operation: "sendMessage" | "sendEvent" | "runFrom";
   body: unknown;
   userId: string | undefined;
   user: UserData | undefined;
-  kind: "message" | "event";
+  /** `run_from` comes only from the Studio emulator routes (ADR-025). */
+  kind: "message" | "event" | "run_from";
   payload: Record<string, Json>;
   message?: { payload: Record<string, Json>; type: string; externalId: string | undefined };
 }
@@ -186,7 +197,7 @@ interface InboundInput {
  * external ids, refuse or replay a repeated `Idempotency-Key` (or `externalMessageId`), append the inbox event (and the user
  * message), then enqueue the turn and answer `202`, wait for the turn, or stream it.
  */
-async function inbound(
+export async function inbound(
   deps: BridgeDeps,
   ctx: BridgeContext,
   request: FastifyRequest,

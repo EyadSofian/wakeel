@@ -14,22 +14,14 @@ import {
   TurnResult,
 } from "@wakeel/contracts";
 import {
-  acquireConversationLease,
-  appendOutbox,
   createBot,
   createBridgeConnection,
   createDatabase,
   createWorkspace,
   type Database,
-  finishTurn,
-  getConversation,
   insertApiKey,
-  insertBotMessages,
-  nextUnprocessedEvent,
-  releaseConversationLease,
   revokeApiKey,
   sql,
-  startTurn,
 } from "@wakeel/db";
 import { type StartedTestDatabase, startTestDatabase, superuserQuery } from "@wakeel/db/testing";
 import { createLogger } from "@wakeel/telemetry";
@@ -41,6 +33,7 @@ import type { z } from "zod";
 import { type App, buildApp } from "../src/app";
 import { Signals } from "../src/routes/bridge/signals";
 import { REDIS_IMAGE } from "./stack";
+import { standInWorker } from "./stand-in-worker";
 
 /**
  * Task 4.5 🔒: the Bridge API, inbound half, on real Postgres and Redis. Acceptance (build plan):
@@ -63,6 +56,8 @@ const jobs: string[] = [];
 /** When true, an enqueued conversation is processed by the stand-in worker at once. */
 let autoWork = false;
 let sleeps: number[] = [];
+/** One turn for each unprocessed event, the way apps/worker commits it (stand-in-worker.ts). */
+let work: (conversationId: string) => Promise<void>;
 
 const BUILT = ["sendMessage", "sendEvent", "updateUser", "getConversation", "listMessages", "getTurn"] as const;
 
@@ -71,6 +66,7 @@ beforeAll(async () => {
   db = createDatabase({ url: pg.urls.rw, maxConnections: 8 });
   publisher = new Redis(redisContainer.getConnectionUrl());
   subscriber = new Redis(redisContainer.getConnectionUrl());
+  work = standInWorker(db, publisher);
   app = buildApp({
     role: "bridge",
     logger: createLogger({ service: "api", level: (process.env["TEST_LOG"] as "error" | undefined) ?? "silent" }),
@@ -103,67 +99,6 @@ beforeEach(() => {
   jobs.length = 0;
   sleeps = [];
 });
-
-/** One turn for the oldest unprocessed event, the way apps/worker commits it: reply "رد: <text>". */
-async function work(conversationId: string): Promise<void> {
-  const ws = await db.lookup.conversationWorkspace(conversationId);
-  if (!ws) return;
-  const epoch = await db.withWorkspace(ws, (tx) => acquireConversationLease(tx, conversationId, "stand-in", 30_000));
-  if (epoch === undefined) return;
-  for (;;) {
-    const done = await db.withWorkspace(ws, async (tx) => {
-      const ev = await nextUnprocessedEvent(tx, conversationId);
-      if (!ev) return undefined;
-      const conv = await getConversation(tx, conversationId);
-      const turn = await startTurn(tx, {
-        conversationId,
-        botId: conv.botId,
-        versionId: null,
-        epoch,
-        eventIds: [ev.id],
-        id: ev.payload["turnId"] as string,
-      });
-      const message = ev.payload["message"] as { text?: string } | undefined;
-      const reply = { type: "text", text: `رد: ${message?.text ?? ev.payload["name"]}`, format: "markdown" };
-      const [stored] = await insertBotMessages(tx, conversationId, [
-        { id: newId("msg"), type: "text", payload: reply, turnId: turn.id },
-      ]);
-      if (!stored) throw new Error("no message stored");
-      const at = { conversationId, connectionId: ev.connectionId, epoch };
-      await appendOutbox(tx, at, [
-        { type: "typing", payload: { turnId: turn.id, data: { state: "on" } }, ephemeral: true },
-        {
-          type: "message.created",
-          payload: {
-            turnId: turn.id,
-            data: {
-              message: {
-                id: stored.id,
-                conversationId,
-                seq: stored.seq,
-                direction: "out",
-                payload: reply,
-                citations: [],
-                turnId: turn.id,
-                createdAt: stored.createdAt.toISOString(),
-              },
-            },
-          },
-        },
-        {
-          type: "turn.completed",
-          payload: { turnId: turn.id, data: { status: "completed", messageCount: 1, durationMs: 5 } },
-        },
-      ]);
-      await finishTurn(tx, { turnId: turn.id, status: "completed", stepCount: 1 });
-      return ev.seq;
-    });
-    if (done === undefined) break;
-    await publisher.publish(`conversation-events:${conversationId}`, "");
-    await publisher.publish(`turn-done:${conversationId}:${done}`, "{}");
-  }
-  await db.withWorkspace(ws, (tx) => releaseConversationLease(tx, conversationId, epoch));
-}
 
 /** A workspace with a bot and two connections, each with its own bridge key. */
 async function tenant() {

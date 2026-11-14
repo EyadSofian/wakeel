@@ -1,0 +1,84 @@
+import { newId } from "@wakeel/contracts";
+import {
+  acquireConversationLease,
+  appendOutbox,
+  type Database,
+  finishTurn,
+  getConversation,
+  insertBotMessages,
+  nextUnprocessedEvent,
+  releaseConversationLease,
+  startTurn,
+} from "@wakeel/db";
+import type { Redis } from "ioredis";
+
+/**
+ * A stand-in for apps/worker (apps never import each other, CLAUDE.md §4), built from the same
+ * repository calls the real worker makes. Each turn answers "رد: <text>" (or the event's name, or
+ * the node of a run_from), with typing, message.created and turn.completed, then signals.
+ */
+export function standInWorker(db: Database, publisher: Redis) {
+  return async function work(conversationId: string): Promise<void> {
+    const ws = await db.lookup.conversationWorkspace(conversationId);
+    if (!ws) return;
+    const epoch = await db.withWorkspace(ws, (tx) => acquireConversationLease(tx, conversationId, "stand-in", 30_000));
+    if (epoch === undefined) return;
+    for (;;) {
+      const done = await db.withWorkspace(ws, async (tx) => {
+        const ev = await nextUnprocessedEvent(tx, conversationId);
+        if (!ev) return undefined;
+        const conv = await getConversation(tx, conversationId);
+        const turn = await startTurn(tx, {
+          conversationId,
+          botId: conv.botId,
+          versionId: null,
+          epoch,
+          eventIds: [ev.id],
+          id: ev.payload["turnId"] as string,
+        });
+        const message = ev.payload["message"] as { text?: string } | undefined;
+        const reply = {
+          type: "text",
+          text: `رد: ${message?.text ?? ev.payload["name"] ?? ev.payload["nodeId"]}`,
+          format: "markdown",
+        };
+        const [stored] = await insertBotMessages(tx, conversationId, [
+          { id: newId("msg"), type: "text", payload: reply, turnId: turn.id },
+        ]);
+        if (!stored) throw new Error("no message stored");
+        const at = { conversationId, connectionId: ev.connectionId, epoch };
+        await appendOutbox(tx, at, [
+          { type: "typing", payload: { turnId: turn.id, data: { state: "on" } }, ephemeral: true },
+          {
+            type: "message.created",
+            payload: {
+              turnId: turn.id,
+              data: {
+                message: {
+                  id: stored.id,
+                  conversationId,
+                  seq: stored.seq,
+                  direction: "out",
+                  payload: reply,
+                  citations: [],
+                  turnId: turn.id,
+                  createdAt: stored.createdAt.toISOString(),
+                },
+              },
+            },
+          },
+          {
+            type: "turn.completed",
+            payload: { turnId: turn.id, data: { status: "completed", messageCount: 1, durationMs: 5 } },
+          },
+        ]);
+        await finishTurn(tx, { turnId: turn.id, status: "completed", stepCount: 1 });
+        return ev.seq;
+      });
+      if (done === undefined) break;
+      await publisher.publish(`conversation-events:${conversationId}`, "");
+      await publisher.publish(`turn-done:${conversationId}:${done}`, "{}");
+    }
+    await db.withWorkspace(ws, (tx) => releaseConversationLease(tx, conversationId, epoch));
+  };
+}

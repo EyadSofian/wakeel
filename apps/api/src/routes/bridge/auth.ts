@@ -11,7 +11,8 @@ import type { FastifyRequest } from "fastify";
 
 export interface BridgeContext {
   workspaceId: string;
-  keyId: string;
+  /** The bridge key used; absent for the Studio emulator, which uses the builder's session (ADR-025). */
+  keyId?: string;
   connection: ConnectionRecord;
 }
 

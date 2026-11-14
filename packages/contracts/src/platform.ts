@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { Json } from "./common";
+import { Json, NodeId, VariableId, WorkflowId } from "./common";
+import { UserData } from "./event";
+import { VariableScope, VariableType } from "./variable";
 
 /**
  * Platform shapes (architecture §2.3, ADR-015): workspace roles, key kinds and the JSON columns of
@@ -243,3 +245,42 @@ export const DraftDocResponse = z.object({
   doc: z.record(z.string(), z.unknown()),
 });
 export type DraftDocResponse = z.infer<typeof DraftDocResponse>;
+
+/* ------------------------------------------------------------------ */
+/* Emulator (task 4.6, ADR-025)                                        */
+/* ------------------------------------------------------------------ */
+
+/** `POST …/emulator/conversations/{externalId}/run-from`: start a new emulator run at a node. */
+export const RunFromRequest = z.strictObject({
+  userId: z.string().min(1).max(255),
+  user: UserData.optional(),
+  workflowId: WorkflowId,
+  nodeId: NodeId,
+});
+export type RunFromRequest = z.infer<typeof RunFromRequest>;
+
+/** One variable in the emulator's Variables tab. Sensitive values are never sent (`variable.ts`). */
+export const EmulatorVariable = z.object({
+  id: VariableId,
+  name: z.string(),
+  scope: VariableScope,
+  type: VariableType,
+  /** The current value, or the declared default when none is set; null when sensitive or unset. */
+  value: Json.nullable(),
+  sensitive: z.boolean(),
+  /** For workflow scope: the workflow of the frame on top of the stack. */
+  workflowId: WorkflowId.optional(),
+});
+export type EmulatorVariable = z.infer<typeof EmulatorVariable>;
+
+/** `GET …/emulator/conversations/{externalId}/state`: the Variables tab and its size meter. */
+export const EmulatorStateResponse = z.object({
+  conversationId: z.string(),
+  status: z.enum(["idle", "waiting_input", "waiting_external", "handed_off", "ended"]),
+  variables: z.array(EmulatorVariable),
+  /** `user.attributes`: data pushed by the bridge, here the emulator's user-data form. */
+  attributes: z.record(z.string(), Json),
+  stateBytes: z.number().int().nonnegative(),
+  limitBytes: z.number().int().positive(),
+});
+export type EmulatorStateResponse = z.infer<typeof EmulatorStateResponse>;
