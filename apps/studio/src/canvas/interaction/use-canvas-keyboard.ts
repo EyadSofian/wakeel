@@ -2,6 +2,7 @@ import { NON_TARGETABLE_NODE_TYPES, type Workflow } from "@wakeel/contracts";
 import { useMotionTokens } from "@wakeel/ui";
 import { useReactFlow } from "@xyflow/react";
 import { type RefObject, useEffect } from "react";
+import { useRunFrom } from "../../emulator/run-from";
 import { useCanvasStore } from "../context";
 import { type Command, commands } from "../store/commands";
 import type { CanvasRFNode } from "../view/CanvasNode";
@@ -25,6 +26,7 @@ export const HANDLED = new Set([
   "undo",
   "redo",
   "sheet",
+  "run-from",
   "add-node",
   "next-node",
   "nearest",
@@ -79,6 +81,7 @@ export function useCanvasKeyboard({
 }) {
   const store = useCanvasStore();
   const ui = useUiStore();
+  const runFrom = useRunFrom();
   const flow = useReactFlow<CanvasRFNode>();
   // §5.1: keyboard zoom animates in duration.base, fit and jump in duration.slower; xyflow takes ms.
   const tokens = useMotionTokens();
@@ -222,6 +225,13 @@ export function useCanvasKeyboard({
         } else if (key === "1") {
           handled();
           void flow.zoomTo(1, { duration: zoomMs });
+        } else if (key === "enter" && one) {
+          // Run from here (§5.1 shortcut table): the emulator opens on a new conversation at this node.
+          handled();
+          if (runFrom) {
+            runFrom(one.id);
+            announce(`Running from ${one.name}`);
+          }
         }
         return;
       }
@@ -419,5 +429,5 @@ export function useCanvasKeyboard({
       document.removeEventListener("copy", onCopy);
       document.removeEventListener("paste", onPaste);
     };
-  }, [store, ui, flow, region, pointer, run, announce, setMinimap, setMode, zoomMs, jumpMs]);
+  }, [store, ui, flow, region, pointer, run, announce, setMinimap, setMode, zoomMs, jumpMs, runFrom]);
 }

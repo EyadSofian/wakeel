@@ -7,6 +7,7 @@ import { NODE_ENTRIES } from "../library/NodeLibrary";
 import { commands } from "../store/commands";
 import { createMenuCard, type MenuCardType } from "../store/factories";
 import { CARD_CATEGORY, CARD_ICONS, CARD_NAMES, NODE_CATEGORY, NODE_ICONS, NODE_TYPE_LABELS } from "../view/summaries";
+import { NodeActionsMenu } from "./NodeActionsMenu";
 import { type PickerItem, PickerMenu } from "./PickerMenu";
 import { useUi, useUiStore } from "./ui-store";
 
@@ -36,6 +37,7 @@ export function CanvasMenus() {
   const close = useCallback(() => ui.getState().set({ menu: undefined }), [ui]);
   if (connecting) return <ConnectHint />;
   if (!menu) return null;
+  if (menu.kind === "actions") return <NodeActionsMenu nodeId={menu.nodeId} at={menu.at} onClose={close} />;
   return menu.kind === "node" ? (
     <NodeMenu at={menu.at} from={menu.from} onClose={close} />
   ) : (

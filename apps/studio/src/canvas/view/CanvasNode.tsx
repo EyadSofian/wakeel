@@ -1,7 +1,7 @@
 import { type Card, type Node as DefNode, NON_TARGETABLE_NODE_TYPES } from "@wakeel/contracts";
 import { CATEGORY_CLASSES, type Category, IconTile, useMotionTokens } from "@wakeel/ui";
 import { Handle, type NodeProps, Position, type Node as RFNode, useStore, useUpdateNodeInternals } from "@xyflow/react";
-import { CircleAlert, GripVertical, Plus, TriangleAlert } from "lucide-react";
+import { CircleAlert, Ellipsis, GripVertical, Plus, TriangleAlert } from "lucide-react";
 import { type HTMLMotionProps, motion, Reorder } from "motion/react";
 import { type HTMLAttributes, memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useCanvas, useCanvasStore } from "../context";
@@ -355,6 +355,7 @@ function CanvasNodeView({ id, data, selected }: NodeProps<CanvasRFNode>) {
   const compact = useStore((s) => s.transform[2] < COMPACT_BELOW);
   const fresh = useUi((s) => s.fresh.has(id));
   const target = useUi((s) => s.dropTarget === id || s.connecting?.target === id);
+  const ui = useUiStore();
   const rowState = useRowState(id);
   const updateInternals = useUpdateNodeInternals();
   const Icon = NODE_ICONS[node.type];
@@ -408,6 +409,22 @@ function CanvasNodeView({ id, data, selected }: NodeProps<CanvasRFNode>) {
         {compact && node.type === "standard" ? (
           <span className="text-small text-secondary tabular-nums">{cardCount}</span>
         ) : null}
+        {compact ? null : (
+          <button
+            type="button"
+            aria-label={`Actions for ${node.name}`}
+            aria-haspopup="menu"
+            title="Node actions"
+            onClick={(e) => {
+              e.stopPropagation();
+              const r = e.currentTarget.getBoundingClientRect();
+              ui.getState().set({ menu: { kind: "actions", nodeId: node.id, at: { x: r.left, y: r.bottom + 4 } } });
+            }}
+            className="nodrag flex size-control-sm shrink-0 items-center justify-center rounded-sm text-tertiary hover:bg-subtle hover:text-primary"
+          >
+            <Ellipsis className="size-icon" strokeWidth={1.75} aria-hidden="true" />
+          </button>
+        )}
       </header>
       {compact ? (
         // Compact form keeps every output so transitions still have somewhere to attach.

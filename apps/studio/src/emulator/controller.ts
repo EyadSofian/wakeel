@@ -68,6 +68,8 @@ export function createEmulatorStore(options: {
   base: string;
   transport: EmulatorTransport;
   newConversationId?: () => string;
+  /** Awaited before each turn: the canvas waits for autosave, so the turn runs the latest draft. */
+  beforeTurn?: () => Promise<void>;
 }): EmulatorStore {
   const { base, transport } = options;
   const nextId = options.newConversationId ?? newId;
@@ -85,6 +87,7 @@ export function createEmulatorStore(options: {
     async function turn(path: string, body: unknown): Promise<void> {
       const conversation = get().conversation;
       set((s) => ({ transcript: startTurn(s.transcript), started: true }));
+      await options.beforeTurn?.();
       // Events of a conversation that was reset meanwhile are dropped.
       const apply = (e: BridgeEvent) => {
         if (get().conversation === conversation) set((s) => ({ transcript: applyEvent(s.transcript, e) }));
