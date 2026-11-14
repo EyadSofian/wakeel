@@ -86,12 +86,19 @@ export function runOverlay(spans: readonly Span[], workflows: Readonly<Record<st
   }
   const edgeBetween = (wf: Workflow | undefined, from: string, to: string) =>
     wf?.edges.find((e) => e.from.nodeId === from && e.to.nodeId === to)?.id;
+  // The turn came in through Start only if it began the first node at its first card; a turn that
+  // picked up a wait inside the node started part way through and did not cross that transition.
   const first = visits[0];
   if (first) {
     const wf = workflows[first.workflowId];
+    const node = wf?.nodes.find((n) => n.id === first.nodeId);
+    const firstCard = node?.type === "standard" ? node.cards[0]?.id : undefined;
+    const ranFirst = [...spans]
+      .sort((a, b) => a.seq - b.seq)
+      .find((s) => s.kind === "card" && s.location.nodeId === first.nodeId)?.location.cardId;
     const start = wf?.nodes.find((n) => n.type === "start");
     const id = start ? edgeBetween(wf, start.id, first.nodeId) : undefined;
-    if (id) edges.add(id);
+    if (id && (firstCard === undefined || ranFirst === firstCard)) edges.add(id);
   }
   for (let i = 1; i < visits.length; i++) {
     const a = visits[i - 1];

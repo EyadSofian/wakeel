@@ -95,16 +95,20 @@ function TraceList() {
   const tokens = useMotionTokens();
   const now = useNow(running);
 
-  if (!traceTurn) return <p className="py-3 text-small text-secondary">Each turn's steps appear here as they run.</p>;
-  if (!spans) return <p className="py-3 text-small text-secondary">Loading the trace…</p>;
-  if (spans.length === 0)
-    return <p className="py-3 text-small text-secondary">This turn's trace could not be loaded.</p>;
-
-  const turn = spans.find((s) => s.kind === "turn");
+  // The list stays mounted while it is empty, so the first live steps enter like the rest (§5.3).
+  const notice = !traceTurn
+    ? "Each turn's steps appear here as they run."
+    : !spans
+      ? "Loading the trace…"
+      : spans.length === 0 && !running
+        ? "This turn's trace could not be loaded."
+        : undefined;
+  const list = spans ?? [];
+  const turn = list.find((s) => s.kind === "turn");
   const open = (s: Span) => running && s.durationMs === 0 && (s.kind === "turn" || s.kind === "node");
   const shown = (s: Span) => (open(s) ? Math.max(0, now - new Date(s.startedAt).getTime()) : s.durationMs);
-  const total = Math.max(1, turn ? shown(turn) : Math.max(...spans.map(shown)));
-  const step = spans.find((s) => s.id === selected);
+  const total = Math.max(1, turn ? shown(turn) : Math.max(0, ...list.map(shown)));
+  const step = list.find((s) => s.id === selected);
 
   const pick = (s: Span) => {
     selectStep(s.id);
@@ -128,9 +132,10 @@ function TraceList() {
 
   return (
     <div className="flex flex-col gap-4">
+      {notice ? <p className="py-3 text-small text-secondary">{notice}</p> : null}
       <ol aria-label="Steps" className="flex flex-col">
         <AnimatePresence initial={false}>
-          {stepRows(spans).map(({ span, depth }) => {
+          {stepRows(list).map(({ span, depth }) => {
             const Icon = iconOf(span);
             const ms = shown(span);
             const isOpen = open(span);
@@ -174,7 +179,9 @@ function TraceList() {
                         />
                       </span>
                     )}
-                    <span className="w-tile text-end tabular-nums text-secondary">{formatDuration(ms)}</span>
+                    <span className="min-w-tile-lg whitespace-nowrap text-end tabular-nums text-secondary">
+                      {formatDuration(ms)}
+                    </span>
                   </span>
                 </button>
               </motion.li>

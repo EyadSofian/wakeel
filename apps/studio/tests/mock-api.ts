@@ -11,7 +11,7 @@ import type {
 } from "@wakeel/contracts";
 import { SCREENSHOT_FIXTURES } from "@wakeel/testing/fixtures/rtl";
 import { BOT, type CanvasFixture, canvasDraft, variablesDraft } from "./canvas-fixtures";
-import { type EmulatorScenario, emulatorState, sseBody, turnEvents } from "./emulator-fixtures";
+import { type EmulatorScenario, emulatorState, sseBody, turnEvents, turnSpans } from "./emulator-fixtures";
 
 /**
  * The mock API layer for the screenshot review (design system §8.1): every `/v1` call is answered
@@ -242,7 +242,7 @@ export async function mockApi(
       if (method === "POST") {
         if (emulator === "running") return; // left pending: the turn is still running
         const sent = JSON.parse(route.request().postData() ?? "{}")?.message?.text ?? "";
-        const body = sseBody(turnEvents(emulator, turns, sent));
+        const body = sseBody(turnEvents(emulator, turns, sent), turnSpans(emulator, turns));
         turns += 1;
         return route.fulfill({ status: 200, contentType: "text/event-stream", body });
       }

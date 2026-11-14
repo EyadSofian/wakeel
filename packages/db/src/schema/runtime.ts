@@ -149,5 +149,4 @@ export const runtimeTables = {
   turns,
   messages,
   outboxEvents,
-  traceSpans,
 } as const;

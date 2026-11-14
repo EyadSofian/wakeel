@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { emptyState, newId, Span } from "@wakeel/contracts";
+import { getTableColumns } from "drizzle-orm";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import {
@@ -11,6 +12,7 @@ import {
   sql,
   upsertSpans,
 } from "../src/index";
+import { traceSpans } from "../src/schema/runtime";
 
 /** Task 4.7 (ADR-009, ADR-026, migration 0008): trace spans, partitioned by month, under RLS. */
 const urls = inject("db");
@@ -134,6 +136,17 @@ describe("upsertSpans and listTurnSpans", () => {
     await su.query("delete from conversations where id = $1", [ids.conv]);
     const { rows } = await su.query("select count(*)::int as n from trace_spans where turn_id = $1", [ids.turn]);
     expect(rows[0]).toEqual({ n: 0 });
+  });
+});
+
+describe("the Drizzle mirror", () => {
+  test("names every column of trace_spans with the same nullability", async () => {
+    const { rows } = await su.query<{ column_name: string; is_nullable: "YES" | "NO" }>(
+      "select column_name, is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'trace_spans'",
+    );
+    const inDb = Object.fromEntries(rows.map((c) => [c.column_name, c.is_nullable === "NO"]));
+    const mirrored = Object.fromEntries(Object.values(getTableColumns(traceSpans)).map((c) => [c.name, c.notNull]));
+    expect(mirrored).toEqual(inDb);
   });
 });
 

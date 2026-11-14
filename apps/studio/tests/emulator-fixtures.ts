@@ -1,4 +1,10 @@
-import { API_VERSION, type BotMessagePayload, type BridgeEvent, type EmulatorStateResponse } from "@wakeel/contracts";
+import {
+  API_VERSION,
+  type BotMessagePayload,
+  type BridgeEvent,
+  type EmulatorStateResponse,
+  type Span,
+} from "@wakeel/contracts";
 import { SCREENSHOT_FIXTURES } from "@wakeel/testing/fixtures/rtl";
 
 /**
@@ -8,7 +14,9 @@ import { SCREENSHOT_FIXTURES } from "@wakeel/testing/fixtures/rtl";
 export type EmulatorScenario = "conversation" | "bubbles" | "error" | "rtl" | "running";
 
 const CONV = "conv_01m7a256m0a13warwhczsjhx9v";
-const TURN = "turn_01m7a256m0a13warwhczsjhx9t";
+/** One turn id per turn of a scenario, so each turn has its own trace. */
+const TURNS = ["turn_01m7a256m0a13warwhczsjhx9t", "turn_01m7a256m0a13warwhczsjhx9s", "turn_01m7a256m0a13warwhczsjhx9r"];
+let TURN = TURNS[0] as string;
 const T = "2026-11-14T10:00:00.000Z";
 /** Served by the mock API (mock-api.ts) so the image bubble has something to show offline. */
 export const MOCK_IMAGE_URL = "http://127.0.0.1:5173/v1/__mock/product.svg";
@@ -61,6 +69,7 @@ const text = (t: string): BotMessagePayload => ({ type: "text", text: t, format:
 
 /** The bot's answer to the `n`-th message the builder sends in a scenario (0-based). */
 export function turnEvents(scenario: EmulatorScenario, n: number, sent: string): BridgeEvent[] {
+  TURN = TURNS[n % TURNS.length] as string;
   switch (scenario) {
     case "conversation":
       return n === 0
@@ -143,9 +152,135 @@ export function turnEvents(scenario: EmulatorScenario, n: number, sent: string):
   }
 }
 
-/** The SSE body of a turn, as the API streams it. */
-export const sseBody = (events: readonly BridgeEvent[]) =>
-  events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join("");
+/** The SSE body of a turn, as the API streams it: its spans (ADR-026), then its events. */
+export const sseBody = (events: readonly BridgeEvent[], spans: readonly Span[] = []) =>
+  [
+    ...spans.map((x) => `event: trace.span\ndata: ${JSON.stringify(x)}\n\n`),
+    ...events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`),
+  ].join("");
+
+/** Ids of the typical canvas (canvas-fixtures.ts): its Greeting node and cards, its FAQ node. */
+const C = (prefix: string, n: number) => `${prefix}_${String(n).padStart(10, "0")}`;
+const WF = C("wf", 1);
+
+/**
+ * The trace of the `n`-th turn of the conversation scenario, on the typical canvas: turn 1 says
+ * hello and asks; turn 2 takes the answer, branches to Shipping FAQ and answers there.
+ */
+export function turnSpans(scenario: EmulatorScenario, n: number): Span[] {
+  if (scenario !== "conversation") return [];
+  const turnId = TURNS[n % TURNS.length] as string;
+  let seq = 0;
+  const id = () => `span_01m7a256m0a13warwhczs${String(n * 100 + seq).padStart(5, "0")}`;
+  const base = (extra: Record<string, unknown>) => {
+    const out = {
+      id: id(),
+      workspaceId: "ws_01m7a256m0a13warwhczsjhx9g",
+      botId: "bot_01m7a256m0a13warwhczsjhx9b",
+      conversationId: CONV,
+      turnId,
+      seq,
+      status: "ok",
+      startedAt: T,
+      location: {},
+      ...extra,
+    };
+    seq += 1;
+    return out;
+  };
+  const turn = base({
+    name: "Turn",
+    durationMs: n === 0 ? 1820 : 940,
+    kind: "turn",
+    attrs: {
+      trigger: "message",
+      mode: "emulator",
+      outcome: n === 0 ? "waiting" : "completed",
+      stepCount: n === 0 ? 2 : 3,
+    },
+  });
+  const at = (node: number, card?: number) => ({
+    workflowId: WF,
+    nodeId: C("node", node),
+    ...(card ? { cardId: C("card", card) } : {}),
+  });
+  const greet = base({
+    parentId: turn.id,
+    name: "Greeting",
+    durationMs: n === 0 ? 1790 : 210,
+    kind: "node",
+    location: at(2),
+    attrs: { nodeType: "standard", leftBy: n === 0 ? "wait" : "goto" },
+  });
+  const spans: unknown[] = [turn, greet];
+  if (n === 0) {
+    spans.push(
+      base({
+        parentId: greet.id,
+        name: "say",
+        durationMs: 30,
+        kind: "card",
+        location: at(2, 1),
+        attrs: { cardType: "say", outcome: "next" },
+      }),
+    );
+    spans.push(
+      base({
+        parentId: greet.id,
+        name: "capture",
+        durationMs: 1760,
+        kind: "card",
+        location: at(2, 2),
+        attrs: { cardType: "capture", outcome: "wait" },
+      }),
+    );
+  } else {
+    spans.push(
+      base({
+        parentId: greet.id,
+        name: "capture",
+        durationMs: 20,
+        kind: "card",
+        location: at(2, 2),
+        attrs: {
+          cardType: "capture",
+          outcome: "next",
+          writes: { [C("var", 2)]: { before: null, after: "shipping 5678" } },
+        },
+      }),
+    );
+    spans.push(
+      base({
+        parentId: greet.id,
+        name: "branch",
+        durationMs: 190,
+        kind: "card",
+        location: at(2, 3),
+        attrs: { cardType: "branch", outcome: "goto" },
+      }),
+    );
+    const faq = base({
+      parentId: turn.id,
+      name: "Shipping FAQ",
+      durationMs: 700,
+      kind: "node",
+      location: at(4),
+      attrs: { nodeType: "standard", leftBy: "next" },
+    });
+    spans.push(faq);
+    spans.push(
+      base({
+        parentId: faq.id,
+        name: "say",
+        durationMs: 700,
+        kind: "card",
+        location: at(4, 4),
+        attrs: { cardType: "say", outcome: "next" },
+      }),
+    );
+  }
+  return spans as Span[];
+}
 
 /** The Variables tab after the `n`-th turn: the second turn changes city and adds an order id. */
 export function emulatorState(n: number): EmulatorStateResponse {

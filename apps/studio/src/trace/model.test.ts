@@ -169,6 +169,16 @@ describe("runOverlay", () => {
     expect([...o.nodes]).toEqual(["node_TRACKAAAAA"]);
   });
 
+  test("a turn that picked up inside the node it waited in does not light the transition from Start", () => {
+    const s = turnSpans();
+    // Greet has two cards; this turn's first step there is the second one: it resumed a wait.
+    const wf = workflow();
+    const greet = wf.nodes.find((x) => x.id === "node_GREETAAAAA") as { cards: unknown[] };
+    greet.cards = [{ id: "card_ASKAAAAAAA" }, { id: "card_SAYAAAAAAA" }];
+    const o = runOverlay(s.all, { wf_MAINAAAAAA: wf });
+    expect([...o.edges]).toEqual(["edge_TRACKAAAAA"]);
+  });
+
   test("a failed card is not marked as visited, so the check never sits on a card that failed", () => {
     const o = runOverlay(
       turnSpans().all.map((x) => (x.kind === "card" && x.seq === 4 ? ({ ...x, status: "error" } as Span) : x)),

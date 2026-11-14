@@ -78,6 +78,7 @@ async function scriptedBot(page: Page, ws: string, bot: string) {
   };
   const res = await page.request.put(url, { headers: { ...headers, "if-match": `"${current.rev}"` }, data: { doc } });
   expect(res.status(), await res.text()).toBe(200);
+  return { greet, track, hello, ask, tracked };
 }
 
 const emulator = (page: Page) => page.getByRole("complementary", { name: "Emulator" });
@@ -111,9 +112,7 @@ test("a three-node scripted bot runs in the emulator, and its choice buttons wor
   ).toBeVisible();
 
   // The Variables tab shows what the capture stored... until the workflow returned and cleared it.
-  await emulator(page)
-    .getByRole("button", { name: /Variables/ })
-    .click();
+  await emulator(page).getByRole("tab", { name: "Variables" }).click();
   await expect(emulator(page).getByText(/KB of 256 KB/)).toBeVisible();
 });
 
@@ -186,9 +185,65 @@ test("the test user form sets the user the bot sees", async ({ page }) => {
   await box.fill("مرحبا");
   await box.press("Enter");
   await expect(transcript(page).getByText("تحب تعمل إيه؟")).toBeVisible();
-  await emulator(page)
-    .getByRole("button", { name: /Variables/ })
-    .click();
+  await emulator(page).getByRole("tab", { name: "Variables" }).click();
   await expect(emulator(page).getByText("User attributes")).toBeVisible();
   await expect(emulator(page).getByText("pro", { exact: true })).toBeVisible();
+});
+
+test("the trace lists the turn's steps; clicking one selects its card; the canvas shows the path until an edit", async ({
+  page,
+}) => {
+  const { ws, bot } = await openNewBot(page, "emulator-trace");
+  const ids = await scriptedBot(page, ws, bot);
+  await page.reload();
+  await expect(page.locator(".react-flow__node")).toHaveCount(4);
+  await page.getByRole("button", { name: "Test", exact: true }).click();
+  const box = emulator(page).getByRole("textbox", { name: "Message the bot" });
+  await box.fill("مرحبا");
+  await box.press("Enter");
+  await expect(transcript(page).getByText("تحب تعمل إيه؟")).toBeVisible();
+
+  // The run overlay: the cards that ran have a check; the transition from Start is tinted.
+  await expect(page.locator(`[data-card="${ids.hello}"] [data-ran="true"]`)).toBeVisible();
+  await expect(page.locator(".wk-edge-ran")).toHaveCount(1);
+
+  // The footer opens this turn's trace; its steps arrived over SSE as they ran.
+  await emulator(page).getByTitle("Open this turn's trace").click();
+  const steps = emulator(page).getByRole("list", { name: "Steps" });
+  await expect(steps.getByRole("button", { name: /Greet/ })).toBeVisible();
+  await expect(steps.getByRole("button")).toHaveCount(4); // the turn, Greet, Send message, Ask
+
+  // Clicking the Send message step selects that card on the canvas and shows the step's details.
+  await steps.getByRole("button", { name: /Send message/ }).click();
+  await expect(page.locator(`[data-card="${ids.hello}"] > div`).first()).toHaveClass(/border-accent(\s|$)/);
+  await expect(emulator(page).getByRole("region", { name: "Step details" })).toContainText("Outcome");
+
+  // Any edit clears the overlay: the path no longer matches what is on the canvas.
+  await page.getByRole("button", { name: "Actions for Track" }).click();
+  await page.getByRole("menuitem", { name: /Rename/ }).click();
+  await page.keyboard.type(" order");
+  await page.keyboard.press("Enter");
+  await expect(page.locator('[data-ran="true"]')).toHaveCount(0);
+  await expect(page.locator(".wk-edge-ran")).toHaveCount(0);
+});
+
+test("an error's Show in trace opens the trace with the failing step selected", async ({ page }) => {
+  const { ws, bot } = await openNewBot(page, "emulator-error");
+  await scriptedBot(page, ws, bot);
+  await page.reload();
+  await page.getByRole("button", { name: "Test", exact: true }).click();
+  const box = emulator(page).getByRole("textbox", { name: "Message the bot" });
+  // Free text to a choice question: it asks again, then fails after its retries.
+  for (const [i, text] of ["مرحبا", "أي حاجة", "تاني", "وتالت"].entries()) {
+    await box.fill(text);
+    await box.press("Enter");
+    // Each turn ends with its footer before the next message goes.
+    await expect(emulator(page).getByTitle("Open this turn's trace")).toHaveCount(i + 1);
+  }
+  const show = emulator(page).getByRole("button", { name: "Show in trace" }).first();
+  await expect(show).toBeVisible();
+  await show.click();
+  const steps = emulator(page).getByRole("list", { name: "Steps" });
+  await expect(steps.locator('[aria-current="step"]')).toBeVisible();
+  await expect(emulator(page).getByRole("region", { name: "Step details" })).toContainText("Fix");
 });
