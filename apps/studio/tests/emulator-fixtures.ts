@@ -11,7 +11,7 @@ import { SCREENSHOT_FIXTURES } from "@wakeel/testing/fixtures/rtl";
  * Emulator turns for the screenshot review (task 4.6): each scenario is the SSE body the mock API
  * answers a message with, so the transcript, banners and Variables tab are deterministic.
  */
-export type EmulatorScenario = "conversation" | "bubbles" | "error" | "rtl" | "running";
+export type EmulatorScenario = "conversation" | "bubbles" | "error" | "rtl" | "running" | "agent";
 
 const CONV = "conv_01m7a256m0a13warwhczsjhx9v";
 /** One turn id per turn of a scenario, so each turn has its own trace. */
@@ -147,6 +147,8 @@ export function turnEvents(scenario: EmulatorScenario, n: number, sent: string):
       ];
     case "rtl":
       return [message(text(sent)), done("completed", 610)];
+    case "agent":
+      return [message(text("طلبك رقم 5678 اتشحن امبارح، وهيوصل الخميس.")), done("waiting", 2140)];
     case "running":
       return [];
   }
@@ -168,6 +170,7 @@ const WF = C("wf", 1);
  * hello and asks; turn 2 takes the answer, branches to Shipping FAQ and answers there.
  */
 export function turnSpans(scenario: EmulatorScenario, n: number): Span[] {
+  if (scenario === "agent") return agentSpans();
   if (scenario !== "conversation") return [];
   const turnId = TURNS[n % TURNS.length] as string;
   let seq = 0;
@@ -330,4 +333,157 @@ export const SENT: Record<EmulatorScenario, string[]> = {
     ["pure_arabic", "english_arabic_name", "arabic_url", "emoji"].includes(f.id),
   ).map((f) => f.text),
   running: ["مرحبا"],
+  agent: ["طلبي رقم 5678 فين؟"],
 };
+
+/**
+ * Task 6.9: one turn of the typical canvas's Autonomous Node (node 3): it looks the order up with a
+ * code tool, then replies and listens. Each iteration has its model call; the first has its tool call.
+ */
+function agentSpans(): Span[] {
+  const turnId = TURNS[0] as string;
+  let seq = 0;
+  const t0 = Date.parse(T);
+  const base = (extra: Record<string, unknown>, offsetMs = 0) => {
+    const out = {
+      id: `span_01m7a256m0a13warwhczs${String(900 + seq).padStart(5, "0")}`,
+      workspaceId: "ws_01m7a256m0a13warwhczsjhx9g",
+      botId: "bot_01m7a256m0a13warwhczsjhx9b",
+      conversationId: CONV,
+      turnId,
+      seq,
+      status: "ok",
+      startedAt: new Date(t0 + offsetMs).toISOString(),
+      location: { workflowId: WF, nodeId: C("node", 3) },
+      ...extra,
+    };
+    seq += 1;
+    return out;
+  };
+  const usage = (input: number, cached: number, output: number, cost: number) => ({
+    inputTokens: input,
+    cachedInputTokens: cached,
+    outputTokens: output,
+    costMicroUsd: cost,
+  });
+  const prompt = (feedback?: string) => ({
+    inline: true,
+    value: {
+      system:
+        "You are the reasoning step of a conversational assistant. You act only by writing directives.\n\ndeclare const tools: {\n  /** Finds an order by its number. */\n  lookupOrder(input: { number: string }): Promise<{ status: string; eta?: string }>;\n};",
+      messages: [
+        { role: "user", content: "طلبي رقم 5678 فين؟" },
+        {
+          role: "user",
+          content: `<data source="variables">\nconversation.topic = null\n</data>${feedback ? `\n<data source="feedback:run_result">\n${feedback}\n</data>` : ""}\nIteration ${feedback ? 2 : 1} of 6.`,
+        },
+      ],
+    },
+  });
+  const turn = base(
+    {
+      name: "Turn",
+      durationMs: 2140,
+      kind: "turn",
+      location: {},
+      attrs: { trigger: "message", mode: "emulator", outcome: "waiting", stepCount: 2 },
+    },
+    0,
+  );
+  const node = base(
+    {
+      parentId: turn.id,
+      name: "Order assistant",
+      durationMs: 2120,
+      kind: "node",
+      attrs: { nodeType: "autonomous", leftBy: "wait" },
+    },
+    10,
+  );
+  const code = 'return await tools.lookupOrder({ number: "5678" })';
+  const first = base(
+    {
+      parentId: node.id,
+      name: "Iteration 1",
+      durationMs: 1080,
+      kind: "autonomy.iteration",
+      attrs: {
+        index: 1,
+        status: "run_result",
+        response: { inline: true, value: `:::run\n${code}\n:::end` },
+        code: { inline: true, value: code },
+        result: { inline: true, value: { status: "shipped", eta: "الخميس" } },
+      },
+    },
+    10,
+  );
+  const firstCall = base(
+    {
+      parentId: first.id,
+      name: "gpt-4.1-mini",
+      durationMs: 960,
+      kind: "llm.call",
+      attrs: {
+        purpose: "autonomy",
+        model: "gpt-4.1-mini",
+        provider: "openai",
+        usage: usage(410, 1024, 38, 290),
+        ttftMs: 420,
+        finishReason: "stop",
+        attempt: 1,
+        prompt: prompt(),
+        completion: { inline: true, value: `:::run\n${code}\n:::end` },
+      },
+    },
+    10,
+  );
+  const tool = base(
+    {
+      parentId: first.id,
+      name: "lookupOrder",
+      durationMs: 110,
+      kind: "tool.call",
+      location: { workflowId: WF, nodeId: C("node", 3), toolId: C("tool", 1) },
+      attrs: {
+        name: "lookupOrder",
+        toolType: "code",
+        sideEffects: false,
+        input: { inline: true, value: { number: "5678" } },
+        output: { inline: true, value: { status: "shipped", eta: "الخميس" } },
+      },
+    },
+    975,
+  );
+  const reply = ":::say text\nطلبك رقم 5678 اتشحن امبارح، وهيوصل الخميس.\n:::exit listen\n:::end";
+  const second = base(
+    {
+      parentId: node.id,
+      name: "Iteration 2",
+      durationMs: 1040,
+      kind: "autonomy.iteration",
+      attrs: { index: 2, status: "exit", exit: "listen", response: { inline: true, value: reply } },
+    },
+    1090,
+  );
+  const secondCall = base(
+    {
+      parentId: second.id,
+      name: "gpt-4.1-mini",
+      durationMs: 1030,
+      kind: "llm.call",
+      attrs: {
+        purpose: "autonomy",
+        model: "gpt-4.1-mini",
+        provider: "openai",
+        usage: usage(120, 1434, 46, 180),
+        ttftMs: 380,
+        finishReason: "stop",
+        attempt: 1,
+        prompt: prompt('{"status":"shipped","eta":"الخميس"}'),
+        completion: { inline: true, value: reply },
+      },
+    },
+    1095,
+  );
+  return [turn, node, first, firstCall, tool, second, secondCall] as Span[];
+}

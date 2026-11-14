@@ -68,6 +68,12 @@ export const pop = { scale: 0.96 } as const;
 export const tilt = { max: 8 } as const;
 export const run = { loop: 1.2, sweep: 1.2 } as const;
 
+/**
+ * Trace playback (§5.3 motion table): a finished turn replays in `total` seconds at 1×, its steps
+ * spaced by their real durations; `speeds` are the choices the controls cycle through.
+ */
+export const playback = { total: 4, speeds: [0.5, 1, 2] } as const;
+
 /** The bounce ceiling: nothing overshoots visibly. */
 export const MAX_BOUNCE = 0.1;
 

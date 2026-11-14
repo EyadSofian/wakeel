@@ -36,6 +36,10 @@ export type ScreenState =
   | "run-from"
   // Task 4.7: the trace tab with a step selected, and the run overlay on the canvas.
   | "trace"
+  // Task 6.9: an Autonomous Node's turn with its model call open in PayloadViewer, and a replay
+  // paused part way through a three-step turn.
+  | "trace-payload"
+  | "trace-playback"
   // Task 5.5: the Connections test tab after a test event and a message.
   | "tested"
   // Task 6.8: the Autonomous Node's inspector, a new code tool's sub-view and an exit's.
@@ -207,6 +211,8 @@ SCREENS.push({
     "user-form",
     "run-from",
     "trace",
+    "trace-payload",
+    "trace-playback",
   ],
   sizes: DESKTOP,
   mock: true,

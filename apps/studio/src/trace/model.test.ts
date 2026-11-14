@@ -1,6 +1,17 @@
 import { ERRORS, type Span, type Workflow } from "@wakeel/contracts";
 import { describe, expect, test } from "vitest";
-import { formatDuration, mergeSpan, runOverlay, stepLabel, stepRows } from "./model";
+import {
+  formatCost,
+  formatDuration,
+  mergeSpan,
+  playbackFrame,
+  playbackOverlay,
+  playbackSchedule,
+  runOverlay,
+  stepLabel,
+  stepRows,
+  tokensOf,
+} from "./model";
 
 /** Task 4.7: the emulator's trace list and the canvas run overlay, as pure data. */
 const T = "2026-11-14T10:00:00.000Z";
@@ -188,5 +199,93 @@ describe("runOverlay", () => {
     );
     expect([...o.cards]).toEqual(["card_SAYAAAAAAA"]);
     expect([...o.failed]).toEqual(["card_CODEAAAAAA"]);
+  });
+});
+
+describe("playback (task 6.9, design system §5.3)", () => {
+  const WF = "wf_0000000001";
+  const at = (nodeId: string, cardId?: string) => ({ workflowId: WF, nodeId, ...(cardId ? { cardId } : {}) });
+  function threeStepTurn() {
+    const turn = span("turn", { seq: 0, durationMs: 1000 });
+    const node = span("node", { seq: 1, parentId: turn.id, location: at("node_0000000002"), durationMs: 1000 });
+    const capture = span("card", {
+      seq: 2,
+      parentId: node.id,
+      location: at("node_0000000002", "card_0000000002"),
+      durationMs: 100,
+    });
+    const branch = span("card", {
+      seq: 3,
+      parentId: node.id,
+      location: at("node_0000000002", "card_0000000003"),
+      durationMs: 300,
+    });
+    const faq = span("node", { seq: 4, parentId: turn.id, location: at("node_0000000004"), durationMs: 600 });
+    const say = span("card", {
+      seq: 5,
+      parentId: faq.id,
+      location: at("node_0000000004", "card_0000000004"),
+      durationMs: 600,
+    });
+    return { turn, node, capture, branch, faq, say, all: [say, turn, branch, node, faq, capture] };
+  }
+  const workflows = {
+    [WF]: {
+      id: WF,
+      nodes: [
+        { id: "node_0000000001", type: "start" },
+        { id: "node_0000000002", type: "standard", cards: [{ id: "card_0000000002" }] },
+        { id: "node_0000000004", type: "standard", cards: [] },
+      ],
+      edges: [
+        { id: "edge_0000000001", from: { nodeId: "node_0000000001" }, to: { nodeId: "node_0000000002" } },
+        { id: "edge_0000000002", from: { nodeId: "node_0000000002" }, to: { nodeId: "node_0000000004" } },
+      ],
+    },
+  } as unknown as Record<string, Workflow>;
+
+  test("steps are revealed in seq order, spaced by the durations of the steps with nothing under them", () => {
+    const t = threeStepTurn();
+    const schedule = playbackSchedule(t.all, 4000);
+    expect(schedule.map((s) => [s.span.id, s.atMs])).toEqual([
+      [t.node.id, 0],
+      [t.capture.id, 0],
+      [t.branch.id, 400],
+      [t.faq.id, 1600],
+      [t.say.id, 1600],
+    ]);
+  });
+
+  test("a turn with no measured durations is spaced evenly", () => {
+    const t = threeStepTurn();
+    const flat = t.all.map((s) => ({ ...s, durationMs: 0 }));
+    expect(playbackSchedule(flat, 3000).map((s) => s.atMs)).toEqual([0, 0, 1000, 2000, 2000]);
+  });
+
+  test("the overlay grows with the playback; the active card is the last one revealed", () => {
+    const t = threeStepTurn();
+    const schedule = playbackSchedule(t.all, 4000);
+    const first = playbackOverlay(schedule, 1, workflows);
+    expect(first.active).toEqual({ nodeId: "node_0000000002", cardId: "card_0000000002" });
+    expect([...first.cards]).toEqual(["card_0000000002"]);
+    expect([...first.edges]).toEqual(["edge_0000000001"]);
+    const second = playbackOverlay(schedule, 2, workflows);
+    expect(second.active?.cardId).toBe("card_0000000003");
+    const last = playbackOverlay(schedule, 4, workflows);
+    expect(last.active?.cardId).toBe("card_0000000004");
+    expect([...last.edges].sort()).toEqual(["edge_0000000001", "edge_0000000002"]);
+    expect(playbackFrame(schedule, 4).shown).toHaveLength(5);
+  });
+
+  test("autonomy steps have their own labels; tokens and cost read as the trace shows them", () => {
+    const names = { botName: "b", cardNames: {} };
+    expect(stepLabel(span("autonomy.iteration", { attrs: { index: 2, status: "exit" } }), names)).toBe("Iteration 2");
+    expect(stepLabel(span("llm.call"), names)).toBe("Thinking");
+    expect(stepLabel(span("tool.call", { attrs: { name: "lookupOrder" } }), names)).toBe("lookupOrder");
+    const usage = { inputTokens: 1000, cachedInputTokens: 200, outputTokens: 40, costMicroUsd: 3100 };
+    expect(tokensOf(span("llm.call", { attrs: { usage } }))).toBe(1240);
+    expect(tokensOf(span("card"))).toBe(0);
+    expect(formatCost(3100)).toBe("$0.0031");
+    expect(formatCost(125_000)).toBe("$0.13");
   });
 });

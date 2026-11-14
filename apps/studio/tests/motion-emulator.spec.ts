@@ -207,3 +207,60 @@ for (const mode of MODES) {
     await panel.getByRole("list", { name: "Steps" }).screenshot({ path: `${DIR}/trace-${mode.id}-100.png` });
   });
 }
+
+for (const mode of MODES) {
+  // Task 6.9 (§5.3 "Trace playback"): a recorded three-step turn replays over 4 s; the current card
+  // takes its tint over 200 ms (80 ms reduced). Frames at 0, 25, 50, 75 and 100% of the replay, and
+  // the tint transition's timing from the card itself.
+  test(`emulator trace playback ${mode.id}`, async ({ page }) => {
+    mkdirSync(DIR, { recursive: true });
+    const panel = await open(page, mode.reducedMotion, "conversation");
+    const box = panel.getByRole("textbox", { name: "Message the bot" });
+    for (const [i, text] of ["عايز أعرف حالة طلبي", "5678"].entries()) {
+      await box.fill(text);
+      await box.press("Enter");
+      await expect(panel.locator("p", { hasText: / s$|Waiting for the user/ })).toHaveCount(i + 1);
+    }
+    await panel.getByTitle("Open this turn's trace").last().click();
+    await page.evaluate(() => {
+      const w = window as unknown as { __tint: { durationMs: number; props: string[] }[] };
+      w.__tint = [];
+      new MutationObserver(() => {
+        const card = document.querySelector("[data-active]");
+        if (!card) return;
+        for (const a of card.getAnimations()) {
+          const t = (a.effect as KeyframeEffect).getTiming();
+          const prop = (a as CSSTransition).transitionProperty;
+          if (prop && !w.__tint.some((x) => x.props.includes(prop)))
+            w.__tint.push({ durationMs: Math.round(Number(t.duration)), props: [prop] });
+        }
+      }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["data-active"] });
+    });
+    const started = Date.now();
+    await panel.getByRole("button", { name: "Play this turn" }).click();
+    const frames: { pct: number; active: string | null }[] = [];
+    for (const pct of PERCENTS) {
+      const due = started + (4000 * pct) / 100 - (pct === 100 ? 150 : 0);
+      await page.waitForTimeout(Math.max(0, due - Date.now()));
+      const active = await page.evaluate(
+        () => document.querySelector("[data-active]")?.closest("[data-card]")?.getAttribute("data-card") ?? null,
+      );
+      frames.push({ pct, active });
+      await page.screenshot({ path: `${DIR}/playback-${mode.id}-${String(pct).padStart(3, "0")}.png` });
+    }
+    await expect(panel.getByRole("button", { name: "Play this turn" })).toBeVisible({ timeout: 4_000 });
+    const tint = await page.evaluate(() => (window as unknown as { __tint: unknown[] }).__tint);
+    writeFileSync(`${DIR}/playback-${mode.id}-timing.json`, `${JSON.stringify({ frames, tint }, null, 2)}\n`);
+    // The replay moves forward through the cards and never back.
+    // The say card is due at about 0.9 s (20, 190 and 700 ms scaled to 4 s) and is held to the end,
+    // so the 25% samples show the order's tail; the full order is checked in playback.spec.ts.
+    const order = ["card_0000000002", "card_0000000003", "card_0000000004"];
+    const seen = frames.map((f) => (f.active ? order.indexOf(f.active) : -1));
+    expect(seen.every((v, i) => i === 0 || v >= (seen[i - 1] ?? -1))).toBe(true);
+    expect(frames.at(-1)?.active).toBe("card_0000000004");
+    const tintMs = (tint as { durationMs: number; props: string[] }[]).find((t) =>
+      t.props.includes("background-color"),
+    );
+    if (tintMs) expect(tintMs.durationMs).toBe(mode.id === "normal" ? 200 : 80);
+  });
+}

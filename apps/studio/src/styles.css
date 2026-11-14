@@ -55,6 +55,12 @@
 .wk-arrow-fill-ran {
   fill: var(--accent-border);
 }
+/* Trace playback (design system §5.3): the card the replay reaches takes its tint over 200 ms. */
+.wk-card-row {
+  transition:
+    background-color var(--duration-slow) var(--ease-out),
+    border-color var(--duration-slow) var(--ease-out);
+}
 
 /*
  * Ports (ADR-017): a 10 px dot in the node's category colour with a surface ring, on the node's end

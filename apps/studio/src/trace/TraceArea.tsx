@@ -1,14 +1,27 @@
 import type { Json, Span } from "@wakeel/contracts";
 import { Badge, tabClasses, travel, useMotionTokens } from "@wakeel/ui";
 import { useReactFlow } from "@xyflow/react";
-import { Braces, ChevronDown, ChevronRight, CircleAlert, CircleCheck, CircleDot, type LucideIcon } from "lucide-react";
+import {
+  Braces,
+  ChevronDown,
+  ChevronRight,
+  CircleAlert,
+  CircleCheck,
+  CircleDot,
+  Cpu,
+  type LucideIcon,
+  Repeat2,
+  Wrench,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useCanvas, useCanvasStore } from "../canvas/context";
 import { CARD_ICONS, CARD_NAMES, NODE_ICONS } from "../canvas/view/summaries";
 import { useEmulator } from "../emulator/controller";
 import { SizeMeter, VariablesBody } from "../emulator/VariablesTab";
-import { formatDuration, stepLabel, stepRows } from "./model";
+import { formatDuration, playbackFrame, stepLabel, stepRows } from "./model";
+import { PayloadViewer } from "./PayloadViewer";
+import { PlaybackControls, useSchedule } from "./playback";
 
 /** Indent per depth, from the space scale. */
 const INDENT = ["ps-0", "ps-5", "ps-8", "ps-10", "ps-11"] as const;
@@ -68,6 +81,7 @@ export function TraceArea() {
         </div>
         <span className="ms-auto flex items-center gap-2 text-micro text-secondary">
           {area.tab === "trace" && turnNumber > 0 ? <span className="tabular-nums">Turn {turnNumber}</span> : null}
+          {area.tab === "trace" && area.open ? <PlaybackControls /> : null}
           {area.tab === "variables" && changed.size > 0 ? <Badge tone="info">{changed.size} changed</Badge> : null}
           {area.tab === "variables" && variables ? (
             <SizeMeter used={variables.stateBytes} limit={variables.limitBytes} />
@@ -94,6 +108,10 @@ function TraceList() {
   const flow = useReactFlow();
   const tokens = useMotionTokens();
   const now = useNow(running);
+  // During a replay (§5.3 "Trace playback") the list shows the steps it has reached, the latest current.
+  const playback = useEmulator((s) => (s.playback?.turnId === s.traceTurn ? s.playback : undefined));
+  const schedule = useSchedule();
+  const frame = playback ? playbackFrame(schedule, playback.index) : undefined;
 
   // The list stays mounted while it is empty, so the first live steps enter like the rest (§5.3).
   const notice = !traceTurn
@@ -103,21 +121,17 @@ function TraceList() {
       : spans.length === 0 && !running
         ? "This turn's trace could not be loaded."
         : undefined;
-  const list = spans ?? [];
+  const all = spans ?? [];
+  const list = frame ? all.filter((s) => s.kind === "turn" || frame.shown.includes(s)) : all;
+  const current = frame ? frame.shown.at(-1)?.id : selected;
   const turn = list.find((s) => s.kind === "turn");
   const open = (s: Span) => running && s.durationMs === 0 && (s.kind === "turn" || s.kind === "node");
   const shown = (s: Span) => (open(s) ? Math.max(0, now - new Date(s.startedAt).getTime()) : s.durationMs);
   const total = Math.max(1, turn ? shown(turn) : Math.max(0, ...list.map(shown)));
-  const step = list.find((s) => s.id === selected);
+  const step = all.find((s) => s.id === selected);
 
-  const pick = (s: Span) => {
-    selectStep(s.id);
-    const { workflowId, nodeId, cardId } = s.location;
-    if (!workflowId || !nodeId) return;
-    const state = canvas.getState();
-    if (state.activeWorkflowId !== workflowId) state.open(workflowId);
-    canvas.getState().select({ nodeIds: [nodeId], edgeIds: [], card: cardId ? { nodeId, cardId } : undefined });
-    // Bring the node into view (§5.1 "Fit view, jump to node": 240 ms; none with reduced motion).
+  /** Brings a node into view (§5.1 "Fit view, jump to node": 240 ms; none with reduced motion). */
+  const reveal = (nodeId: string) =>
     requestAnimationFrame(() => {
       const node = flow.getInternalNode(nodeId);
       if (!node) return;
@@ -128,7 +142,26 @@ function TraceList() {
         duration: tokens.reduced ? 0 : tokens.duration.slower * 1000,
       });
     });
+
+  const pick = (s: Span) => {
+    selectStep(s.id);
+    const { workflowId, nodeId, cardId } = s.location;
+    if (!workflowId || !nodeId) return;
+    const state = canvas.getState();
+    if (state.activeWorkflowId !== workflowId) state.open(workflowId);
+    canvas.getState().select({ nodeIds: [nodeId], edgeIds: [], card: cardId ? { nodeId, cardId } : undefined });
+    reveal(nodeId);
   };
+
+  // A replay follows its current step across the canvas, opening its workflow when it changes.
+  const followed = frame?.active?.location;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the node the replay is on is the trigger.
+  useEffect(() => {
+    if (!followed?.workflowId || !followed.nodeId) return;
+    const state = canvas.getState();
+    if (state.activeWorkflowId !== followed.workflowId) state.open(followed.workflowId);
+    reveal(followed.nodeId);
+  }, [followed?.workflowId, followed?.nodeId]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -154,10 +187,10 @@ function TraceList() {
               >
                 <button
                   type="button"
-                  aria-current={span.id === selected ? "step" : undefined}
+                  aria-current={span.id === current ? "step" : undefined}
                   onClick={() => pick(span)}
-                  className={`flex h-row w-full items-center justify-between gap-3 rounded-xs px-2 text-start text-small hover:bg-subtle ${
-                    span.id === selected ? "bg-accent-subtle" : ""
+                  className={`wk-card-row flex h-row w-full items-center justify-between gap-3 rounded-xs px-2 text-start text-small hover:bg-subtle ${
+                    span.id === current ? "bg-accent-subtle" : ""
                   }`}
                 >
                   <span className={`flex min-w-0 items-center gap-2 ${INDENT[Math.min(depth, INDENT.length - 1)]}`}>
@@ -189,7 +222,7 @@ function TraceList() {
           })}
         </AnimatePresence>
       </ol>
-      {step ? <StepDetails span={step} /> : null}
+      {step && !frame ? <StepView span={step} spans={all} /> : null}
     </div>
   );
 }
@@ -232,6 +265,12 @@ function iconOf(span: Span): LucideIcon {
       return CARD_ICONS[span.attrs.cardType as keyof typeof CARD_ICONS] ?? CircleDot;
     case "code.exec":
       return Braces;
+    case "autonomy.iteration":
+      return Repeat2;
+    case "llm.call":
+      return Cpu;
+    case "tool.call":
+      return Wrench;
     case "error":
       return CircleAlert;
     default:
@@ -239,7 +278,26 @@ function iconOf(span: Span): LucideIcon {
   }
 }
 
-/** The selected step's details: what it changed, its code and logs, or its error. */
+/**
+ * Steps with payloads open the PayloadViewer; the rest show their facts. A newly selected step's
+ * details are scrolled into the trace area's view, which is short beside a long list.
+ */
+function StepView({ span, spans }: { span: Span; spans: readonly Span[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const tokens = useMotionTokens();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the selected step is the trigger.
+  useEffect(() => {
+    ref.current?.scrollIntoView({ block: "nearest", behavior: tokens.reduced ? "auto" : "smooth" });
+  }, [span.id]);
+  const payloads =
+    span.kind === "autonomy.iteration" ||
+    span.kind === "llm.call" ||
+    span.kind === "tool.call" ||
+    span.kind === "code.exec";
+  return <div ref={ref}>{payloads ? <PayloadViewer span={span} spans={spans} /> : <StepDetails span={span} />}</div>;
+}
+
+/** The selected step's details: what it changed, or its error. */
 function StepDetails({ span }: { span: Span }) {
   // A card's writes are keyed by variable id; show each by its name.
   const manifest = useCanvas((s) => s.manifest?.doc);
@@ -262,10 +320,6 @@ function StepDetails({ span }: { span: Span }) {
       rows.push(["Outcome", span.attrs.outcome]);
       for (const [id, w] of Object.entries(span.attrs.writes ?? {}))
         rows.push([id, `${show(w.before)} → ${show(w.after)}`]);
-      break;
-    case "code.exec":
-      if (span.attrs.source?.inline) rows.push(["Code", span.attrs.source.value]);
-      if (span.attrs.logs?.inline) rows.push(["Logs", span.attrs.logs.value]);
       break;
     case "error":
       rows.push(["Message", span.attrs.message], ["Fix", span.attrs.fix], ["Handled by", span.attrs.handledBy]);
