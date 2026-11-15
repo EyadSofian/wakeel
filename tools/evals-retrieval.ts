@@ -183,7 +183,7 @@ async function main() {
     await mkdir(dirname(output), { recursive: true });
     await writeFile(
       output,
-      JSON.stringify(
+      `${JSON.stringify(
         {
           ...report,
           models: {
@@ -195,7 +195,7 @@ async function main() {
         },
         null,
         2,
-      ) + "\n",
+      )}\n`,
     );
     console.table(
       report.sets.map(({ locale, count, dense, hybrid, passed }) => ({
@@ -220,7 +220,7 @@ async function main() {
 
 main().catch((error: unknown) => {
   console.error(
-    error instanceof AppError ? error.code + ": " + error.title : "Retrieval evaluation failed before completion",
+    error instanceof AppError ? `${error.code}: ${error.title}` : "Retrieval evaluation failed before completion",
   );
   process.exitCode = 1;
 });
