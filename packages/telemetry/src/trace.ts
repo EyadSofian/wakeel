@@ -93,17 +93,61 @@ export interface TraceBefore {
 
 const REDACTED = "[redacted]";
 const PREVIEW_CHARS = 400;
+const pendingPayloads = new WeakMap<Payload, Json>();
 const encoder = new TextEncoder();
 
-/**
- * A payload as stored for now: inline up to `INLINE_PAYLOAD_BYTES`, otherwise a preview and the
- * true size with an empty key. The object store (ADR-009) arrives with the first large producer.
- */
+/** Keep offload candidates in memory until the redaction boundary prepares the span for storage. */
 export function inlinePayload(value: Json): Payload {
-  const text = typeof value === "string" ? value : JSON.stringify(value);
+  const text = JSON.stringify(value);
   const bytes = encoder.encode(text).length;
   if (bytes <= INLINE_PAYLOAD_BYTES) return { inline: true, value };
-  return { inline: false, key: "", bytes, preview: Array.from(text).slice(0, PREVIEW_CHARS).join("") };
+  const payload = { inline: false as const, key: "", bytes, preview: payloadPreview(value) };
+  pendingPayloads.set(payload, value);
+  return payload;
+}
+
+function payloadPreview(value: Json): string {
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text.slice(0, PREVIEW_CHARS).replace(/[\uD800-\uDBFF]$/, "");
+}
+
+const payloadFields: Partial<Record<Span["kind"], readonly string[]>> = {
+  "autonomy.iteration": ["response", "code", "result"],
+  "llm.call": ["prompt", "completion"],
+  "code.exec": ["logs", "source"],
+  "tool.call": ["input", "output"],
+  "kb.search": ["dense", "lexical", "fused", "reranked"],
+};
+
+export function prepareTraceSpan(span: Span, redact: <T>(value: T, keys?: boolean) => T) {
+  const safe = redact(span);
+  const attrs = { ...safe.attrs } as Record<string, unknown>;
+  const original = span.attrs as Record<string, unknown>;
+  const bundle: Record<string, Json> = {};
+  for (const key of payloadFields[span.kind] ?? []) {
+    const source = original[key] as Payload | undefined;
+    if (!source) continue;
+    const value = source.inline ? source.value : pendingPayloads.get(source);
+    if (value === undefined) continue;
+
+    const redacted = redact(value, true);
+    const bytes = encoder.encode(JSON.stringify(redacted)).length;
+    if (bytes <= INLINE_PAYLOAD_BYTES) attrs[key] = { inline: true, value: redacted };
+    else {
+      bundle[key] = redacted;
+      attrs[key] = { inline: false, key, bytes, preview: payloadPreview(redacted) };
+    }
+  }
+  return { span: { ...safe, attrs } as Span, bundle };
+}
+
+export function tracePreviewOnly(span: Span): Span {
+  const attrs = { ...span.attrs } as Record<string, unknown>;
+  for (const key of payloadFields[span.kind] ?? []) {
+    const payload = attrs[key] as Payload | undefined;
+    if (payload && !payload.inline) attrs[key] = { ...payload, key: "" };
+  }
+  return { ...span, attrs } as Span;
 }
 
 /** `span_` + a hash of the turn and the span's seq (ADR-026). */

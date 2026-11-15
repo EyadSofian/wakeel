@@ -50,6 +50,7 @@ import {
   turnProcessor,
   workspaceCredentials,
 } from "./turn/index";
+import { maintainTraces } from "./turn/trace-retention";
 import { egressSender, webhookEnqueuer, webhookFollowUp, webhookProcessor } from "./webhook/index";
 import { startWorkers } from "./workers";
 
@@ -122,6 +123,8 @@ if (config) {
 
   const turnDeps: TurnDeps = {
     db,
+    traceStore: objectStore,
+    tracePiiPatterns: config.tracePiiPatterns,
     owner: `${hostname()}:${process.pid}`,
     logger,
     enginePorts: ({ workspaceId, knowledge, tables }) => ({
@@ -164,7 +167,13 @@ if (config) {
           enqueueWebhook: webhooks.now,
         },
         // Scheduled knowledge base re-sync (task 8.5): finds due sources and adds kb-sync jobs.
-        { "kb-resync": () => enqueueDueSyncs({ db, enqueueSync }, new Date()) },
+        {
+          "kb-resync": () => enqueueDueSyncs({ db, enqueueSync }, new Date()),
+          "trace-retention": () =>
+            maintainTraces(db, objectStore, new Date(), config.traceRetention, () =>
+              logger.warn({ code: "trace_payload_delete_failed" }, "trace payload deletion will be retried"),
+            ),
+        },
       ),
       "kb-ingest": ingestProcessor({
         db,
@@ -231,6 +240,12 @@ if (config) {
         "janitor",
         { every: WORKER_LIMITS.janitorIntervalSeconds * 1000 },
         { name: "janitor", opts: { removeOnComplete: true, removeOnFail: 100 } },
+      );
+    if (config.queues.includes("maintenance"))
+      await maintenanceQueue.upsertJobScheduler(
+        "trace-retention",
+        { every: 60 * 60 * 1000 },
+        { name: "trace-retention", opts: { removeOnComplete: true, removeOnFail: 100 } },
       );
     if (config.queues.includes("maintenance"))
       await maintenanceQueue.upsertJobScheduler(

@@ -1,6 +1,7 @@
-import { AppError, type Trace, TurnId } from "@wakeel/contracts";
-import { listTurnSpans } from "@wakeel/db";
+import { AppError, Json, SpanId, Trace, TurnId } from "@wakeel/contracts";
+import { listTurnSpans, tracePayloadKey } from "@wakeel/db";
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { requirePermission, type StudioDeps } from "../studio";
 
 /**
@@ -16,7 +17,32 @@ export async function traceRoutes(app: FastifyInstance, deps: StudioDeps): Promi
     const spans = await deps.db.withWorkspace(ctx.workspaceId, (tx) => listTurnSpans(tx, parsed.data));
     const first = spans[0];
     if (!first) throw new AppError("not_found");
-    const trace: Trace = { turnId: parsed.data, conversationId: first.conversationId, spans };
-    return trace;
+    return Trace.parse({ turnId: parsed.data, conversationId: first.conversationId, spans });
+  });
+
+  const selector = z.object({
+    turnId: TurnId,
+    spanId: SpanId,
+    field: z
+      .string()
+      .regex(/^[a-z]+$/)
+      .max(32),
+  });
+  app.get("/v1/workspaces/:workspaceId/turns/:turnId/trace/:spanId/payload/:field", async (request, reply) => {
+    const ctx = await requirePermission(deps, request, reply, "conversation.read");
+    const parsed = selector.safeParse(request.params);
+    if (!parsed.success) throw new AppError("not_found");
+    const { turnId, spanId, field } = parsed.data;
+    const key = await deps.db.withWorkspace(ctx.workspaceId, (tx) => tracePayloadKey(tx, turnId, spanId, field));
+    if (!key?.startsWith(`traces/${ctx.workspaceId}/${spanId}/`)) throw new AppError("not_found");
+    let bundle: Record<string, Json>;
+    try {
+      const bytes = await deps.objectStore.get(key);
+      bundle = z.record(z.string(), Json).parse(JSON.parse(new TextDecoder().decode(bytes)));
+    } catch {
+      throw new AppError("not_found");
+    }
+    if (!Object.hasOwn(bundle, field)) throw new AppError("not_found");
+    return reply.header("cache-control", "no-store").send({ value: bundle[field] });
   });
 }

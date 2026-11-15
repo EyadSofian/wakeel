@@ -194,7 +194,43 @@ const queueList = z
   })
   .transform((names) => names as QueueName[]);
 
+function jsonEnv<S extends z.ZodType>(schema: S) {
+  return z.string().transform((raw, ctx) => {
+    try {
+      const result = schema.safeParse(JSON.parse(raw));
+      if (result.success) return result.data as z.output<S>;
+    } catch {
+      // Use the same problem for invalid JSON or an invalid configuration value.
+    }
+    ctx.addIssue({ code: "custom", message: "Invalid trace configuration." });
+    return z.NEVER;
+  });
+}
+
 export const workerEnv = defineEnv({
+  traceRetention: {
+    env: "TRACE_RETENTION_BY_PLAN",
+    schema: jsonEnv(z.record(z.string(), z.number().int().positive().max(36500))).default({}),
+    description: "Operator JSON map of plan names to span retention in days. Plans without an override use 30 days.",
+  },
+  tracePiiPatterns: {
+    env: "TRACE_PII_PATTERNS",
+    schema: jsonEnv(
+      z
+        .array(z.string().min(1).max(500))
+        .max(32)
+        .transform((values, ctx) => {
+          try {
+            return values.map((source) => new RegExp(source, "gu"));
+          } catch {
+            ctx.addIssue({ code: "custom", message: "Invalid trace redaction pattern." });
+            return z.NEVER;
+          }
+        }),
+    ).default([]),
+    description: "Operator JSON array of trusted regular expressions used to redact trace values.",
+  },
+
   queues: {
     env: "QUEUES",
     schema: queueList.default([...QUEUE_NAMES]),

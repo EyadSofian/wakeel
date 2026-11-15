@@ -20,6 +20,7 @@ import {
   loadVersionDefinition,
   type NewOutboxEvent,
   nextUnprocessedEvent,
+  type ObjectStore,
   recordTurnProgress,
   releaseConversationLease,
   renewConversationLease,
@@ -53,6 +54,7 @@ import { eventScope, isTextMessage } from "./event-scope";
 import { botMessageId } from "./message-id";
 import { scrubSecrets } from "./redact";
 import { type TableOperationTrace, turnTables } from "./tables";
+import { storeTraceSpans } from "./trace-storage";
 import { migrateToVersion } from "./version";
 
 /** ADR-008: a lease lasts 30 s and a heartbeat renews it every 10 s. */
@@ -83,6 +85,8 @@ export interface TurnDeps {
   leaseMs?: number;
   /** 0 turns the heartbeat off (tests that simulate a dead worker). */
   heartbeatMs?: number;
+  traceStore?: Pick<ObjectStore, "put">;
+  tracePiiPatterns?: readonly RegExp[];
   /** Writes trace spans; defaults to `upsertSpans`. Tests pass one that fails. */
   writeSpans?(workspaceId: string, spans: readonly Span[]): Promise<void>;
   /**
@@ -480,9 +484,19 @@ class ConversationRun {
     const spans = scrubSecrets(written, this.#secrets);
     try {
       if (this.deps.writeSpans) await this.deps.writeSpans(this.workspaceId, spans);
-      else await this.#tx((tx) => upsertSpans(tx, spans));
-    } catch (err) {
-      this.#log.warn({ err, spans: spans.length, code: "trace_write_failed" }, "trace spans were not written");
+      else if (this.deps.traceStore) {
+        await storeTraceSpans(
+          this.deps.db,
+          this.deps.traceStore,
+          this.workspaceId,
+          written,
+          this.#secrets,
+          this.deps.tracePiiPatterns ?? [],
+          () => this.#log.warn({ code: "trace_payload_write_failed" }, "trace payload was not stored"),
+        );
+      } else await this.#tx((tx) => upsertSpans(tx, spans));
+    } catch {
+      this.#log.warn({ spans: spans.length, code: "trace_write_failed" }, "trace spans were not written");
     }
   }
 

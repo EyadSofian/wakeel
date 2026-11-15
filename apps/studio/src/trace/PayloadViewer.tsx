@@ -1,7 +1,9 @@
-import type { Json, Payload, Span } from "@wakeel/contracts";
-import { tabClasses } from "@wakeel/ui";
+import { Json, type Payload, type Span } from "@wakeel/contracts";
+import { Button, tabClasses } from "@wakeel/ui";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { api } from "../api/client";
+import { ProblemBanner } from "../shell/ProblemBanner";
 import { formatCost, formatDuration, tokensOf } from "./model";
 
 /**
@@ -59,6 +61,10 @@ export function PayloadViewer({ span, spans }: { span: Span; spans: readonly Spa
   useEffect(() => setTab(ids[0]), [span.id]);
   const current = tab && tabs[tab] ? tab : ids[0];
   const payload = current ? tabs[current] : undefined;
+  const owner =
+    span.kind === "autonomy.iteration" && current === "prompt"
+      ? (spans.find((entry) => entry.parentId === span.id && entry.kind === "llm.call") ?? span)
+      : span;
 
   return (
     <section aria-label="Step details" className="flex flex-col gap-3 rounded-sm border border-hairline bg-subtle p-4">
@@ -82,7 +88,9 @@ export function PayloadViewer({ span, spans }: { span: Span; spans: readonly Spa
             ))}
           </div>
           <div role="tabpanel" aria-label={current ? TAB_LABELS[current] : undefined} className="min-w-0">
-            {payload ? <PayloadBody payload={payload} code={current === "code"} /> : null}
+            {payload ? (
+              <PayloadBody key={`${owner.id}:${current}`} payload={payload} code={current === "code"} span={owner} />
+            ) : null}
           </div>
         </>
       )}
@@ -131,17 +139,45 @@ const TOOL_TYPES: Record<Extract<Span, { kind: "tool.call" }>["attrs"]["toolType
   builtin: "Built-in",
 };
 
-function PayloadBody({ payload, code }: { payload: Payload; code: boolean }) {
-  if (!payload.inline)
+function PayloadBody({ payload, code, span }: { payload: Payload; code: boolean; span: Span }) {
+  const [loaded, setLoaded] = useState<{ value: Json }>();
+  const [failure, setFailure] = useState<unknown>();
+  const [pending, setPending] = useState(false);
+  if (!payload.inline && !loaded)
     return (
       <div className="flex flex-col gap-2">
         <p className="text-micro text-secondary">
-          Only the first 400 characters were kept ({Math.ceil(payload.bytes / 1024)} KB in all).
+          {payload.key
+            ? `Preview of ${Math.ceil(payload.bytes / 1024)} KB`
+            : `Only the first 400 characters were kept (${Math.ceil(payload.bytes / 1024)} KB in all).`}
         </p>
         <Text value={payload.preview} />
+        {failure != null && <ProblemBanner error={failure} />}
+        {payload.key && (
+          <Button
+            disabled={pending}
+            onClick={async () => {
+              setPending(true);
+              setFailure(undefined);
+              try {
+                const data = await api<{ value: unknown }>(
+                  "GET",
+                  `/v1/workspaces/${span.workspaceId}/turns/${span.turnId}/trace/${span.id}/payload/${encodeURIComponent(payload.key)}`,
+                );
+                setLoaded({ value: Json.parse(data.value) });
+              } catch (error) {
+                setFailure(error);
+              } finally {
+                setPending(false);
+              }
+            }}
+          >
+            {pending ? "Loading payload" : "Load full payload"}
+          </Button>
+        )}
       </div>
     );
-  const value = payload.value;
+  const value = payload.inline ? payload.value : (loaded?.value ?? null);
   if (typeof value === "string") return code ? <Code value={value} /> : <Text value={value} />;
   if (isPrompt(value)) return <Prompt value={value} />;
   return <JsonTree value={value} />;

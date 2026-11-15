@@ -5,10 +5,12 @@ import {
   BridgeUser,
   EmulatorStateResponse,
   newElementId,
+  newId,
   Span,
   Trace,
   type Workflow,
 } from "@wakeel/contracts";
+import { upsertSpans } from "@wakeel/db";
 import { superuserQuery } from "@wakeel/db/testing";
 import { RTL_FIXTURES } from "@wakeel/testing";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest";
@@ -324,8 +326,30 @@ describe("traces (task 4.7)", () => {
     expect(trace.statusCode, trace.body).toBe(200);
     expect(Trace.parse(trace.json())).toMatchObject({ turnId, spans: [{ kind: "turn", seq: 0 }] });
 
+    const current = Trace.parse(trace.json()).spans[0];
+    if (!current) throw new Error("Missing turn span");
+    const id = newId("span");
+    const key = `traces/${b.ws}/${id}/fixture.json`;
+    const span = Span.parse({
+      ...current,
+      id,
+      seq: 1,
+      kind: "code.exec",
+      name: "Run code",
+      attrs: { kind: "card", source: { inline: false, key: "source", bytes: 12000, preview: "إجراء ORD-12" } },
+    });
+    const value = "إجراء ORD-12 ".repeat(800);
+    await stack.objectStore.put(key, Buffer.from(JSON.stringify({ source: value })), "application/json");
+    await stack.db.withWorkspace(b.ws, (tx) => upsertSpans(tx, [span], new Map([[id, key]])));
+    const payloadPath = `/turns/${turnId}/trace/${id}/payload/source`;
+    const payload = await owner.get(`/v1/workspaces/${b.ws}${payloadPath}`);
+    expect(payload.statusCode).toBe(200);
+    expect(payload.json().value === value).toBe(true);
+    expect(payload.headers["cache-control"]).toBe("no-store");
+
     const stranger = await signUp(stack.app);
     const theirs = await botOf(stranger);
+    expect((await stranger.get(`/v1/workspaces/${theirs.ws}${payloadPath}`)).statusCode).toBe(404);
     expect((await stranger.get(`/v1/workspaces/${theirs.ws}/turns/${turnId}/trace`)).json()).toMatchObject({
       code: "not_found",
     });
