@@ -1,6 +1,6 @@
 # ADR-047 — Table schema changes, row validation and filter semantics
 
-Status: proposed · Date: 2026-11-15 · Tasks: 9.1, 9.2, 9.4
+Status: accepted (Eyad approved in writing on 2026-11-15) · Date: 2026-11-15 · Tasks: 9.1, 9.2, 9.4
 
 ## Context
 
@@ -20,7 +20,7 @@ count limit. The Studio needs a revision boundary for schema edits.
 
 ## Recommendation
 
-Choose option 1.
+Option 1 approved.
 
 - Reserve the default limit of 50 tables per bot and 100,000 rows per table. Serialize table
   creation by locking its bot and enforce the table limit in that transaction. Lock the table for
