@@ -16,6 +16,7 @@ import { type KnowledgeDeps, knowledgeRoutes } from "./routes/knowledge";
 import { memberRoutes } from "./routes/members";
 import { modelRoutes } from "./routes/models";
 import { portableRoutes } from "./routes/portable";
+import { tableRowRoutes } from "./routes/table-rows";
 import { tableRoutes } from "./routes/tables";
 import { traceRoutes } from "./routes/traces";
 import { versionRoutes } from "./routes/versions";
@@ -129,6 +130,7 @@ export function buildApp(options: AppOptions) {
     void app.register(portableRoutes, deps);
     void app.register(traceRoutes, deps);
     void app.register(tableRoutes, deps);
+    void app.register(tableRowRoutes, deps);
     void app.register(modelRoutes, { studio: deps, keyring: deps.keyring });
   }
 

@@ -24,7 +24,7 @@ export interface TableScope {
   tableId: string;
 }
 export type TableRecord = TableSchema & { rowCount: number; revision: string };
-type NormaliseSearch = (text: string) => string;
+export type NormaliseSearch = (text: string) => string;
 
 function tableRecord(raw: unknown): TableRecord {
   if (!raw) throw new AppError("not_found");
@@ -39,10 +39,10 @@ function tableRecord(raw: unknown): TableRecord {
   return { ...schema, rowCount: row.row_count, revision: `"${hash}"` };
 }
 
-async function readTable(tx: Tx, { botId, tableId }: TableScope, lock = false) {
+export async function readTable(tx: Tx, { botId, tableId }: TableScope, lock: boolean | "share" = false) {
   await getBot(tx, botId);
   const selected = await tx.execute(sql`select ${tableFields} from bot_tables
-    where bot_id = ${botId} and id = ${tableId} ${lock ? sql`for update` : sql``}`);
+    where bot_id = ${botId} and id = ${tableId} ${lock === "share" ? sql`for share` : lock ? sql`for update` : sql``}`);
   return tableRecord(selected.rows[0]);
 }
 
@@ -86,7 +86,7 @@ function assertRevision(current: TableRecord, revision: string) {
   if (current.revision !== revision) throw new AppError("revision_conflict");
 }
 
-function searchText(data: Record<string, Json>, columns: Column[], normalize: NormaliseSearch): string {
+export function searchText(data: Record<string, Json>, columns: Column[], normalize: NormaliseSearch): string {
   const values = columns.flatMap((column) => {
     const value = data[column.id];
     if (!column.searchable || value == null) return [];
@@ -95,10 +95,23 @@ function searchText(data: Record<string, Json>, columns: Column[], normalize: No
   return values.length ? normalize(values.join(" ")) : "";
 }
 
-/** The table write lock covers data validation and the uniqueness check for the entire batch. */
-export async function insertTableRows(tx: Tx, scope: TableScope, inputs: unknown[], normalize: NormaliseSearch) {
+export async function ensureUnique(tx: Tx, table: TableRecord, rows: Record<string, Json>[], except?: string) {
+  for (const column of table.columns.filter((column) => column.unique)) {
+    const values = rows.flatMap((data) => (data[column.id] == null ? [] : [data[column.id]]));
+    if (!values.length) continue;
+    const otherRow = except === undefined ? sql`` : sql`and r.id <> ${except}`;
+    const conflict = await tx.execute(sql`with pending as (
+      select value from jsonb_array_elements(${JSON.stringify(values)}::jsonb)
+    )
+    select exists(select 1 from pending group by value having count(*) > 1)
+      or exists(select 1 from pending join table_rows r on (r.data -> ${column.id}::text) = pending.value
+        where r.table_id = ${table.id} ${otherRow}) as found`);
+    if (conflict.rows[0]?.["found"]) throw new AppError("unique_violation", { column: column.name });
+  }
+}
+
+export async function insertRowsLocked(tx: Tx, table: TableRecord, inputs: unknown[], normalize: NormaliseSearch) {
   if (!inputs.length || inputs.length > TABLE_LIMITS.insertBatch) throw new AppError("validation_failed");
-  const table = await readTable(tx, scope, true);
   if (table.rowCount + inputs.length > defaults.rows) {
     throw new AppError("table_limit_reached", { table: table.name, limit: defaults.rows });
   }
@@ -106,21 +119,21 @@ export async function insertTableRows(tx: Tx, scope: TableScope, inputs: unknown
     const data = validateRow(table.columns, input);
     return { id: newId("row"), data, terms: searchText(data, table.columns, normalize) };
   });
-  for (const column of table.columns.filter((column) => column.unique)) {
-    const values = rows.flatMap(({ data }) => (data[column.id] == null ? [] : [data[column.id]]));
-    const conflict = await tx.execute(sql`with pending as (
-      select value from jsonb_array_elements(${JSON.stringify(values)}::jsonb)
-    )
-    select exists(select 1 from pending group by value having count(*) > 1)
-      or exists(select 1 from pending join table_rows r on (r.data -> ${column.id}::text) = pending.value
-        where r.table_id = ${table.id}) as found`);
-    if (conflict.rows[0]?.["found"]) throw new AppError("unique_violation", { column: column.name });
-  }
+  await ensureUnique(
+    tx,
+    table,
+    rows.map((row) => row.data),
+  );
   await tx.execute(sql`insert into table_rows (id, workspace_id, table_id, data, lex)
     select id, ${currentWorkspace}, ${table.id}, data, to_tsvector('simple', terms)
     from jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) as input(id text, data jsonb, terms text)`);
   await tx.execute(sql`update bot_tables set row_count = row_count + ${rows.length} where id = ${table.id}`);
   return rows.map(({ terms: _terms, ...row }) => row);
+}
+
+/** The table write lock covers data validation and the uniqueness check for the entire batch. */
+export async function insertTableRows(tx: Tx, scope: TableScope, inputs: unknown[], normalize: NormaliseSearch) {
+  return insertRowsLocked(tx, await readTable(tx, scope, true), inputs, normalize);
 }
 
 async function checkColumnChanges(tx: Tx, current: TableRecord, next: TableSchema, normalize: NormaliseSearch) {
