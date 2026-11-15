@@ -16,6 +16,7 @@
     "@wakeel/contracts": "workspace:*",
     "@wakeel/db": "workspace:*",
     "@wakeel/engine": "workspace:*",
+    "@wakeel/evals": "workspace:*",
     "@wakeel/llm": "workspace:*",
     "@wakeel/retrieval": "workspace:*",
     "@wakeel/sandbox-client": "workspace:*",

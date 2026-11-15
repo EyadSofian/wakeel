@@ -11,6 +11,7 @@ import { configVarRoutes } from "./routes/config-vars";
 import { connectionRoutes } from "./routes/connections";
 import { conversationHistoryRoutes } from "./routes/conversation-history";
 import { emulatorRoutes } from "./routes/emulator";
+import { type EvalRoutesDeps, evalRoutes } from "./routes/evals";
 import { fileRoutes } from "./routes/files";
 import { invitationRoutes } from "./routes/invitations";
 import { type KnowledgeDeps, knowledgeRoutes } from "./routes/knowledge";
@@ -37,6 +38,7 @@ export interface AppOptions {
   /** Per-check limit for /health/ready. */
   readinessTimeoutMs?: number;
   knowledge?: KnowledgeDeps;
+  evals?: EvalRoutesDeps;
   /** The Studio API (sign-in, workspaces, members); mounted for roles studio and all. */
   studio?: Omit<StudioDeps, "now"> & { now?: () => Date };
   /** The Bridge API (task 4.5); mounted for roles bridge and all. */
@@ -123,6 +125,7 @@ export function buildApp(options: AppOptions) {
     void app.register(auditRoutes, deps);
     void app.register(botRoutes, deps);
     void app.register(versionRoutes, deps);
+    if (options.evals) void app.register(evalRoutes, { studio: deps, queue: options.evals });
     void app.register(configVarRoutes, deps);
     void app.register(fileRoutes, deps);
     void app.register(knowledgeRoutes, {

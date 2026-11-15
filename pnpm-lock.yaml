@@ -234,6 +234,9 @@ importers:
       '@wakeel/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@wakeel/evals':
+        specifier: workspace:*
+        version: link:../../packages/evals
       '@wakeel/llm':
         specifier: workspace:*
         version: link:../../packages/llm

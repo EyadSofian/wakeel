@@ -22,6 +22,7 @@ export const bridgeConnections = pgTable("bridge_connections", {
   consecutiveDead: integer("consecutive_dead").notNull().default(0),
   /** Set on the emulator's draft connection for one builder session (0007, ADR-025). */
   emulatorSessionId: text("emulator_session_id"),
+  evalInternal: boolean("eval_internal").notNull().default(false),
   createdAt: at("created_at").notNull().defaultNow(),
   updatedAt: at("updated_at").notNull().defaultNow(),
 });

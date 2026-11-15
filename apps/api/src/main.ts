@@ -67,6 +67,7 @@ if (config) {
   const subscriber = new Redis(redisUrl);
   const turnQueue = new Queue("turn", { connection: { url: redisUrl, maxRetriesPerRequest: null } });
   const webhookQueue = new Queue("webhook", { connection: { url: redisUrl, maxRetriesPerRequest: null } });
+  const evalQueue = new Queue("eval", { connection: { url: redisUrl, maxRetriesPerRequest: null } });
   const keyring = {
     current: { version: config.masterKeyVersion, key: config.masterKey.reveal() },
     previous: config.previousMasterKeys.reveal(),
@@ -87,6 +88,17 @@ if (config) {
     rerankFetch: rerankThroughEgress({ egressUrl: config.egressUrl, egressToken: config.egressToken.reveal() }),
   });
   const app = buildApp({
+    evals: {
+      enqueue: async (input) => {
+        await evalQueue.add("run", input, {
+          jobId: input.runId,
+          attempts: 5,
+          backoff: { type: "exponential", delay: 5_000 },
+          removeOnComplete: true,
+          removeOnFail: true,
+        });
+      },
+    },
     knowledge: {
       llm,
       enqueueSync: async (job) => {
@@ -140,6 +152,7 @@ if (config) {
       turnQueue.close(),
       webhookQueue.close(),
       syncQueue.close(),
+      evalQueue.close(),
     ]);
     process.exit(0);
   };
