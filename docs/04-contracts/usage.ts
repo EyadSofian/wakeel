@@ -42,3 +42,15 @@ export const NewUsage = z
     { message: "Use the unit defined for this usage kind", path: ["unit"] },
   );
 export type NewUsage = z.infer<typeof NewUsage>;
+
+/** Architecture §2.3: UTC daily usage, retaining mode so only live entries reach billing. */
+export const DailyUsage = z.object({
+  day: z.iso.date(),
+  botId: BotId.nullable(),
+  kind: UsageKind,
+  model: z.string().nullable(),
+  mode: UsageMode,
+  quantity: z.number().finite().nonnegative(),
+  costMicroUsd: z.number().int().nonnegative(),
+});
+export type DailyUsage = z.infer<typeof DailyUsage>;

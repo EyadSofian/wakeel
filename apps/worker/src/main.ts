@@ -38,6 +38,7 @@ import {
   syncProcessor,
   turnKnowledge,
 } from "./kb/index";
+import { rollupUsage } from "./maintenance/usage-rollup";
 import {
   aiPort,
   autonomyPort,
@@ -174,6 +175,7 @@ if (config) {
         // Scheduled knowledge base re-sync (task 8.5): finds due sources and adds kb-sync jobs.
         {
           "storage-usage": () => sampleStorageUsage(db, new Date()),
+          "usage-rollup": () => rollupUsage(db, new Date()),
           "kb-resync": () => enqueueDueSyncs({ db, enqueueSync }, new Date()),
           "trace-retention": () =>
             maintainTraces(db, objectStore, new Date(), config.traceRetention, () =>
@@ -252,6 +254,12 @@ if (config) {
         "storage-usage",
         { every: 60 * 60 * 1000 },
         { name: "storage-usage", opts: { removeOnComplete: true, removeOnFail: 100 } },
+      );
+    if (config.queues.includes("maintenance"))
+      await maintenanceQueue.upsertJobScheduler(
+        "usage-rollup",
+        { every: 60 * 60 * 1000 },
+        { name: "usage-rollup", opts: { removeOnComplete: true, removeOnFail: 100 } },
       );
     if (config.queues.includes("maintenance"))
       await maintenanceQueue.upsertJobScheduler(

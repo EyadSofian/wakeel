@@ -14,6 +14,7 @@ export * from "./secret-values";
 export * from "./secrets";
 export * from "./traces";
 export * from "./usage";
+export * from "./usage-daily";
 export * from "./versions";
 export * from "./webhooks";
 export * from "./workspaces";

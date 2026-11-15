@@ -10,6 +10,8 @@ import {
   ensureConversation,
   insertUsageEvent,
   insertUserMessage,
+  readDailyUsage,
+  rollupUsageDay,
   sql,
   upsertEndUser,
   usageTotals,
@@ -73,6 +75,38 @@ describe.each(["A → B", "B → A"])("two tenants, %s", (direction) => {
 });
 
 describe("usage_events", () => {
+  test("daily roll-ups match event sums by mode, are repeatable, and remain tenant-scoped", async () => {
+    const [owner, other] = [await workspace(), await workspace()];
+    await db.withWorkspace(owner, async (tx) => {
+      for (const [mode, quantity, cost] of [
+        ["live", 2, 7],
+        ["live", 3, 11],
+        ["emulator", 9, 31],
+        ["eval", 4, 17],
+      ] as const) {
+        const id = await insertUsageEvent(tx, { ...event, mode, quantity, costMicroUsd: cost });
+        await tx.execute(sql`update usage_events set at='2026-11-14T12:00:00Z' where id=${id}`);
+      }
+      const result = await rollupUsageDay(tx, "2026-11-14");
+      expect(result.map(({ mode, quantity, costMicroUsd }) => ({ mode, quantity, costMicroUsd }))).toEqual([
+        { mode: "emulator", quantity: 9, costMicroUsd: 31 },
+        { mode: "eval", quantity: 4, costMicroUsd: 17 },
+        { mode: "live", quantity: 5, costMicroUsd: 18 },
+      ]);
+      expect(await rollupUsageDay(tx, "2026-11-14")).toEqual(result);
+      expect(await readDailyUsage(tx, "2026-11-15")).toEqual([]);
+    });
+    expect(await db.withWorkspace(other, (tx) => readDailyUsage(tx, "2026-11-14"))).toEqual([]);
+    expect((await rw.query("select * from usage_daily")).rows).toEqual([]);
+    await expect(
+      db.withWorkspace(other, (tx) =>
+        tx.execute(sql`insert into usage_daily
+      (workspace_id, day, kind, mode, quantity, cost_micro_usd) values
+      (${owner}, '2026-11-14', 'llm_tokens', 'live', 1, 0)`),
+      ),
+    ).rejects.toThrow();
+  });
+
   test("occupancy uses the last sample per bot, excluding archived bots and non-live modes", async () => {
     const ws = await workspace();
     const userId = (await su.query("select user_id from memberships where workspace_id=$1", [ws])).rows[0]
