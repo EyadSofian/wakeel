@@ -119,6 +119,7 @@ export function createMenuCard(
   wf: Workflow,
   workflows: readonly Workflow[],
   kbId?: string,
+  tableId?: string,
 ): MenuCard {
   const base = { id: newElementId("card"), disabled: false };
   switch (type) {
@@ -187,7 +188,9 @@ export function createMenuCard(
         ? { card: { ...base, type, kbIds: [kbId], query: "{{event.text}}", topK: 5 } }
         : { unavailable: "Create a knowledge base first" };
     case "table":
-      return { unavailable: "Create a table first" };
+      return tableId
+        ? { card: { ...base, type, tableId, operation: "find", sort: [], limit: 10 } }
+        : { unavailable: "Create a table first" };
     case "call_workflow": {
       const sub = workflows.find((w) => w.kind === "sub" && w.id !== wf.id);
       return sub
