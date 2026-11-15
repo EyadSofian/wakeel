@@ -208,6 +208,9 @@ export function createLlm(deps: LlmDeps): LlmClient {
       const result = withFallback(request.model, async (model) => {
         const cred = await credential(request.context.workspaceId, model.provider);
         const run = streamText({
+          // The SDK otherwise logs raw provider exceptions, which may carry secrets or prompt text.
+          // fullStream below still delivers the failure to our problem/trace boundary.
+          onError: () => {},
           model: models.language(model, cred),
           system: request.system,
           messages: request.messages,
@@ -282,6 +285,8 @@ export function createLlm(deps: LlmDeps): LlmClient {
         if (!model.capabilities.vision) throw new AppError("model_lacks_vision", { model: model.id });
         const cred = await credential(request.context.workspaceId, model.provider);
         const run = streamText({
+          // Provider errors are mapped by withFallback; never let the SDK print raw request data.
+          onError: () => {},
           model: models.language(model, cred),
           system: request.system,
           messages: [
