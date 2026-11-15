@@ -1,6 +1,6 @@
 # ADR-043 — Search configuration and the missing retrieval bindings
 
-Status: proposed · Date: 2026-11-15 · Task: 8.6
+Status: accepted (Eyad approved recommendations 1–7 in writing on 2026-11-15) · Date: 2026-11-15 · Task: 8.6
 
 ## Context
 
