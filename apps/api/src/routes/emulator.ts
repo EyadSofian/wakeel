@@ -1,23 +1,31 @@
 import {
   AppError,
+  BotId,
   BotManifest,
   type EmulatorStateResponse,
   type EmulatorVariable,
   type Json,
+  ReplayResult,
+  ReplayTurnRequest,
+  ReplayTurnResponse,
   RunFromRequest,
   SendMessageRequest,
   STATE_MAX_BYTES,
+  TurnId,
   UserData,
   type Variable,
   Workflow,
 } from "@wakeel/contracts";
 import {
+  createRecordedReplay,
   ensureEmulatorConnection,
   findConversation,
   getBot,
   getConversation,
   getEndUser,
   listDraftDocs,
+  listTurnSpans,
+  recordedReplayResult,
 } from "@wakeel/db";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -56,6 +64,34 @@ export async function emulatorRoutes(app: FastifyInstance, deps: EmulatorDeps): 
     });
     return { workspaceId: member.workspaceId, connection };
   }
+
+  const replayPath = z.object({ botId: BotId, turnId: TurnId });
+  app.post(`${base}/replay/:turnId`, async (request, reply) => {
+    const actor = await requireMember(deps.studio, request, reply, "bot.update");
+    await requireMember(deps.studio, request, reply, "conversation.read");
+    const p = replayPath.parse(request.params);
+    const body = ReplayTurnRequest.parse(request.body);
+    const response = await deps.studio.db.withWorkspace(actor.workspaceId, (tx) =>
+      createRecordedReplay(tx, { ...body, botId: p.botId, sourceTurnId: p.turnId, sessionId: actor.session.sessionId }),
+    );
+    await deps.bridge.enqueueTurn(response.conversationId);
+    return reply.code(202).send(ReplayTurnResponse.parse(response));
+  });
+
+  app.get(`${base}/replay/:turnId`, async (request, reply) => {
+    const actor = await requireMember(deps.studio, request, reply, "bot.update");
+    await requireMember(deps.studio, request, reply, "conversation.read");
+    const p = replayPath.parse(request.params);
+    return deps.studio.db.withWorkspace(actor.workspaceId, async (tx) => {
+      const replay = await recordedReplayResult(tx, { ...p, sessionId: actor.session.sessionId });
+      const spans = await listTurnSpans(tx, p.turnId);
+      return ReplayResult.parse({
+        status: replay.status,
+        messages: replay.messages,
+        trace: spans.length ? { turnId: p.turnId, conversationId: replay.conversation.id, spans } : null,
+      });
+    });
+  });
 
   app.post(`${base}/conversations/:externalConversationId/messages`, async (request, reply) => {
     const ctx = await context(request, reply);

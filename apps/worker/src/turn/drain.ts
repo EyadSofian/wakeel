@@ -53,6 +53,7 @@ import type { AutonomyTurn } from "./autonomy";
 import { eventScope, isTextMessage } from "./event-scope";
 import { botMessageId } from "./message-id";
 import { scrubSecrets } from "./redact";
+import { replayCodePort, replayPolicy } from "./replay";
 import { type TableOperationTrace, turnTables } from "./tables";
 import { storeTraceSpans } from "./trace-storage";
 import { migrateToVersion } from "./version";
@@ -260,6 +261,7 @@ class ConversationRun {
     });
     if (!loaded) return false;
     const { event, conversation, definition, migrated, config } = loaded;
+    const replay = replayPolicy(conversation.mode, event.payload);
     this.#secrets = config.secrets;
 
     let turn = loaded.turn;
@@ -319,6 +321,7 @@ class ConversationRun {
       definition,
       ...(state.summary ? { summary: state.summary.text } : {}),
       env: config.values,
+      ...(replay ? { replay: { allowSideEffects: replay.allowSideEffects } } : {}),
     };
     const retrievalTraces: RetrievalRecord[] = [];
     const knowledge = this.deps.knowledge?.(modelTurn, (record) => retrievalTraces.push(record));
@@ -336,6 +339,7 @@ class ConversationRun {
     const ai = this.deps.ai?.(modelTurn);
     const ports: EnginePorts = {
       ...sandbox,
+      ...(replay ? { code: replayCodePort(sandbox.code, replay.allowSideEffects) } : {}),
       tables,
       ...(knowledge ? { knowledge } : {}),
       ...(autonomy ? { autonomy } : {}),
@@ -462,6 +466,11 @@ class ConversationRun {
    * take every text message that followed it without anything else in between.
    */
   async #coalesce(event: InboundEventRecord, definition: BotDefinition): Promise<InboundEventRecord[]> {
+    const replay = replayPolicy("emulator", event.payload);
+    if (replay) {
+      const following = await this.#tx((tx) => unprocessedEventsAfter(tx, this.conversationId, event.seq));
+      return [event, ...following.filter((next) => replayPolicy("emulator", next.payload)?.group === replay.group)];
+    }
     const windowMs = definition.manifest.settings.coalesceWindowMs;
     if (windowMs <= 0 || !isTextMessage(event)) return [event];
     await (this.deps.sleep ?? realSleep)(windowMs);

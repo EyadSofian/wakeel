@@ -73,6 +73,18 @@ for (const theme of ["light", "dark"] as const) {
     await sheet.getByRole("button", { name: /Run code/ }).click();
     await expect(sheet.getByText("return 12;")).toBeVisible();
     await expect(page).toHaveScreenshot(`conversations-trace-${theme}.png`);
+    await page.route("**/emulator/replay/**", (route) => {
+      if (route.request().method() === "POST") {
+        expect(route.request().postDataJSON()).toMatchObject({ allowSideEffects: false });
+        return route.fulfill({
+          status: 202,
+          json: { conversationId: conversation.id, turnId, externalId: "replay-fixture" },
+        });
+      }
+      return route.fulfill({ json: { status: "completed", messages: [response], trace: null } });
+    });
+    await sheet.getByRole("button", { name: "Replay on draft", exact: true }).click();
+    await expect(sheet.getByRole("status")).toHaveText("Completed");
     await sheet.getByRole("button", { name: "Close" }).click();
     await expect(page.getByRole("button", { name: "Open trace" })).toBeFocused();
   });

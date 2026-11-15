@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
   Accepted,
   type BotManifest,
@@ -10,7 +10,7 @@ import {
   Trace,
   type Workflow,
 } from "@wakeel/contracts";
-import { upsertSpans } from "@wakeel/db";
+import { sql, upsertSpans } from "@wakeel/db";
 import { superuserQuery } from "@wakeel/db/testing";
 import { RTL_FIXTURES } from "@wakeel/testing";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest";
@@ -357,4 +357,47 @@ describe("traces (task 4.7)", () => {
       code: "not_found",
     });
   });
+});
+
+test("replay creates an isolated draft conversation and deduplicates the request", async () => {
+  const owner = await signUp(stack.app);
+  const b = await botOf(owner);
+  stack.autoWork.on = true;
+  const response = await stack.app.inject({
+    method: "POST",
+    url: `${b.base}/conversations/${emu()}/messages?wait=5`,
+    headers: { cookie: owner.cookie, origin: STUDIO, "x-csrf-token": owner.csrf },
+    payload: hello("فاتورة ORD-12"),
+  });
+  const source = response.json() as { turnId: string; conversationId: string };
+  await stack.db.withWorkspace(b.ws, (tx) =>
+    tx.execute(sql`update conversations set mode='live' where id=${source.conversationId}`),
+  );
+  const body = { requestId: randomUUID(), allowSideEffects: false };
+  const path = `${b.base}/replay/${source.turnId}`;
+  const before = (
+    await superuserQuery(stack.pg.urls, "select state, next_in_seq, next_out_seq from conversations where id=$1", [
+      source.conversationId,
+    ])
+  )[0];
+  const replay = await owner.send("POST", path, body);
+  expect(replay.statusCode, replay.body).toBe(202);
+  expect(replay.json().conversationId).not.toBe(source.conversationId);
+  expect((await owner.send("POST", path, body)).json()).toEqual(replay.json());
+  expect((await owner.send("POST", path, { ...body, allowSideEffects: true })).statusCode).toBe(409);
+  expect(
+    (
+      await superuserQuery(stack.pg.urls, "select state, next_in_seq, next_out_seq from conversations where id=$1", [
+        source.conversationId,
+      ])
+    )[0],
+  ).toEqual(before);
+  const record = (
+    await superuserQuery(stack.pg.urls, "select mode, version_id from conversations where id=$1", [
+      replay.json().conversationId,
+    ])
+  )[0];
+  expect(record).toEqual({ mode: "emulator", version_id: null });
+  const stranger = await signUp(stack.app);
+  expect((await stranger.send("POST", path, { requestId: randomUUID() })).statusCode).toBe(404);
 });

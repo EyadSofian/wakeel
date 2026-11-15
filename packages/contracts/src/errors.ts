@@ -246,6 +246,16 @@ export const ERRORS = {
     title: "We could not fetch {url}: {message}",
     fix: "Check that the page is public.",
   },
+  replay_input_unavailable: {
+    status: 422,
+    title: "This turn has no supported recorded input",
+    fix: "Choose a turn triggered by a message or a custom event.",
+  },
+  replay_side_effect_blocked: {
+    status: 403,
+    title: "Replay stopped before running code with possible side effects",
+    fix: "Review the code and explicitly confirm side effects before replaying.",
+  },
   table_write_disabled: {
     status: 403,
     title: "This run cannot change table rows",
