@@ -67,7 +67,7 @@ test("mounts the schema routes described by OpenAPI", () => {
   const operations = Object.entries(spec.paths).flatMap(([path, item]) =>
     types.flatMap((method) => (item[method]?.operationId ? [{ path, method }] : [])),
   );
-  expect(operations).toHaveLength(5);
+  expect(operations).toHaveLength(12);
   for (const { path, method } of operations) {
     const url = path.replace(/\{(\w+)\}/g, ":$1");
     expect(stack.app.hasRoute({ method, url })).toBe(true);

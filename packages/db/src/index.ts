@@ -10,5 +10,7 @@ export * from "./schema/kb";
 export * from "./schema/platform";
 export * from "./schema/runtime";
 export * from "./sql";
+export { importTableCsv } from "./tables/csv";
 export * from "./tables/filter";
 export * from "./tables/repo";
+export * from "./tables/rows";
