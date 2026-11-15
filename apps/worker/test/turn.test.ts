@@ -14,6 +14,7 @@ import {
   createWorkspace,
   type Database,
   getDraftDoc,
+  insertTableRows,
   type Keyring,
   listDraftDocs,
   memoryObjectStore,
@@ -31,7 +32,7 @@ import {
 import { type StartedTestDatabase, startTestDatabase, superuserQuery } from "@wakeel/db/testing";
 import type { CodeOutcome, CodePort, CodeRequest, KnowledgePort, SandboxPort } from "@wakeel/engine";
 import type { LlmClient } from "@wakeel/llm";
-import { createLogger } from "@wakeel/telemetry";
+import { createLogger, sampleStorageUsage } from "@wakeel/telemetry";
 import { FakeLlm } from "@wakeel/testing";
 import { Queue } from "bullmq";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -808,6 +809,12 @@ describe("the Autonomous Node (task 6.6)", () => {
     await drainConversation(d, c.conversationId);
     expect(await botTexts(c)).toEqual(["طلبك اتشحن"]);
     expect(codeRuns).toHaveLength(1);
+    const usage = await db.withWorkspace(c.ws, (tx) =>
+      tx.execute(sql`select mode, quantity::float8 as quantity
+      from usage_events where kind='code_ms' and conversation_id=${c.conversationId}`),
+    );
+    expect(usage.rows).toHaveLength(2);
+    for (const row of usage.rows) expect(row).toEqual({ mode: "emulator", quantity: expect.any(Number) });
     expect(codeRuns[0]?.source.startsWith('const input = {"number":"5678"}; ')).toBe(true);
     const second = llm.calls[1]?.request as { messages: { content: string }[] };
     expect(second.messages.at(-1)?.content).toContain('{"status":"shipped"}');
@@ -1605,5 +1612,46 @@ test("a fresh replay leaves its live source unchanged and blocks Code cards unti
     );
     await drainConversation(deps({ code }).d, c.conversationId);
     expect(calls).toBe(allowed ? 1 : 0);
+    const usage = await db.withWorkspace(c.ws, (tx) =>
+      tx.execute(sql`select count(*)::int as n from usage_events
+      where kind='code_ms' and conversation_id=${c.conversationId}`),
+    );
+    expect(usage.rows[0]?.["n"]).toBe(allowed ? 1 : 0);
   }
+});
+
+test("storage sampling records current table occupancy once per hour and zero after deletion", async () => {
+  const c = await seed([]);
+  const table = await db.withWorkspace(c.ws, async (tx) => {
+    const t = await createTable(tx, c.botId, {
+      name: "orders",
+      columns: [
+        { id: newElementId("col"), name: "title", type: "string", required: true, unique: false, searchable: false },
+      ],
+    });
+    const column = t.columns[0];
+    if (!column) throw new Error("the fixture table has no column");
+    await insertTableRows(tx, { botId: c.botId, tableId: t.id }, [{ [column.id]: "فاتورة ORD-12" }], (text) => text);
+    return t;
+  });
+  const sampled = new Date("2026-11-15T12:00:00Z");
+  await sampleStorageUsage(db, sampled);
+  await sampleStorageUsage(db, sampled);
+  const values = () =>
+    db.withWorkspace(c.ws, (tx) =>
+      tx.execute(sql`select kind, quantity::float8 as quantity
+    from usage_events where kind in ('table_rows','kb_storage_bytes') order by kind, at, id`),
+    );
+  expect((await values()).rows).toEqual([
+    { kind: "kb_storage_bytes", quantity: 0 },
+    { kind: "table_rows", quantity: 1 },
+  ]);
+  await db.withWorkspace(c.ws, (tx) => tx.execute(sql`delete from bot_tables where id=${table.id}`));
+  await sampleStorageUsage(db, new Date("2026-11-15T13:00:00Z"));
+  expect(
+    (await values()).rows
+      .filter((row) => row["kind"] === "table_rows")
+      .map((row) => row["quantity"])
+      .sort(),
+  ).toEqual([0, 1]);
 });

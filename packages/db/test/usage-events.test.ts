@@ -1,8 +1,19 @@
 import { randomBytes } from "node:crypto";
-import { newId } from "@wakeel/contracts";
+import { emptyState, type Json, newId } from "@wakeel/contracts";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
-import { createDatabase, createWorkspace, type Database, insertUsageEvent, sql } from "../src/index";
+import {
+  createBot,
+  createDatabase,
+  createWorkspace,
+  type Database,
+  ensureConversation,
+  insertUsageEvent,
+  insertUserMessage,
+  sql,
+  upsertEndUser,
+  usageTotals,
+} from "../src/index";
 
 /** Task 6.1 (migration 0011): usage events, partitioned by month, under RLS. */
 const urls = inject("db");
@@ -62,6 +73,58 @@ describe.each(["A → B", "B → A"])("two tenants, %s", (direction) => {
 });
 
 describe("usage_events", () => {
+  test("occupancy uses the last sample per bot, excluding archived bots and non-live modes", async () => {
+    const ws = await workspace();
+    const userId = (await su.query("select user_id from memberships where workspace_id=$1", [ws])).rows[0]
+      .user_id as string;
+    await db.withWorkspace(ws, async (tx) => {
+      const bot = await createBot(tx, { name: "مخزون ORD-12", slug: "storage", createdBy: userId });
+      const archived = await createBot(tx, { name: "أرشيف", slug: "archive", createdBy: userId });
+      await tx.execute(sql`update bots set archived_at=now() where id=${archived.id}`);
+      const sample = async (botId: string, quantity: number, time: string) => {
+        const id = await insertUsageEvent(tx, {
+          kind: "table_rows",
+          quantity,
+          unit: "rows",
+          mode: "live",
+          botId,
+          detail: { measurement: "snapshot" },
+        });
+        await tx.execute(sql`update usage_events set at=${time}::timestamptz where id=${id}`);
+      };
+      await sample(bot.id, 10, "2026-11-10T10:00:00Z");
+      await sample(bot.id, 4, "2026-11-10T11:00:00Z");
+      await sample(archived.id, 100, "2026-11-10T11:00:00Z");
+      await insertUsageEvent(tx, { ...event, quantity: 50, mode: "emulator" });
+      await insertUsageEvent(tx, { ...event, quantity: 20, mode: "eval" });
+      expect(await usageTotals(tx, new Date("2026-11-01"), new Date("2026-12-01"))).toEqual([
+        { kind: "table_rows", quantity: 4, costMicroUsd: 0 },
+      ]);
+    });
+  });
+
+  test("accounting identities deduplicate retries and stay isolated by workspace", async () => {
+    const [a, b] = [await workspace(), await workspace()];
+    const input = { ...event, sourceKey: "delivery:one:1" };
+    const first = await db.withWorkspace(a, (tx) => insertUsageEvent(tx, input));
+    expect(await db.withWorkspace(a, (tx) => insertUsageEvent(tx, input))).toBe(first);
+    expect(await db.withWorkspace(b, (tx) => insertUsageEvent(tx, input))).not.toBe(first);
+    for (const ws of [a, b]) {
+      const rows = await db.withWorkspace(ws, (tx) => tx.execute(sql`select usage_id from usage_sources`));
+      expect(rows.rows).toHaveLength(1);
+      expect(
+        await db.withWorkspace(ws, (tx) => usageTotals(tx, new Date("2000-01-01"), new Date("2100-01-01"))),
+      ).toEqual([{ kind: "llm_tokens", quantity: 1200, costMicroUsd: 4200 }]);
+    }
+    expect((await rw.query("select * from usage_sources")).rows).toEqual([]);
+    await expect(
+      db.withWorkspace(a, (tx) =>
+        tx.execute(sql`insert into usage_sources
+      (workspace_id, source_key, usage_id) values (${b}, 'forged', ${newId("usg")})`),
+      ),
+    ).rejects.toThrow();
+  });
+
   test("a row cannot name another workspace", async () => {
     const [a, b] = [await workspace(), await workspace()];
     await expect(
@@ -82,4 +145,47 @@ describe("usage_events", () => {
     expect(rows.length).toBe(9);
     for (const r of rows) expect([r.relname, r.relrowsecurity, r.relforcerowsecurity]).toEqual([r.relname, true, true]);
   });
+});
+
+test("conversation usage is counted once at the second user message, with its traffic mode", async () => {
+  for (const mode of ["live", "emulator", "eval"] as const) {
+    const ws = await workspace();
+    const userId = (await su.query("select user_id from memberships where workspace_id=$1", [ws])).rows[0]
+      .user_id as string;
+    const bot = await db.withWorkspace(ws, (tx) => createBot(tx, { name: "المتجر", slug: "shop", createdBy: userId }));
+    const connectionId = newId("conn");
+    await db.withWorkspace(ws, async (tx) => {
+      await tx.execute(sql`insert into bridge_connections (id, workspace_id, bot_id, name, target)
+        values (${connectionId}, ${ws}, ${bot.id}, 'Meter', 'draft')`);
+      const user = await upsertEndUser(tx, { botId: bot.id, connectionId, externalId: "a", patch: {} });
+      const conversation = await ensureConversation(tx, {
+        botId: bot.id,
+        connectionId,
+        endUserId: user.id,
+        externalId: "chat",
+        mode,
+        state: emptyState() as unknown as Record<string, Json>,
+        stateBytes: 10,
+      });
+      const message = () =>
+        insertUserMessage(tx, {
+          conversationId: conversation.id,
+          type: "text",
+          payload: { type: "text", text: "فاتورة ORD-12" },
+        });
+      await message();
+      expect(
+        (await tx.execute(sql`select count(*)::int as n from usage_events where kind='conversation'`)).rows[0]?.["n"],
+      ).toBe(0);
+      await message();
+      await message();
+      const events = await tx.execute(
+        sql`select mode, quantity::int as quantity from usage_events where kind='conversation'`,
+      );
+      expect(events.rows).toEqual([{ mode, quantity: 1 }]);
+      expect(await usageTotals(tx, new Date("2000-01-01"), new Date("2100-01-01"))).toEqual(
+        mode === "live" ? [{ kind: "conversation", quantity: 1, costMicroUsd: 0 }] : [],
+      );
+    });
+  }
 });

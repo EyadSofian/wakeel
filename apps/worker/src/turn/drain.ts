@@ -12,6 +12,7 @@ import {
   getEndUser,
   type InboundEventRecord,
   insertBotMessages,
+  insertUsageEvent,
   type Keyring,
   LeaseLostError,
   listRuntimeTableNames,
@@ -345,11 +346,32 @@ class ConversationRun {
       ...(knowledge ? { knowledge } : {}),
       tables: { names: tableNames, execute: tables.execute },
     });
-    const autonomy = this.deps.autonomy?.(modelTurn, sandbox.code, knowledge, tables);
+    const rawCode = sandbox.code;
+    const code: CodePort = {
+      run: async (request) => {
+        const started = clock.now();
+        try {
+          return await rawCode.run(request);
+        } finally {
+          await this.#tx((tx) =>
+            insertUsageEvent(tx, {
+              kind: "code_ms",
+              unit: "ms",
+              quantity: Math.max(0, clock.now() - started),
+              mode: modelTurn.mode,
+              botId: modelTurn.botId,
+              conversationId: modelTurn.conversationId,
+              turnId: modelTurn.turnId,
+            }),
+          ).catch(() => this.#log.warn({ code: "usage_write_failed" }, "code usage was not written"));
+        }
+      },
+    };
+    const autonomy = this.deps.autonomy?.(modelTurn, code, knowledge, tables);
     const ai = this.deps.ai?.(modelTurn);
     const ports: EnginePorts = {
       ...sandbox,
-      ...(replay ? { code: replayCodePort(sandbox.code, replay.allowSideEffects) } : {}),
+      code: replay ? replayCodePort(code, replay.allowSideEffects) : code,
       tables,
       ...(knowledge ? { knowledge } : {}),
       ...(autonomy ? { autonomy } : {}),

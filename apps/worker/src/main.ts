@@ -24,7 +24,7 @@ import {
   createExpressionPort,
   createSandboxClient,
 } from "@wakeel/sandbox-client";
-import { countMetric, createLogger, gaugeMetric, startMetricsServer } from "@wakeel/telemetry";
+import { countMetric, createLogger, gaugeMetric, sampleStorageUsage, startMetricsServer } from "@wakeel/telemetry";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import {
@@ -173,6 +173,7 @@ if (config) {
         },
         // Scheduled knowledge base re-sync (task 8.5): finds due sources and adds kb-sync jobs.
         {
+          "storage-usage": () => sampleStorageUsage(db, new Date()),
           "kb-resync": () => enqueueDueSyncs({ db, enqueueSync }, new Date()),
           "trace-retention": () =>
             maintainTraces(db, objectStore, new Date(), config.traceRetention, () =>
@@ -245,6 +246,12 @@ if (config) {
         "janitor",
         { every: WORKER_LIMITS.janitorIntervalSeconds * 1000 },
         { name: "janitor", opts: { removeOnComplete: true, removeOnFail: 100 } },
+      );
+    if (config.queues.includes("maintenance"))
+      await maintenanceQueue.upsertJobScheduler(
+        "storage-usage",
+        { every: 60 * 60 * 1000 },
+        { name: "storage-usage", opts: { removeOnComplete: true, removeOnFail: 100 } },
       );
     if (config.queues.includes("maintenance"))
       await maintenanceQueue.upsertJobScheduler(
