@@ -5,6 +5,7 @@ export * from "./capability";
 export * from "./card";
 export * from "./common";
 export * from "./connections";
+export * from "./conversation-history";
 export * from "./diff";
 export * from "./errors";
 export * from "./eval";
