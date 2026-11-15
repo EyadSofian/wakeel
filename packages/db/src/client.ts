@@ -58,6 +58,8 @@ export interface Lookups {
   conversationsExpired(limit: number): Promise<{ conversationId: string; workspaceId: string }[]>;
   /** Conversations with a due, unleased pending webhook delivery on an active connection (ADR-028 §4). */
   webhookStreamsDue(now: Date, limit: number): Promise<{ conversationId: string; workspaceId: string }[]>;
+  /** Knowledge base sources whose re-sync schedule is due (task 8.5, ADR-042). */
+  kbSourcesDue(now: Date, limit: number): Promise<{ sourceId: string; workspaceId: string }[]>;
 }
 
 /** Opens a pool for the app_rw role. The pool itself is never exposed. */
@@ -144,6 +146,13 @@ export function createDatabase(options: DatabaseOptions): Database {
       async webhookStreamsDue(now, limit) {
         const { rows } = await pool.query<{ conversationId: string; workspaceId: string }>(
           'select conversation_id as "conversationId", workspace_id as "workspaceId" from lookup.webhook_streams_due($1, $2)',
+          [now, limit],
+        );
+        return rows;
+      },
+      async kbSourcesDue(now, limit) {
+        const { rows } = await pool.query<{ sourceId: string; workspaceId: string }>(
+          'select source_id as "sourceId", workspace_id as "workspaceId" from lookup.kb_sources_due($1, $2)',
           [now, limit],
         );
         return rows;

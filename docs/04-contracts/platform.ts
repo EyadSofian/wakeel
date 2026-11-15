@@ -391,3 +391,39 @@ export type PresignedRequest = z.infer<typeof PresignedRequest>;
 
 export const CreateFileResponse = z.object({ file: FileResponse, upload: PresignedRequest });
 export type CreateFileResponse = z.infer<typeof CreateFileResponse>;
+
+/* ------------------------------------------------------------------ */
+/* Knowledge base sources (task 8.5, ADR-042)                          */
+/* ------------------------------------------------------------------ */
+
+const httpUrl = z
+  .url({ protocol: /^https?$/ })
+  .max(2048, "Use a URL of 2,048 characters or fewer");
+
+/** One source of documents. Crawls stay on the start URL's origin unless `sameOriginOnly` is off. */
+export const KbSourceConfig = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("file"), fileId: FileId }),
+  z.strictObject({
+    kind: z.literal("text"),
+    title: z.string().trim().min(1, "Enter a title").max(200),
+    text: z.string().min(1, "Enter some text").max(200_000, "Use 200,000 characters or fewer"),
+  }),
+  z.strictObject({ kind: z.literal("url"), url: httpUrl }),
+  z.strictObject({
+    kind: z.literal("sitemap"),
+    url: httpUrl,
+    maxPages: z.int().min(1).max(1_000).default(100),
+  }),
+  z.strictObject({
+    kind: z.literal("crawl"),
+    url: httpUrl,
+    maxDepth: z.int().min(0).max(5).default(2),
+    maxPages: z.int().min(1).max(1_000).default(100),
+    sameOriginOnly: z.boolean().default(true),
+  }),
+]);
+export type KbSourceConfig = z.infer<typeof KbSourceConfig>;
+
+/** How often url, sitemap and crawl sources re-sync; null means only when asked. */
+export const KbSyncSchedule = z.enum(["1 hour", "6 hours", "1 day", "7 days"]).nullable();
+export type KbSyncSchedule = z.infer<typeof KbSyncSchedule>;

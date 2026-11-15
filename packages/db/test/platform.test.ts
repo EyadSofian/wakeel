@@ -273,13 +273,14 @@ describe("lookups (ADR-015)", () => {
        from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'lookup' order by 1`,
     );
     // Each new lookup is added here on purpose, and reviewed (ADR-015). 0006 adds the turn worker's
-    // three; 0009 adds the webhook janitor's (ADR-028).
+    // three; 0009 adds the webhook janitor's (ADR-028); 0017 the knowledge base re-sync's (ADR-042).
     expect(rows.map((r) => r.proname)).toEqual([
       "api_key_by_prefix",
       "conversation_workspace",
       "conversations_expired",
       "conversations_to_wake",
       "invitation_by_token_hash",
+      "kb_sources_due",
       "user_workspace_ids",
       "webhook_streams_due",
     ]);
@@ -299,7 +300,7 @@ describe("lookups (ADR-015)", () => {
        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where p.prosecdef and n.nspname not in ('pg_catalog', 'information_schema')`,
     );
-    expect(rows.length).toBe(7);
+    expect(rows.length).toBe(8);
     for (const r of rows) {
       expect(r, r.fn).toMatchObject({ owner: "app_lookup", public_exec: false, rw_exec: true });
       expect(r.config).toEqual(["search_path=pg_catalog, public"]);
