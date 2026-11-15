@@ -17,6 +17,7 @@ import { BotLayout } from "./routes/bot/BotLayout";
 import { ConnectionDetail, type ConnectionTab } from "./routes/connections/ConnectionDetail";
 import { ConnectionsScreen } from "./routes/connections/ConnectionsScreen";
 import { ConversationsScreen } from "./routes/conversations/ConversationsScreen";
+import { EvalsScreen } from "./routes/evals/EvalsScreen";
 import { Gallery } from "./routes/Gallery";
 import { KnowledgeScreen } from "./routes/knowledge/KnowledgeScreen";
 import { ModelsSettings } from "./routes/settings/models/ModelsSettings";
@@ -181,6 +182,15 @@ const conversationsRoute = createRoute({
   },
 });
 
+const evalsRoute = createRoute({
+  getParentRoute: () => botRoute,
+  path: "/evals",
+  component: function EvalsRoute() {
+    const { workspaceId, botId } = botRoute.useParams();
+    return <EvalsScreen workspaceId={workspaceId} botId={botId} />;
+  },
+});
+
 const tablesRoute = createRoute({
   getParentRoute: () => botRoute,
   path: "/tables",
@@ -321,6 +331,7 @@ export const router = createRouter({
         knowledgeRoute,
         tablesRoute,
         conversationsRoute,
+        evalsRoute,
         tableDetailRoute,
         knowledgeDetailRoute,
         connectionSetupRoute,
