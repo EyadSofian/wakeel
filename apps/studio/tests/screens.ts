@@ -372,6 +372,16 @@ SCREENS.push({
   interactions: [],
 });
 
+// Task 12.2: suite and case editor, including all asynchronous states and keyboard focus.
+SCREENS.push({
+  id: "evals",
+  route: `/w/${WS}/b/bot_01m7a256m0a13warwhczsjhx9b/evals`,
+  states: ["default", "empty", "loading", "error", "rtl", "focus", "edit"],
+  sizes: DESKTOP,
+  mock: true,
+  interactions: [],
+});
+
 export const THEMES = ["light", "dark"] as const;
 
 /** Screens selected by REVIEW_SCREEN (set by `--screen <id>`), or all. */

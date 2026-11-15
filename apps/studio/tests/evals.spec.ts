@@ -90,6 +90,7 @@ for (const theme of ["light", "dark"] as const) {
       await editor.getByLabel("Case script").fill(JSON.stringify(item.script));
       await editor.getByRole("button", { name: "Save case" }).click();
       await expect(editor).toBeHidden();
+      await expect(page.getByRole("button", { name: item.script.name })).toBeFocused();
       await page.getByRole("button", { name: "Run all" }).click();
       const results = page.getByRole("region", { name: "Run results" });
       await expect(results.getByRole("status")).toHaveText("Passed · 1/1 cases");

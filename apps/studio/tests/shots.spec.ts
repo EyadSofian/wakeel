@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { CanvasFixture } from "./canvas-fixtures";
 import { type EmulatorScenario, SENT } from "./emulator-fixtures";
+import { mockEvalReview } from "./eval-review-fixtures";
 import { type MockState, mockApi } from "./mock-api";
 import { type Screen, type ScreenState, selectedScreens, THEMES } from "./screens";
 
@@ -195,6 +196,22 @@ async function settled(locator: Locator): Promise<void> {
 
 async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<void> {
   if (screen.id === "emulator") return prepareEmulator(page, state);
+  if (screen.id === "evals") {
+    if (state === "empty") await expect(page.getByText("No eval suites")).toBeVisible();
+    if (state === "error") await expect(page.getByRole("alert")).toBeVisible();
+    if (state === "focus") {
+      await page.getByLabel("Suite name").focus();
+      await page.keyboard.press("a");
+      await expect(page.locator(":focus-visible")).toHaveCount(1);
+    }
+    if (state === "edit") {
+      await page.getByRole("button", { name: "Add case", exact: true }).click();
+      await expect(page.getByRole("dialog", { name: "Add case" })).toBeVisible();
+    }
+    if (!["empty", "error", "loading", "edit"].includes(state))
+      await expect(page.getByRole("button", { name: "Run all" })).toBeVisible();
+    return;
+  }
   if (screen.id === "sign-in" && state === "error") {
     // A rejected sign-in: the banner shows what happened and how to fix it.
     await page.getByLabel("Email").fill("eyad@engosoft.test");
@@ -445,7 +462,13 @@ for (const screen of selectedScreens()) {
           await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
           await page.setViewportSize({ width, height });
           if (screen.mock) {
-            await mockApi(page, mockStateFor(screen, state), canvasFor(screen, state), emulatorScenario(state));
+            await mockApi(
+              page,
+              screen.id === "evals" ? (state === "rtl" ? "rtl" : "default") : mockStateFor(screen, state),
+              canvasFor(screen, state),
+              emulatorScenario(state),
+            );
+            if (screen.id === "evals") await mockEvalReview(page, mockStateFor(screen, state));
           }
           // Relative dates ("3 days ago") follow the clock; a fixed one keeps shots the same every day.
           await page.clock.setFixedTime(SHOT_TIME);
@@ -469,7 +492,9 @@ for (const screen of selectedScreens()) {
 
           mkdirSync(`${SHOTS_DIR}/${screen.id}`, { recursive: true });
           await page.screenshot({ path: `${SHOTS_DIR}/${screen.id}/${name}.png`, fullPage: true });
-          await expect(page).toHaveScreenshot(`${screen.id}/${name}.png`, { fullPage: true });
+          await expect(page).toHaveScreenshot(`${screen.id}/${screen.id === "evals" ? "review-" : ""}${name}.png`, {
+            fullPage: true,
+          });
         });
       }
     }

@@ -1,0 +1,40 @@
+[
+  {
+    "durationMs": 200,
+    "frames": [
+      {
+        "offset": null,
+        "easing": "linear",
+        "composite": "auto",
+        "opacity": "0",
+        "computedOffset": 0
+      },
+      {
+        "offset": null,
+        "easing": "linear",
+        "composite": "auto",
+        "opacity": "1",
+        "computedOffset": 1
+      }
+    ]
+  },
+  {
+    "durationMs": 246.59999999403954,
+    "frames": [
+      {
+        "offset": null,
+        "easing": "linear",
+        "composite": "auto",
+        "transform": "translateX(7.96322px)",
+        "computedOffset": 0
+      },
+      {
+        "offset": null,
+        "easing": "linear",
+        "composite": "auto",
+        "transform": "translateX(0px)",
+        "computedOffset": 1
+      }
+    ]
+  }
+]
