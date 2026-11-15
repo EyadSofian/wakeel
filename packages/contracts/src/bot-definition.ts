@@ -18,6 +18,7 @@ export const BotSettings = z.object({
   errorMessage: Template.default("Something went wrong on our side. Please try again in a moment."),
   /** Sent when the workspace has reached a hard usage cap. */
   quotaMessage: Template.default("This assistant is temporarily unavailable."),
+  blockPublishOnFailingEvals: z.boolean().optional(),
   /** Merge text messages that arrive within this window into one turn. 0 = off. */
   coalesceWindowMs: z.number().int().min(0).max(5_000).default(0),
   /** Transcript tokens given to models before older messages are summarised. */

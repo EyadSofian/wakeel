@@ -16,6 +16,7 @@ import type { Tx } from "../client";
 import { botDraftDocs, bots, botVersions } from "../schema/bots";
 import { users } from "../schema/platform";
 import { getBot, listDraftDocs } from "./bots";
+import { evalPublishStatus } from "./eval-publish";
 import { listKnowledgeBases } from "./kb";
 import { currentWorkspace } from "./scope";
 
@@ -103,6 +104,10 @@ export async function publishDraft(
   await tx.select({ id: bots.id }).from(bots).where(eq(bots.id, input.botId)).for("update");
   await getBot(tx, input.botId);
   const definition = await assembleDraft(tx, input.botId);
+  if (definition.manifest.settings.blockPublishOnFailingEvals) {
+    const status = await evalPublishStatus(tx, input.botId, definition);
+    if (status.failed || status.errors) throw new AppError("eval_publish_blocked");
+  }
   const knowledgeBaseIds = new Set((await listKnowledgeBases(tx, input.botId)).map((b) => b.id));
   const issues = validateDefinition(definition, {
     ...input.context,

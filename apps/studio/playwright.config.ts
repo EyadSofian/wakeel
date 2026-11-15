@@ -24,7 +24,7 @@ export default defineConfig({
     // Flows on the mock API that need no dev stack: trace playback of a recorded turn (task 6.9).
     {
       name: "flows",
-      testMatch: /(playback|knowledge|tables|table-canvas|conversations|evals)\.spec\.ts/,
+      testMatch: /(playback|knowledge|tables|table-canvas|conversations|evals|eval-publish)\.spec\.ts/,
       use: { deviceScaleFactor: 1 },
     },
     // Canvas performance budget (design system §5.1), `pnpm studio:perf`. Device scale 1: a

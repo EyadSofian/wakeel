@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { AppError, newId, seedSubWorkflow, type Workflow } from "@wakeel/contracts";
+import { AppError, BotManifest, EvalCase, newId, seedSubWorkflow, type Workflow } from "@wakeel/contracts";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import {
@@ -7,6 +7,8 @@ import {
   canonicalJson,
   createBot,
   createDatabase,
+  createEvalRun,
+  createEvalSuite,
   createWorkflowDoc,
   createWorkspace,
   type Database,
@@ -20,7 +22,10 @@ import {
   restoreVersion,
   rollbackTo,
   saveDraftDoc,
+  saveEvalCase,
+  saveEvalRunStatus,
   sql,
+  startEvalRun,
 } from "../src/index";
 
 /** Task 7.1 (ADR-036): publish, hash, rollback, restore; immutability; two tenants. */
@@ -93,6 +98,51 @@ describe("canonicalJson", () => {
 });
 
 describe("publish", () => {
+  test("the optional eval gate checks the latest completed results for this exact draft", async () => {
+    const t = await tenant();
+    const { bot } = await publishableBot(t);
+    const publish = () =>
+      db.withWorkspace(t.ws, (tx) =>
+        publishDraft(tx, {
+          botId: bot.id,
+          label: "بوابة التقييم",
+          userId: t.userId,
+        }),
+      );
+    await db.withWorkspace(t.ws, async (tx) => {
+      const suite = await createEvalSuite(tx, bot.id, "الطلبات");
+      await saveEvalCase(tx, bot.id, suite.id, EvalCase.parse({ name: "فاتورة", turns: [{ user: "فاتورة ORD-12" }] }));
+      const run = await createEvalRun(tx, bot.id, suite.id, { kind: "draft" });
+      await startEvalRun(tx, run.id);
+      await saveEvalRunStatus(tx, run.id, "failed");
+      const stored = (await listDraftDocs(tx, bot.id)).find((item) => item.kind === "manifest");
+      if (!stored) throw new Error("missing manifest");
+      const manifest = BotManifest.parse(stored.doc);
+      await saveDraftDoc(tx, {
+        botId: bot.id,
+        kind: "manifest",
+        docId: "manifest",
+        expectedRev: stored.rev,
+        userId: t.userId,
+        doc: { ...manifest, settings: { ...manifest.settings, blockPublishOnFailingEvals: true } },
+      });
+    });
+    await expect(publish()).rejects.toMatchObject({ code: "eval_publish_blocked" });
+    await db.withWorkspace(t.ws, async (tx) => {
+      const stored = (await listDraftDocs(tx, bot.id)).find((item) => item.kind === "manifest");
+      if (!stored) throw new Error("missing manifest");
+      await saveDraftDoc(tx, {
+        botId: bot.id,
+        kind: "manifest",
+        docId: "manifest",
+        expectedRev: stored.rev,
+        userId: t.userId,
+        doc: { ...BotManifest.parse(stored.doc), description: "تحديث المحتوى" },
+      });
+    });
+    await expect(publish()).resolves.toMatchObject({ version: { number: 1 } });
+  });
+
   test("is refused with the issue list while the draft has errors, and nothing is stored", async () => {
     const t = await tenant();
     const bot = await db.withWorkspace(t.ws, (tx) =>

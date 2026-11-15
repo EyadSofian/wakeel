@@ -15,9 +15,11 @@ import {
   TurnId,
 } from "@wakeel/contracts";
 import {
+  assembleDraft,
   botMessagesOfTurn,
   createEvalRun,
   createEvalSuite,
+  evalPublishStatus,
   getEvalRun,
   getEvalSuite,
   listEvalRuns,
@@ -44,6 +46,13 @@ export async function evalRoutes(
   { studio, queue }: { studio: StudioDeps; queue: EvalRoutesDeps },
 ) {
   const root = "/v1/workspaces/:workspaceId/bots/:botId/evals";
+  app.get(`${root}/publish-status`, async (req, reply) => {
+    const { workspaceId } = await requirePermission(studio, req, reply, "bot.read");
+    const { botId } = bot.parse(req.params);
+    return studio.db.withWorkspace(workspaceId, async (tx) =>
+      evalPublishStatus(tx, botId, await assembleDraft(tx, botId)),
+    );
+  });
   app.get(`${root}/suites`, async (req, reply) => {
     const { workspaceId } = await requirePermission(studio, req, reply, "eval.run");
     const { botId } = bot.parse(req.params);
