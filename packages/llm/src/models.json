@@ -88,7 +88,7 @@
         "outputPerMTok": 8
       },
       "priceCheckedAt": "2026-11-14",
-      "autonomy": "untested",
+      "autonomy": "unsupported",
       "fallback": ["gpt-4.1-mini"]
     },
     {
@@ -109,7 +109,7 @@
         "cacheReadPerMTok": 0.1
       },
       "priceCheckedAt": "2026-11-14",
-      "autonomy": "untested",
+      "autonomy": "unsupported",
       "fallback": []
     }
   ]

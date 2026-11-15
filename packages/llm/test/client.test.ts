@@ -1,6 +1,6 @@
 import { APICallError } from "ai";
 import { MockEmbeddingModelV4, MockLanguageModelV4, simulateReadableStream } from "ai/test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import type { Credential, ModelFactory } from "../src/adapters";
 import { createLlm, type LlmDeps, type UsageEvent } from "../src/client";
 import { loadRegistry } from "../src/registry";
@@ -113,6 +113,25 @@ const request = {
 };
 
 describe("stream", () => {
+  test("provider exceptions containing secrets never reach the SDK's default console logger", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const s = setup({
+        main: () =>
+          new APICallError({
+            message: "rejected secret-canary",
+            url: "https://provider.invalid",
+            requestBodyValues: { apiKey: "secret-canary" },
+            statusCode: 401,
+            isRetryable: false,
+          }),
+      });
+      await expect(s.llm.stream(request).result).rejects.toMatchObject({ code: "model_auth_failed" });
+      expect(logged).not.toHaveBeenCalled();
+    } finally {
+      logged.mockRestore();
+    }
+  });
   test("streams text and emits one usage event with the cost from the registry", async () => {
     const s = setup({ main: () => streamOf(["أهلاً", " بيك"]) });
     const handle = s.llm.stream(request);

@@ -17,6 +17,10 @@ None. Concepts studied in other projects (research report §5) were reimplemente
 
 Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (PostgreSQL License, pgvector MIT), Redis 7.2 (BSD-3-Clause), RustFS (Apache-2.0).
 
+The adherence workflow uses [actions/upload-artifact](https://github.com/actions/upload-artifact)
+at commit `ea165f8d65b6e75b540449e92b4886f43607fa02` (v4.6.2), MIT, copyright
+GitHub, Inc. and contributors. Its source is executed as a pinned CI action, not copied or shipped.
+
 ## Installed packages
 
 <!-- BEGIN GENERATED: pnpm licences --write -->
