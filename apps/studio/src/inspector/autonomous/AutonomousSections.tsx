@@ -1,10 +1,11 @@
-import { type Exit, type Node, newElementId, type Tool, type VariableAccess } from "@wakeel/contracts";
+import { type Exit, type Node, newElementId, TableOperation, type Tool, type VariableAccess } from "@wakeel/contracts";
 import { Button, IconTile, Input, Select, Switch, Textarea } from "@wakeel/ui";
 import { ArrowLeft, BookOpen, Braces, LogOut, Plus, Table2, Trash2, Workflow } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useId, useMemo } from "react";
 import { useCanvas } from "../../canvas/context";
 import { FieldShell, SchemaField, Section, StringField, useDraft, useVariables } from "../fields";
 import { KnowledgeFields, useBotKnowledge } from "../KnowledgeFields";
+import { TableSelect, useBotTables } from "../TableFields";
 import { ModelField } from "./ModelSection";
 
 /**
@@ -168,6 +169,7 @@ function freeName(base: string, taken: ReadonlySet<string>): string {
 
 function ToolsSection({ node, edit, open }: { node: Auto; edit: Edit; open: (id: string) => void }) {
   const kbId = useBotKnowledge().data?.pages[0]?.data[0]?.id;
+  const tableId = useBotTables().data?.[0]?.id;
   const add = () => {
     const tool: Tool = {
       id: newElementId("tool"),
@@ -225,10 +227,26 @@ function ToolsSection({ node, edit, open }: { node: Auto; edit: Edit; open: (id:
             Add knowledge tool
           </Button>
         </div>
-      ) : (
-        <p className="text-small text-tertiary">
-          Knowledge, table and workflow tools arrive with knowledge bases, tables and sub-workflow calls.
-        </p>
+      ) : null}
+      {tableId && node.tools.length < 40 && (
+        <div>
+          <Button
+            onClick={() => {
+              const tool: Tool = {
+                id: newElementId("tool"),
+                type: "table",
+                name: freeName("lookupRows", new Set(node.tools.map((t) => t.name))),
+                description: "Find rows in the selected table.",
+                tableId,
+                operations: ["find"],
+              };
+              edit((n) => ({ ...n, tools: [...n.tools, tool] }));
+              open(tool.id);
+            }}
+          >
+            Add table tool
+          </Button>
+        </div>
       )}
     </Section>
   );
@@ -293,6 +311,41 @@ function ToolView({ node, tool, edit, onDeleted }: { node: Auto; tool: Tool; edi
         </>
       ) : tool.type === "kb_search" ? (
         <KnowledgeFields kbIds={tool.kbIds} topK={tool.topK} onChange={(patch) => set({ ...tool, ...patch })} />
+      ) : tool.type === "table" ? (
+        <>
+          <TableSelect value={tool.tableId} onChange={(tableId) => set({ ...tool, tableId })} />
+          <fieldset className="flex flex-col gap-3">
+            <legend className="mb-3 text-small font-medium text-primary">Allowed operations</legend>
+            <div className="flex flex-wrap gap-x-6 gap-y-3">
+              {TableOperation.options.map((op) => {
+                const checked = tool.operations.includes(op);
+                return (
+                  <label key={op} className="flex items-center gap-3 text-body text-primary">
+                    <input
+                      type="checkbox"
+                      className="size-icon accent-accent"
+                      checked={checked}
+                      disabled={checked && tool.operations.length === 1}
+                      onChange={() =>
+                        set({
+                          ...tool,
+                          operations: checked
+                            ? tool.operations.filter((item) => item !== op)
+                            : [...tool.operations, op],
+                        })
+                      }
+                    />
+                    {op[0]?.toUpperCase()}
+                    {op.slice(1)}
+                  </label>
+                );
+              })}
+            </div>
+            <p className="text-small text-secondary">
+              At least one operation stays selected. Writes run in live conversations only.
+            </p>
+          </fieldset>
+        </>
       ) : (
         <p className="text-small text-secondary">This kind of tool cannot run yet; calls to it tell the model so.</p>
       )}

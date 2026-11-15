@@ -22,6 +22,7 @@ import { AiConditionForm, ExtractDataForm, GenerateTextForm } from "./cards/AiCa
 import { AskForm, CodeForm, ConditionForm, EndForm, LogForm, SayForm, SetVariableForm } from "./cards/CardForms";
 import { HandoffForm, RunWorkflowForm } from "./cards/FlowCardForms";
 import { KnowledgeForm } from "./cards/KnowledgeForm";
+import { TableForm } from "./cards/TableForm";
 import { IssuesContext, Section, StringField, useCommitCard, useDraft } from "./fields";
 
 /**
@@ -402,6 +403,7 @@ function CardsSection({ node, summary }: { node: Extract<Node, { type: "standard
 
 /** Card types with a form here. Search knowledge, Table and Set timeout arrive with their tasks. */
 const EDITABLE_CARDS: readonly Card["type"][] = [
+  "table",
   "say",
   "capture",
   "branch",
@@ -473,6 +475,7 @@ function CardView({
         {card.type === "ai_generate" ? <GenerateTextForm card={card} {...props} /> : null}
         {card.type === "ai_extract" ? <ExtractDataForm card={card} {...props} /> : null}
         {card.type === "kb_search" ? <KnowledgeForm card={card} {...props} /> : null}
+        {card.type === "table" ? <TableForm card={card} {...props} /> : null}
         {card.type === "handoff" ? <HandoffForm card={card} {...props} /> : null}
         {card.type === "call_workflow" ? <RunWorkflowForm card={card} {...props} /> : null}
         {EDITABLE_CARDS.includes(card.type) ? null : (
