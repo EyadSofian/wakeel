@@ -200,3 +200,77 @@ describe("embed", () => {
     });
   });
 });
+
+describe("readImage (ADR-040, the OCR tier)", () => {
+  const vision = loadRegistry({
+    models: [
+      { ...entry("eyes", ["eyes-backup"]), capabilities: { vision: true, caching: false, structuredOutput: true } },
+      { ...entry("eyes-backup"), capabilities: { vision: true, caching: false, structuredOutput: true } },
+      entry("blind"),
+    ],
+  });
+  const image = { image: new Uint8Array([0x89, 0x50, 0x4e, 0x47]), mediaType: "image/png" as const };
+  const read = {
+    model: "eyes",
+    system: "Fixed OCR instructions.",
+    instruction: "Transcribe this page.",
+    ...image,
+    purpose: "kb_ocr",
+    context: { workspaceId: "ws_1", mode: "live" as const },
+  };
+
+  function visionSetup(behaviour: Record<string, () => unknown>) {
+    const seen: unknown[] = [];
+    const events: UsageEvent[] = [];
+    const llm = createLlm({
+      registry: vision,
+      models: {
+        language: (model) =>
+          new MockLanguageModelV4({
+            modelId: model.providerModel,
+            doStream: async (options) => {
+              seen.push(options.prompt);
+              const result = (behaviour[model.id] ?? (() => streamOf(["ok"])))();
+              if (result instanceof Error) throw result;
+              return result as ReturnType<typeof streamOf>;
+            },
+          }),
+        embedding: () => {
+          throw new Error("unused");
+        },
+      },
+      credentials: {
+        workspaceKey: async () => "k",
+        platformKey: async () => "p",
+        platformKeysAllowed: async () => true,
+      },
+      onUsage: async (e) => void events.push(e),
+      sleep: async () => {},
+      random: () => 0.5,
+    });
+    return { llm, seen, events };
+  }
+
+  test("sends the instruction and the image as user content, returns the text, records usage", async () => {
+    const s = visionSetup({ eyes: () => streamOf(["# إيصال", " استلام"]) });
+    const out = await s.llm.readImage(read);
+    expect(out.text).toBe("# إيصال استلام");
+    const prompt = JSON.stringify(s.seen[0]);
+    expect(prompt).toContain("Fixed OCR instructions.");
+    expect(prompt).toContain("Transcribe this page.");
+    expect(prompt).toContain('"type":"file"');
+    expect(s.events).toHaveLength(1);
+    expect(s.events[0]).toMatchObject({ kind: "llm_tokens", purpose: "kb_ocr", model: "eyes" });
+  });
+
+  test("a model without vision is refused with model_lacks_vision", async () => {
+    const s = visionSetup({});
+    await expect(s.llm.readImage({ ...read, model: "blind" })).rejects.toMatchObject({ code: "model_lacks_vision" });
+  });
+
+  test("retries a 429 then falls back to the next vision model", async () => {
+    const s = visionSetup({ eyes: () => rateLimited(), "eyes-backup": () => streamOf(["نص"]) });
+    const out = await s.llm.readImage(read);
+    expect(out).toMatchObject({ text: "نص", model: "eyes-backup" });
+  });
+});

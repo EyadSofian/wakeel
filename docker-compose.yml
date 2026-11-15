@@ -81,6 +81,26 @@ services:
       - ./infra/object-store/create-bucket.sh:/init/create-bucket.sh:ro
     restart: "no"
 
+  parser:
+    # Task 8.2 (ADR-040): Docling, built from apps/parser. Threat T10: no network at all and no
+    # credentials; the worker reaches it over the internal network only. Not started by dev:infra,
+    # because the image is large: `docker compose --profile parser up --detach parser`.
+    profiles: ["parser"]
+    build: ./apps/parser
+    image: wakeel-parser:dev
+    environment:
+      PARSER_TOKEN: dev_only_parser_token_change_me_0123456789
+    networks: [parser-internal]
+    ports:
+      - "127.0.0.1:${WAKEEL_PARSER_PORT:-4500}:4500"
+    read_only: true
+    tmpfs: [/tmp]
+
+networks:
+  # internal: no route to the outside world from containers on this network.
+  parser-internal:
+    internal: true
+
 volumes:
   pg-data:
   redis-data:

@@ -62,6 +62,19 @@ export interface EmbedRequest {
   context: CallContext;
 }
 
+/** One image, read by a vision model (ADR-040: the OCR tier). No streaming: the page is one unit. */
+export interface ReadImageRequest {
+  model: string;
+  /** Fixed platform text only; the image and anything taken from it are user content. */
+  system: string;
+  instruction: string;
+  image: Uint8Array;
+  mediaType: "image/png" | "image/jpeg";
+  maxOutputTokens?: number;
+  purpose: string;
+  context: CallContext;
+}
+
 export interface UsageEvent {
   kind: "llm_tokens" | "embedding_tokens";
   workspaceId: string;
@@ -103,6 +116,7 @@ export interface LlmDeps {
 export interface LlmClient {
   stream(request: StreamRequest): StreamHandle;
   embed(request: EmbedRequest): Promise<{ embeddings: number[][]; model: string; usage: TokenUsage }>;
+  readImage(request: ReadImageRequest): Promise<StreamResult>;
 }
 
 const BASE_BACKOFF_MS = 500;
@@ -261,6 +275,39 @@ export function createLlm(deps: LlmDeps): LlmClient {
         },
       };
       return { textStream, result };
+    },
+
+    async readImage(request) {
+      return withFallback(request.model, async (model) => {
+        if (!model.capabilities.vision) throw new AppError("model_lacks_vision", { model: model.id });
+        const cred = await credential(request.context.workspaceId, model.provider);
+        const run = streamText({
+          model: models.language(model, cred),
+          system: request.system,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: request.instruction },
+                { type: "image", image: request.image, mediaType: request.mediaType },
+              ],
+            },
+          ],
+          maxRetries: 0,
+          ...(request.maxOutputTokens ? { maxOutputTokens: request.maxOutputTokens } : {}),
+        });
+        // Consume the stream so a provider error surfaces here and the retry policy applies.
+        for await (const part of run.fullStream) if (part.type === "error") throw part.error;
+        const usage = toTokenUsage(await run.usage);
+        const cost = await record("llm_tokens", request, model, cred.source, usage);
+        return {
+          text: await run.text,
+          finishReason: await run.finishReason,
+          model: model.id,
+          usage,
+          costMicroUsd: cost,
+        } satisfies StreamResult;
+      });
     },
 
     async embed(request) {

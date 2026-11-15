@@ -77,6 +77,12 @@ export const ERRORS = {
   model_auth_failed: { status: 502, title: "The key for {provider} was rejected", fix: "Update the key in workspace settings." },
   model_context_exceeded: { status: 500, title: "The conversation no longer fits in {model}'s context", fix: "Lower the transcript budget or shorten the instructions." },
   model_key_missing: { status: 409, title: "No key is set for {provider}", fix: "Add a {provider} key in Settings → Models, or choose a model from a provider that has one." },
+  // ADR-040: the OCR tier sends page images; the configured model must read images.
+  model_lacks_vision: {
+    status: 422,
+    title: '"{model}" cannot read images',
+    fix: "Choose a model that supports images to read scanned and Arabic PDF pages.",
+  },
   model_not_configured: { status: 422, title: "No model is set for this step", fix: "Choose a default model in bot settings." },
   ai_extraction_invalid: { status: 500, title: "The model's answer did not match the extraction schema: {message}", fix: "Describe the fields more clearly in the instructions, or make fields the text may not give optional." },
   // Knowledge and tables

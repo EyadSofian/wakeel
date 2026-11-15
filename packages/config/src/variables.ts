@@ -309,3 +309,18 @@ export const objectStoreEnv = defineEnv({
     secret: true,
   },
 });
+
+/** The parser service (task 8.2, ADR-040): internal network only; the worker calls it. */
+export const parserClientEnv = defineEnv({
+  parserUrl: {
+    env: "PARSER_URL",
+    schema: z.url({ protocol: /^https?$/ }).default("http://127.0.0.1:4500"),
+    description: "Base URL of the parser service, for example http://parser:4500.",
+  },
+  parserToken: {
+    env: "PARSER_TOKEN",
+    schema: z.string().min(16),
+    description: "Shared token the worker sends to the parser; at least 16 characters.",
+    secret: true,
+  },
+});

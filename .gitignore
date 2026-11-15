@@ -17,3 +17,5 @@ test-results/
 
 # Playwright review output
 apps/studio/test-results/
+apps/parser/.venv/
+apps/parser/**/__pycache__/

@@ -21,10 +21,11 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 
 <!-- BEGIN GENERATED: pnpm licences --write -->
 
-440 packages installed by `pnpm install` (runtime and development), not counting platform builds.
+465 packages installed by `pnpm install` (runtime and development), not counting platform builds.
 
-### MIT (311)
+### MIT (319)
 
+- @acemir/cssom 0.9.33
 - @babel/helper-string-parser 7.29.14 — https://babel.dev/docs/en/next/babel-helper-string-parser
 - @babel/helper-validator-identifier 7.29.7
 - @babel/parser 7.29.14 — https://babel.dev/docs/en/next/babel-parser
@@ -114,6 +115,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - @types/ssh2 1.15.6 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/ssh2
 - @types/ssh2-streams 0.1.13 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/ssh2-streams
 - @types/trusted-types 2.0.7 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/trusted-types
+- @types/turndown 5.0.6 — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/turndown
 - @vitejs/plugin-react 6.3.0 — https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#readme
 - @vitest/coverage-v8 5.1.0 — https://vitest.dev/guide/coverage
 - @vitest/istanbul-lib-coverage 2.1.0 — https://vitest.dev/
@@ -172,6 +174,8 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - dequal 2.0.3
 - detect-node-es 1.1.0 — https://github.com/thekashey/detect-node
 - docker-compose 1.5.0 — https://pdmlab.github.io/docker-compose/
+- dom-serializer 2.0.0
+- dom-serializer 3.1.1
 - eastasianwidth 0.2.0
 - emoji-regex 8.0.0 — https://mths.be/emoji-regex
 - emoji-regex 9.2.2 — https://mths.be/emoji-regex
@@ -196,6 +200,8 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - fs-constants 1.0.0 — https://github.com/mafintosh/fs-constants
 - get-nonce 1.0.1 — https://github.com/theKashey/get-nonce
 - get-port 5.1.1
+- html-escaper 3.0.3 — https://github.com/WebReflection/html-escaper
+- htmlparser2 10.1.0
 - ioredis 6.0.0
 - ipaddr.js 2.5.0
 - is-extglob 2.1.1 — https://github.com/jonschlinkert/is-extglob
@@ -318,6 +324,8 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - toad-cache 3.7.4 — https://github.com/kibertoad/toad-cache
 - tsx 4.23.15 — https://tsx.hirok.io
 - turbo 2.11.11 — https://turborepo.dev
+- turndown 7.2.4
+- turndown-plugin-gfm 1.0.2
 - undici 8.12.4 — https://undici.nodejs.org
 - undici-types 5.26.5 — https://undici.nodejs.org
 - undici-types 6.21.0 — https://undici.nodejs.org
@@ -337,7 +345,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - zustand 4.5.7 — https://github.com/pmndrs/zustand
 - zustand 5.0.16 — https://github.com/pmndrs/zustand
 
-### Apache-2.0 (62)
+### Apache-2.0 (63)
 
 - @ai-sdk/anthropic 4.0.105 — https://ai-sdk.dev/docs
 - @ai-sdk/gateway 4.0.146 — https://ai-sdk.dev/docs
@@ -369,6 +377,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - @grpc/grpc-js 1.14.7 — https://grpc.io/
 - @grpc/proto-loader 0.7.15 — https://grpc.io/
 - @grpc/proto-loader 0.8.1 — https://grpc.io/
+- @mozilla/readability 0.6.0 — https://github.com/mozilla/readability
 - @playwright/test 1.65.0 — https://playwright.dev
 - @smithy/core 3.40.0 — https://github.com/smithy-lang/smithy-typescript/tree/main/packages/core
 - @smithy/credential-provider-imds 4.5.2 — https://github.com/smithy-lang/smithy-typescript/tree/main/packages/credential-provider-imds
@@ -402,9 +411,10 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - text-decoder 1.2.7 — https://github.com/holepunchto/text-decoder#readme
 - typescript 5.9.3 — https://www.typescriptlang.org/
 
-### ISC (34)
+### ISC (37)
 
 - @isaacs/cliui 8.0.2
+- boolbase 2.0.0 — https://github.com/fb55/boolbase
 - chownr 1.1.4
 - cliui 8.0.1
 - d3-color 3.1.1 — https://d3js.org/d3-color/
@@ -421,6 +431,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - glob 10.5.0
 - inherits 2.0.4
 - isexe 2.0.0 — https://github.com/isaacs/isexe#readme
+- linkedom 0.18.14 — https://github.com/WebReflection/linkedom#readme
 - lru-cache 10.4.3
 - lucide-react 1.72.0 — https://lucide.dev
 - minimatch 5.1.9
@@ -433,6 +444,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - signal-exit 4.1.0
 - split-ca 1.0.1 — https://github.com/bushong1/split-ca
 - split2 4.2.0
+- uhyphen 0.2.0 — https://github.com/WebReflection/uhyphen#readme
 - which 2.0.2
 - wrappy 1.0.2 — https://github.com/npm/wrappy
 - y18n 5.0.8 — https://github.com/yargs/y18n
@@ -459,6 +471,22 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - protobufjs 7.6.6 — https://protobufjs.github.io/protobuf.js/
 - secure-json-parse 4.1.1 — https://github.com/fastify/secure-json-parse#readme
 - source-map-js 1.2.2 — https://github.com/7rulnik/source-map-js
+
+### BSD-2-Clause (13)
+
+- @mixmark-io/domino 2.2.0
+- css-select 7.0.0
+- css-what 8.0.0
+- domelementtype 2.3.0
+- domelementtype 3.0.0
+- domhandler 5.0.3
+- domhandler 6.0.1
+- domutils 3.2.2
+- domutils 4.0.2
+- entities 4.5.0
+- entities 7.0.1
+- entities 8.1.0
+- nth-check 3.0.1 — https://github.com/fb55/nth-check
 
 ### BlueOak-1.0.0 (5)
 
