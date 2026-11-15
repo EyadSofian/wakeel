@@ -172,15 +172,15 @@ describe("code tools", () => {
 });
 
 describe("tools that are not built yet, or not on the node", () => {
-  test.each([
-    ["orders", "tables are not available yet"],
-    ["deleteEverything", "this node has no such tool"],
-  ])("%s fails with a message the model can read", async (tool, message) => {
-    await expect(callTool(node, { tool, input: {} }, deps().d)).rejects.toMatchObject({
-      code: "tool_failed",
-      params: { message },
-    });
-  });
+  test.each([["deleteEverything", "this node has no such tool"]])(
+    "%s fails with a message the model can read",
+    async (tool, message) => {
+      await expect(callTool(node, { tool, input: {} }, deps().d)).rejects.toMatchObject({
+        code: "tool_failed",
+        params: { message },
+      });
+    },
+  );
 });
 
 describe("workflow tools (ADR-035)", () => {
@@ -306,4 +306,23 @@ describe("explicit knowledge tools", () => {
       code: "model_not_configured",
     });
   });
+});
+
+test("table tools dispatch only the operations and table bound by the builder", async () => {
+  const { d } = deps();
+  const calls: unknown[] = [];
+  d.table = async (request) => {
+    calls.push(request);
+    return [{ status: "تم الشحن ORD-12" }];
+  };
+  const input = { where: { number: { eq: "ORD-12" } } };
+  await expect(callTool(node, { tool: "orders", operation: "find", input }, d)).resolves.toEqual([
+    { status: "تم الشحن ORD-12" },
+  ]);
+  expect(calls).toHaveLength(1);
+  expect(calls[0]).toMatchObject({ operation: "find", target: { id: "tbl_01m7a256m0a13warwhczsjhx9b" }, input });
+  await expect(callTool(node, { tool: "orders", operation: "delete", input }, d)).rejects.toMatchObject({
+    code: "tool_input_invalid",
+  });
+  expect(calls).toHaveLength(1);
 });

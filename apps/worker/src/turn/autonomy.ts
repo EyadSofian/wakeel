@@ -19,7 +19,7 @@ import {
   type Tool,
 } from "@wakeel/contracts";
 import { type Database, getWorkspace, recentTranscript } from "@wakeel/db";
-import type { AiPort, AutonomyPort, CodePort, KnowledgePort } from "@wakeel/engine";
+import type { AiPort, AutonomyPort, CodePort, KnowledgePort, TablePort } from "@wakeel/engine";
 import { type LlmClient, registry } from "@wakeel/llm";
 import type { AutonomyRunPort, BuilderTool } from "@wakeel/sandbox-client";
 import type { Logger } from "@wakeel/telemetry";
@@ -50,6 +50,7 @@ export interface AutonomyTurn {
 }
 
 export interface AutonomyWiring {
+  tables?: TablePort;
   knowledge?: KnowledgePort;
   db: Database;
   llm: LlmClient;
@@ -136,8 +137,13 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
                 name: call.tool,
                 ...(tool ? { toolId: tool.id } : {}),
                 toolType: tool?.type ?? "code",
-                sideEffects: tool?.type === "code" ? tool.sideEffects : tool?.type === "workflow",
-                input: call.input,
+                sideEffects:
+                  tool?.type === "code"
+                    ? tool.sideEffects
+                    : tool?.type === "table"
+                      ? !["find", "get"].includes(call.operation ?? "")
+                      : tool?.type === "workflow",
+                input: tool?.type === "table" ? null : call.input,
                 ...end,
                 startedAt: new Date(started).toISOString(),
                 durationMs: Math.max(0, now() - started),
@@ -146,6 +152,7 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
               const output = await callTool(request.node, call, {
                 definition: turn.definition,
                 code: toolCode(code, citationAccess),
+                ...(w.tables ? { table: w.tables.execute } : {}),
                 ...(w.knowledge
                   ? {
                       kbSearch: async (query) => {
@@ -161,7 +168,7 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
                 idempotencyKey: request.idempotencyKey,
                 warn: (message, data) => w.logger.warn(data, message),
               });
-              record({ output });
+              record(tool?.type === "table" ? {} : { output });
               return output;
             } catch (error) {
               if (!isToolSuspended(error)) {

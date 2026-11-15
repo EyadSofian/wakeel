@@ -1,4 +1,4 @@
-import type { AutonomousNode, BotDefinition, Tool } from "@wakeel/contracts";
+import type { AutonomousNode, BotDefinition, TableOperation, Tool } from "@wakeel/contracts";
 import { oneLine, schemaToTs, variableTypeToTs } from "./schema-ts";
 
 /**
@@ -15,6 +15,15 @@ function doc(lines: string[]): string {
   return lines.length === 1 ? `  /** ${lines[0]} */` : `  /**\n${lines.map((l) => `   * ${l}`).join("\n")}\n   */`;
 }
 
+const tableMethods: Record<TableOperation, string> = {
+  find: "find(args: { where?: Record<string, unknown>; search?: string; sort?: { column: string; direction?: 'asc' | 'desc' }[]; limit?: number }): Promise<Record<string, unknown>[]>;",
+  get: "get(args: { where: Record<string, unknown> }): Promise<Record<string, unknown> | null>;",
+  insert: "insert(args: { values: Record<string, unknown> }): Promise<Record<string, unknown>>;",
+  update: "update(args: { where: Record<string, unknown>; values: Record<string, unknown> }): Promise<number>;",
+  upsert: "upsert(args: { values: Record<string, unknown>; on: string }): Promise<Record<string, unknown>>;",
+  delete: "delete(args: { where: Record<string, unknown> }): Promise<number>;",
+};
+
 function member(tool: Tool, definition: BotDefinition): string {
   const description = oneLine(tool.description);
   switch (tool.type) {
@@ -28,7 +37,7 @@ function member(tool: Tool, definition: BotDefinition): string {
     case "kb_search":
       return `${doc([description, "Returns passages; cite one by writing its token, for example [[c1]]."])}\n  ${tool.name}(query: string): Promise<Array<{ token: string; text: string; title: string }>>;`;
     case "table": {
-      const ops = tool.operations.map((op) => `    ${op}(args: Record<string, unknown>): Promise<unknown>;`).join("\n");
+      const ops = tool.operations.map((op) => `    ${tableMethods[op]}`).join("\n");
       return `${doc([description])}\n  ${tool.name}: {\n${ops}\n  };`;
     }
     case "workflow": {

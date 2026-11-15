@@ -157,6 +157,7 @@ export interface StepResult {
 
 /** What a card executor receives. */
 export interface CardContext<C extends Card = Card> {
+  tables?: TablePort;
   knowledge?: KnowledgePort;
   retrievalCitations?: SearchCitations;
   card: C;
@@ -300,7 +301,12 @@ export interface KnowledgePort {
   ): Promise<{ passages: Passage[]; citations: SearchCitations }>;
 }
 
+export interface TablePort {
+  execute(request: import("@wakeel/contracts").TableRuntimeCall): Promise<Json>;
+}
+
 export interface EnginePorts {
+  tables?: TablePort;
   knowledge?: KnowledgePort;
   sandbox: SandboxPort;
   code: CodePort;

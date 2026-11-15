@@ -331,3 +331,41 @@ test("Code API searches preserve earlier citations through two sandbox round tri
   expect(result.said).toEqual([{ type: "text", text: "الاسترجاع خلال ١٤ يومًا[[c1]][[c2]]" }]);
   expect(seen[0]).toMatchObject({ query: "إزاي أرجع ORD-12؟", filters: { languages: ["ar"] } });
 });
+
+test("builder code calls each advertised table method through the sandbox boundary", async () => {
+  const idempotencyKey = `${newId("turn")}:3`;
+  const calls: unknown[] = [];
+  const adapter = createCodePort(createSandboxClient({ url }), {
+    tables: {
+      names: ["orders"],
+      execute: async (call) => {
+        calls.push(call);
+        return call.operation === "find" ? [] : null;
+      },
+    },
+  });
+  const outcome = await adapter.run({
+    source: `
+      const filter = { title: { eq: "مرتجع ORD-12" } };
+      const values = { title: "فاتورة ORD-12" };
+      await tables.orders.find({ where: filter });
+      await tables.orders.get(filter);
+      await tables.orders.insert(values);
+      await tables.orders.update(filter, values);
+      await tables.orders.upsert(values, "title");
+      await tables.orders.delete(filter);
+      return typeof tables.other;
+    `,
+    scopes: {},
+    timeoutMs: 2000,
+    memoryMb: 64,
+    idempotencyKey,
+    secretKeys: [],
+  });
+  expect(outcome).toMatchObject({ ok: true, value: "undefined" });
+  expect(calls).toEqual(
+    ["find", "get", "insert", "update", "upsert", "delete"].map((operation) =>
+      expect.objectContaining({ operation, surface: "code", target: { name: "orders" }, idempotencyKey }),
+    ),
+  );
+});

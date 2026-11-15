@@ -1,11 +1,15 @@
 import {
   AppError,
-  type Json,
+  Identifier,
+  Json,
   newRequestId,
   type Passage,
   type SearchCitations,
   SearchRequest,
+  TableOperation,
+  type TableRuntimeCall,
 } from "@wakeel/contracts";
+import { z } from "zod";
 import type { SandboxClient } from "./client";
 import type { ScopePatches } from "./protocol";
 
@@ -56,7 +60,10 @@ export interface CodePort {
   run(request: CodeRequest): Promise<CodeOutcome>;
 }
 
+const tableFrame = z.object({ table: Identifier }).catchall(Json);
+
 export interface CodePortOptions {
+  tables?: { names: string[]; execute(request: TableRuntimeCall): Promise<Json> };
   kbSearch?(
     request: SearchRequest,
     citations?: SearchCitations,
@@ -89,6 +96,7 @@ export function createCodePort(client: SandboxClient, options: CodePortOptions =
           limits: { timeoutMs: request.timeoutMs, memoryMb: request.memoryMb },
           secretKeys: request.secretKeys,
           ctx: { idempotencyKey: request.idempotencyKey },
+          ...(options.tables ? { tables: options.tables.names } : {}),
           ...(token ? { capabilityToken: token } : {}),
         },
         {
@@ -112,6 +120,20 @@ export function createCodePort(client: SandboxClient, options: CodePortOptions =
               const result = await options.kbSearch(parsed.data, retrievalCitations);
               retrievalCitations = result.citations;
               return result.passages;
+            }
+            if (call.name.startsWith("tables.") && options.tables) {
+              const operation = TableOperation.safeParse(call.name.slice("tables.".length));
+              const args = tableFrame.safeParse(call.input);
+              if (!operation.success || !args.success) throw new AppError("validation_failed");
+              const { table, ...input } = args.data;
+              if (!options.tables.names.includes(table)) throw new AppError("not_found");
+              return options.tables.execute({
+                target: { name: table },
+                operation: operation.data,
+                surface: "code",
+                input,
+                idempotencyKey: request.idempotencyKey,
+              });
             }
             throw new AppError("internal_error", {}, { detail: `${call.name} is not available to code yet` });
           },

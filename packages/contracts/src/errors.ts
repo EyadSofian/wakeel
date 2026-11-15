@@ -246,6 +246,16 @@ export const ERRORS = {
     title: "We could not fetch {url}: {message}",
     fix: "Check that the page is public.",
   },
+  table_write_disabled: {
+    status: 403,
+    title: "This run cannot change table rows",
+    fix: "Use Studio to edit the table or run the published bot.",
+  },
+  table_replay_conflict: {
+    status: 409,
+    title: "The table operation changed after the turn resumed",
+    fix: "Check the existing table rows before starting another turn.",
+  },
   table_row_invalid: {
     status: 422,
     title: "Row does not match the table: {message}",

@@ -288,9 +288,11 @@ describe("what counts as a failure", () => {
     const table = { id: cardId(), type: "table", tableId: newId("tbl"), operation: "find" };
     const bot = linearBot([step(), table]);
     const { result, commits } = await run({ def: bot.def });
-    // The Log card has an executor (4.3); the Table card does not have one until Phase 9.
+    // The Log card works without ports. Table operations require the worker's table adapter.
     expect(commits.flatMap((c) => c.logs)).toEqual([{ level: "info", message: "step" }]);
-    expect(result.error?.message).toBe("Something went wrong on our side: No executor for table cards.");
+    expect(result.error?.message).toBe(
+      "Something went wrong on our side: Table operations are not wired for this turn.",
+    );
   });
 
   test("an autonomous node with no autonomy port is internal_error", async () => {

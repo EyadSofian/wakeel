@@ -13,6 +13,7 @@ import {
 import { Code, Play, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { type KeyboardEvent, type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTableSchemas } from "../api/tables";
 import { useCanvas, useCanvasStore } from "../canvas/context";
 import { useUi, useUiStore } from "../canvas/interaction/ui-store";
 import { commands } from "../canvas/store/commands";
@@ -26,14 +27,29 @@ import { loadMonaco, type Monaco } from "./monaco-loader";
  * it and gives focus back to what opened it. `⌘Enter` will run the code with the last emulator
  * scope once the emulator exists (4.6); until then it says so. Slides up on `spring.smooth`.
  */
-export function CodeDrawer() {
+export function CodeDrawer({ workspaceId, botId }: { workspaceId: string; botId: string }) {
   const target = useUi((s) => s.code);
-  return <AnimatePresence>{target ? <Drawer key={target.cardId} {...target} /> : null}</AnimatePresence>;
+  return (
+    <AnimatePresence>
+      {target ? <Drawer key={target.cardId} {...target} workspaceId={workspaceId} botId={botId} /> : null}
+    </AnimatePresence>
+  );
 }
 
 type LoadState = { status: "loading" } | { status: "ready"; monaco: Monaco } | { status: "failed" };
 
-function Drawer({ nodeId, cardId }: { nodeId: string; cardId: string }) {
+function Drawer({
+  nodeId,
+  cardId,
+  workspaceId,
+  botId,
+}: {
+  nodeId: string;
+  cardId: string;
+  workspaceId: string;
+  botId: string;
+}) {
+  const { data: tables } = useTableSchemas(workspaceId, botId);
   const ui = useUiStore();
   const store = useCanvasStore();
   const tokens = useMotionTokens();
@@ -76,8 +92,8 @@ function Drawer({ nodeId, cardId }: { nodeId: string; cardId: string }) {
   }, [attempt]);
 
   const typings = useMemo(
-    () => (manifest && workflow ? generateTypings({ manifest, workflow }) : ""),
-    [manifest, workflow],
+    () => (manifest && workflow ? generateTypings({ manifest, workflow, tables: tables ?? [] }) : ""),
+    [manifest, workflow, tables],
   );
 
   const [said, setSaid] = useState("");

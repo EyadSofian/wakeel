@@ -87,7 +87,9 @@ describe("toolsDts", () => {
       ],
     });
     const dts = toolsDts(node, definition);
-    expect(dts).toContain("orders: {\n    find(args: Record<string, unknown>): Promise<unknown>;\n    get(");
+    expect(dts).toContain("orders: {\n    find(args: { where?:");
+    expect(dts).toContain("get(args: { where: Record<string, unknown> }): Promise<Record<string, unknown> | null>;");
+    expect(dts).not.toContain("delete(args:");
     expect(dts).toContain("  /** Price a cart. */\n  quote(input: Record<string, unknown>): Promise<unknown>;");
     expect(dts).toContain("gone(input: Record<string, never>): Promise<never>;");
   });

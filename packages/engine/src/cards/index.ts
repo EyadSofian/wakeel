@@ -11,13 +11,13 @@ import { kbSearch } from "./kb-search";
 import { say } from "./say";
 import { setVariable } from "./set-variable";
 import { end, log, setTimeoutCard } from "./simple";
+import { table } from "./table";
 
 export { normalizeDigits, parseReply } from "./capture-parse";
 export { CardEvaluator, checkMessage, renderMessages } from "./render";
 
 /**
- * The engine's card executors, by card type (tasks 4.3, 5.4, 6.7). The knowledge and table cards
- * arrive in later phases; a card type with no executor fails its step with `internal_error`.
+ * The engine's card executors by card type. A missing executor fails the step with `internal_error`.
  */
 export const CARD_EXECUTORS: CardExecutors = {
   say,
@@ -34,4 +34,5 @@ export const CARD_EXECUTORS: CardExecutors = {
   ai_extract: aiExtract,
   ai_branch: aiBranch,
   kb_search: kbSearch,
+  table,
 };

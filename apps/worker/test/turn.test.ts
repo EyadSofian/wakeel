@@ -9,6 +9,7 @@ import {
   createDatabase,
   createKnowledgeBase,
   createSource,
+  createTable,
   createWorkflowDoc,
   createWorkspace,
   type Database,
@@ -20,6 +21,7 @@ import {
   replaceChunks,
   saveDraftDoc,
   sql,
+  startTurn,
   updateDocument,
   updateWorkspace,
   upsertDocument,
@@ -46,6 +48,7 @@ import {
   turnFollowUp,
   turnProcessor,
 } from "../src/turn/index";
+import { turnTables } from "../src/turn/tables";
 import { startWorkers } from "../src/workers";
 
 /**
@@ -1473,4 +1476,52 @@ describe("knowledge search in committed turns", () => {
     });
     model.expectDone();
   });
+});
+
+test("table runtime mutations do not repeat across retries or run against live data from emulator", async () => {
+  const c = await seed([]);
+  const event = await send(c, "أضيف مرتجع ORD-12");
+  const { table, turn, epoch } = await db.withWorkspace(c.ws, async (tx) => {
+    const table = await createTable(tx, c.botId, {
+      name: "orders",
+      columns: [
+        { id: newElementId("col"), name: "title", type: "string", required: true, unique: false, searchable: true },
+      ],
+    });
+    await tx.execute(sql`update conversations set mode = 'live' where id = ${c.conversationId}`);
+    const epoch = await acquireConversationLease(tx, c.conversationId, "runtime-test", 30_000);
+    if (epoch === undefined) throw new Error("could not take the fixture lease");
+    const turn = await startTurn(tx, {
+      conversationId: c.conversationId,
+      botId: c.botId,
+      versionId: null,
+      epoch,
+      eventIds: [event.id],
+    });
+    return { table, turn, epoch };
+  });
+  const base = { workspaceId: c.ws, botId: c.botId, conversationId: c.conversationId, turnId: turn.id, epoch };
+  const live = () => turnTables(db, { ...base, mode: "live" }, () => {});
+  const request = {
+    target: { id: table.id },
+    operation: "insert" as const,
+    surface: "code" as const,
+    input: { values: { title: "مرتجع ORD-12" } },
+    idempotencyKey: `${turn.id}:1`,
+  };
+  const inserted = await live().execute(request);
+  expect(await live().execute(request)).toEqual(inserted);
+  await expect(live().execute({ ...request, input: { values: { title: "كتاب مختلف" } } })).rejects.toMatchObject({
+    code: "table_replay_conflict",
+  });
+  for (const mode of ["emulator", "eval"] as const) {
+    await expect(turnTables(db, { ...base, mode }, () => {}).execute(request)).rejects.toMatchObject({
+      code: "table_write_disabled",
+    });
+  }
+  await expect(
+    turnTables(db, { ...base, mode: "live", epoch: epoch + 1 }, () => {}).execute(request),
+  ).rejects.toThrow();
+  const read = { ...request, operation: "find" as const, input: { search: "مرتجع ORD 12" } };
+  expect(await turnTables(db, { ...base, mode: "emulator" }, () => {}).execute(read)).toEqual([inserted]);
 });
