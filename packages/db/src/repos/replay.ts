@@ -67,7 +67,7 @@ export async function createRecordedReplay(
       (item) =>
         item.kind !== "message" ||
         !("message" in item.payload) ||
-        (item.payload.message as { type?: string } | undefined)?.type !== "text",
+        (item.payload["message"] as { type?: string } | undefined)?.type !== "text",
     )
   )
     throw new AppError("replay_input_unavailable");
@@ -86,7 +86,7 @@ export async function createRecordedReplay(
   const turnId = newId("turn");
   const response = { conversationId: conversation.id, turnId, externalId: key };
   for (const [index, event] of recorded.entries()) {
-    if ("message" in event.payload && event.payload.message) {
+    if ("message" in event.payload && event.payload["message"]) {
       const message = SendMessageRequest.parse(event.payload).message;
       await insertUserMessage(tx, {
         conversationId: conversation.id,
