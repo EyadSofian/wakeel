@@ -48,7 +48,10 @@ async function main() {
   const tei = process.env["TEI_API_KEY"];
   const baseURL = process.env["TEI_BASE_URL"];
   if (!openai || !tei || !baseURL) throw new AppError("model_key_missing", { provider: "OpenAI and TEI" });
-  if (new URL(baseURL).protocol !== "https:") throw new AppError("validation_failed");
+  const endpoint = new URL(baseURL);
+  // CI publishes its disposable TEI container only on the runner's loopback interface.
+  if (endpoint.protocol !== "https:" && !(endpoint.protocol === "http:" && endpoint.hostname === "127.0.0.1"))
+    throw new AppError("validation_failed");
   const usage: UsageEvent[] = [];
   // The eval operator selects this authenticated server. Only authored synthetic fixtures reach it.
   const llm = createLlm({
