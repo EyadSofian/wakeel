@@ -6,7 +6,9 @@
   "devDependencies": {
     "@wakeel/contracts": "workspace:*",
     "@wakeel/llm": "workspace:*",
-    "@wakeel/sandbox-client": "workspace:*"
+    "@wakeel/sandbox-client": "workspace:*",
+    "@wakeel/db": "workspace:*",
+    "@wakeel/retrieval": "workspace:*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
