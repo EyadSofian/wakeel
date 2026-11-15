@@ -1,6 +1,6 @@
 import type { AddressInfo } from "node:net";
 import { createLogger } from "@wakeel/telemetry";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { SandboxPool } from "../src/pool";
 import { createSandboxServer, type SandboxServer } from "../src/server";
 
@@ -80,6 +80,23 @@ describe("health", () => {
 });
 
 describe("POST /exec", () => {
+  test("a frame emitted before the pool admission tick keeps valid NDJSON headers", async () => {
+    const execution = vi.spyOn(pool, "exec").mockImplementationOnce(async (_job, options) => {
+      options?.onFrame?.({ t: "log", level: "info", args: ["فاتورة ORD-12"] });
+      return { t: "result", value: 42, scopePatches: {}, stats: { setupMs: 0, runMs: 0 } };
+    });
+    try {
+      const res = await post(`${JSON.stringify(frame())}\n`);
+      expect(res.headers.get("content-type")).toBe("application/x-ndjson");
+      expect(await lines(res)).toEqual([
+        { t: "log", level: "info", args: ["فاتورة ORD-12"] },
+        { t: "result", value: 42, scopePatches: {}, stats: { setupMs: 0, runMs: 0 } },
+      ]);
+    } finally {
+      execution.mockRestore();
+    }
+  });
+
   test("streams one result frame as NDJSON", async () => {
     const res = await post(`${JSON.stringify(frame())}\n`);
     expect(res.status).toBe(200);
