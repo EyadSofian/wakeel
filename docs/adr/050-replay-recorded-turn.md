@@ -1,6 +1,6 @@
 # ADR-050 — Replay a recorded turn against the draft
 
-Status: proposed · Date: 2026-11-15 · Task: 10.4
+Status: accepted (Eyad approved in writing on 2026-11-15) · Date: 2026-11-15 · Task: 10.4
 
 ## Context
 
@@ -21,7 +21,7 @@ makes table writes unavailable in emulator and eval.
 
 ## Recommendation
 
-Choose option 1.
+Option 1 approved.
 
 - Use a bot-scoped Studio POST selecting a live turn ID. Require both conversation read and
   permission to use the emulator. Validate that the turn belongs to the path bot and workspace.
