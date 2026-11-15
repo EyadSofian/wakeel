@@ -27,4 +27,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # apps/parser's tests run real Docling (task 8.2); uv is pinned like everything else.
       - run: pipx install uv==0.11.26
-      - run: pnpm check
+      # Sandbox setup has a strict 5 ms p50 budget. Do not compete for the runner's CPU with
+      # simultaneous TypeScript builds and database suites while measuring it.
+      - run: pnpm check --concurrency=1
