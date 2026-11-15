@@ -59,6 +59,13 @@ export const ERRORS = {
   },
   payload_too_large: { status: 413, title: "That is larger than {limit}", fix: "Send less data in one request." },
 
+  // ADR-039: the upload did not arrive as announced.
+  upload_incomplete: {
+    status: 409,
+    title: "The file has not finished uploading",
+    fix: "Upload the file again, then try once it has finished.",
+  },
+
   // Publish and definition
   definition_invalid: {
     status: 422,

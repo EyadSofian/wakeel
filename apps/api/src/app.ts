@@ -10,6 +10,7 @@ import { type BridgeDeps, bridgeRoutes } from "./routes/bridge/index";
 import { configVarRoutes } from "./routes/config-vars";
 import { connectionRoutes } from "./routes/connections";
 import { emulatorRoutes } from "./routes/emulator";
+import { fileRoutes } from "./routes/files";
 import { invitationRoutes } from "./routes/invitations";
 import { memberRoutes } from "./routes/members";
 import { modelRoutes } from "./routes/models";
@@ -117,6 +118,7 @@ export function buildApp(options: AppOptions) {
     void app.register(botRoutes, deps);
     void app.register(versionRoutes, deps);
     void app.register(configVarRoutes, deps);
+    void app.register(fileRoutes, deps);
     void app.register(portableRoutes, deps);
     void app.register(traceRoutes, deps);
     void app.register(modelRoutes, { studio: deps, keyring: deps.keyring });

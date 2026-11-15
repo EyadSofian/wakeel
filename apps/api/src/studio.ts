@@ -1,6 +1,6 @@
 import { type AuthService, can, type Permission, parseKey, type SessionView, secretMatches } from "@wakeel/auth";
 import { AppError, WorkspaceId } from "@wakeel/contracts";
-import type { Keyring } from "@wakeel/db";
+import type { Keyring, ObjectStore } from "@wakeel/db";
 import {
   type ApiKeyRecord,
   type Database,
@@ -22,6 +22,8 @@ export interface StudioDeps {
   now: () => Date;
   /** Seals workspace secrets such as model provider keys (tasks 1.5, 6.2). */
   keyring: Keyring;
+  /** Presigns uploads and downloads (task 8.1, ADR-039). */
+  objectStore: ObjectStore;
 }
 
 export interface MemberContext {

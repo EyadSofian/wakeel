@@ -41,6 +41,8 @@ export const AUDIT_ACTIONS = [
   // Task 7.3 (ADR-037): config variable values; meta never holds the value.
   "config_var.set",
   "config_var.deleted",
+  "file.created",
+  "file.uploaded",
 ] as const;
 export type AuditActionName = (typeof AUDIT_ACTIONS)[number];
 

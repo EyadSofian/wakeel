@@ -274,3 +274,38 @@ export const egressClientEnv = defineEnv({
     description: "Base URL of the egress service, for example http://egress:4400.",
   },
 });
+
+/** The object store (ADR-013, ADR-039): uploads, parsed documents, large trace payloads. */
+export const objectStoreEnv = defineEnv({
+  s3Endpoint: {
+    env: "S3_ENDPOINT",
+    schema: z.url({ protocol: /^https?$/ }).default("http://127.0.0.1:9000"),
+    description: "S3 API address the services use, for example http://object-store:9000.",
+  },
+  s3PublicEndpoint: {
+    env: "S3_PUBLIC_ENDPOINT",
+    schema: z.url({ protocol: /^https?$/ }).optional(),
+    description: "S3 API address browsers use for presigned uploads and downloads. Defaults to S3_ENDPOINT.",
+  },
+  s3Region: {
+    env: "S3_REGION",
+    schema: z.string().min(1).default("us-east-1"),
+    description: "S3 region, for example us-east-1.",
+  },
+  s3Bucket: {
+    env: "S3_BUCKET",
+    schema: z.string().min(3).max(63),
+    description: "Bucket for every tenant's objects, for example wakeel-dev.",
+  },
+  s3AccessKeyId: {
+    env: "S3_ACCESS_KEY_ID",
+    schema: z.string().min(1),
+    description: "Access key id for the bucket.",
+  },
+  s3SecretAccessKey: {
+    env: "S3_SECRET_ACCESS_KEY",
+    schema: z.string().min(1),
+    description: "Secret access key for the bucket.",
+    secret: true,
+  },
+});

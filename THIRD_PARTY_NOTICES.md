@@ -21,9 +21,9 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 
 <!-- BEGIN GENERATED: pnpm licences --write -->
 
-414 packages installed by `pnpm install` (runtime and development), not counting platform builds.
+440 packages installed by `pnpm install` (runtime and development), not counting platform builds.
 
-### MIT (310)
+### MIT (311)
 
 - @babel/helper-string-parser 7.29.14 — https://babel.dev/docs/en/next/babel-helper-string-parser
 - @babel/helper-validator-identifier 7.29.7
@@ -146,6 +146,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - better-auth 1.7.23 — https://better-auth.com
 - better-call 1.4.5
 - bl 4.1.0 — https://github.com/rvagg/bl
+- bowser 2.15.0 — https://github.com/bowser-js/bowser
 - brace-expansion 2.1.8 — https://github.com/juliangruber/brace-expansion
 - buffer 5.7.1 — https://github.com/feross/buffer
 - buffer 6.0.3 — https://github.com/feross/buffer
@@ -336,7 +337,7 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - zustand 4.5.7 — https://github.com/pmndrs/zustand
 - zustand 5.0.16 — https://github.com/pmndrs/zustand
 
-### Apache-2.0 (37)
+### Apache-2.0 (62)
 
 - @ai-sdk/anthropic 4.0.105 — https://ai-sdk.dev/docs
 - @ai-sdk/gateway 4.0.146 — https://ai-sdk.dev/docs
@@ -345,11 +346,36 @@ Container images used by `docker-compose.yml` and the tests: pgvector/pgvector (
 - @ai-sdk/openai-compatible 3.0.92 — https://ai-sdk.dev/docs
 - @ai-sdk/provider 4.0.38 — https://ai-sdk.dev/docs
 - @ai-sdk/provider-utils 5.0.81 — https://ai-sdk.dev/docs
+- @aws-sdk/checksums 3.1002.5 — https://github.com/aws/aws-sdk-js-v3/tree/main/packages-internal/checksums
+- @aws-sdk/client-s3 3.1169.0 — https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-s3
+- @aws-sdk/core 3.981.0 — https://github.com/aws/aws-sdk-js-v3/tree/main/packages-internal/core
+- @aws-sdk/credential-provider-env 3.972.84 — https://github.com/aws/aws-sdk-js-v3/tree/main/packages-internal/credential-provider-env
+- @aws-sdk/credential-provider-http 3.972.86 — https://github.com/aws/aws-sdk-js-v3/tree/main/packages-internal/credential-provider-http
+- @aws-sdk/credential-provider-ini 3.973.30 — https://github.com/aws/aws-sdk-js-v3/tree/main/packages-internal/credential-provider-ini
+- @aws-sdk/credential-provider-login 3.972.92 — https://github.com/aws/aws-sdk-js-v3/tree/main/packages-internal/credential-provider-login
+- @aws-sdk/credential-provider-node 3.972.97 — https://github.com/aws/aws-sdk-js-v3/tree/main/packages-internal/credential-provider-node
+- @aws-sdk/credential-provider-process 3.972.84 — https://github.com/aws/aws-sdk-js-v3/tree/main/packages-internal/credential-provider-process
+- @aws-sdk/credential-provider-sso 3.973.28 — https://github.com/aws/aws-sdk-js-v3/tree/main/packages-internal/credential-provider-sso
+- @aws-sdk/credential-provider-web-identity 3.972.90 — https://github.com/aws/aws-sdk-js-v3/tree/main/packages-internal/credential-provider-web-identity
+- @aws-sdk/middleware-sdk-s3 3.972.89 — https://github.com/aws/aws-sdk-js-v3/tree/main/packages-internal/middleware-sdk-s3
+- @aws-sdk/nested-clients 3.998.3 — https://github.com/aws/aws-sdk-js-v3/tree/main/packages/nested-clients
+- @aws-sdk/s3-request-presigner 3.1169.0 — https://github.com/aws/aws-sdk-js-v3/tree/main/packages/s3-request-presigner
+- @aws-sdk/signature-v4-multi-region 3.996.52 — https://github.com/aws/aws-sdk-js-v3/tree/main/packages/signature-v4-multi-region
+- @aws-sdk/token-providers 3.1166.0 — https://github.com/aws/aws-sdk-js-v3/tree/main/packages/token-providers
+- @aws-sdk/types 3.975.1 — https://github.com/aws/aws-sdk-js-v3/tree/main/packages-internal/types
+- @aws-sdk/xml-builder 3.972.43 — https://github.com/aws/aws-sdk-js-v3/tree/main/packages-internal/xml-builder
+- @aws/lambda-invoke-store 0.3.0 — https://github.com/awslabs/aws-lambda-invoke-store
 - @balena/dockerignore 1.0.2
 - @grpc/grpc-js 1.14.7 — https://grpc.io/
 - @grpc/proto-loader 0.7.15 — https://grpc.io/
 - @grpc/proto-loader 0.8.1 — https://grpc.io/
 - @playwright/test 1.65.0 — https://playwright.dev
+- @smithy/core 3.40.0 — https://github.com/smithy-lang/smithy-typescript/tree/main/packages/core
+- @smithy/credential-provider-imds 4.5.2 — https://github.com/smithy-lang/smithy-typescript/tree/main/packages/credential-provider-imds
+- @smithy/fetch-http-handler 5.8.1 — https://github.com/smithy-lang/smithy-typescript/tree/main/packages/fetch-http-handler
+- @smithy/node-http-handler 4.14.2 — https://github.com/smithy-lang/smithy-typescript/tree/main/packages/node-http-handler
+- @smithy/signature-v4 5.7.5 — https://github.com/smithy-lang/smithy-typescript/tree/main/packages/signature-v4
+- @smithy/types 4.20.0 — https://github.com/smithy-lang/smithy-typescript/tree/main/packages/types
 - @vercel/oidc 3.2.0 — https://vercel.com
 - @workflow/serde 4.1.0
 - ai 7.0.173 — https://ai-sdk.dev/docs

@@ -10,9 +10,10 @@ import {
   egressClientEnv,
   loadConfigOrExit,
   masterKeyEnv,
+  objectStoreEnv,
   redisEnv,
 } from "@wakeel/config";
-import { createDatabase } from "@wakeel/db";
+import { createDatabase, s3ObjectStore } from "@wakeel/db";
 import { createLogger } from "@wakeel/telemetry";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
@@ -28,6 +29,8 @@ const config = loadConfigOrExit({
   // testWebhook signs and sends through egress (ADR-029 §4).
   ...egressClientEnv,
   ...masterKeyEnv,
+  // Uploads are presigned against the object store (ADR-039).
+  ...objectStoreEnv,
 });
 if (config) {
   const logger = createLogger({ service: "api", level: config.logLevel });
@@ -62,10 +65,18 @@ if (config) {
     current: { version: config.masterKeyVersion, key: config.masterKey.reveal() },
     previous: config.previousMasterKeys.reveal(),
   };
+  const objectStore = s3ObjectStore({
+    endpoint: config.s3Endpoint,
+    ...(config.s3PublicEndpoint ? { publicEndpoint: config.s3PublicEndpoint } : {}),
+    region: config.s3Region,
+    bucket: config.s3Bucket,
+    accessKeyId: config.s3AccessKeyId,
+    secretAccessKey: config.s3SecretAccessKey.reveal(),
+  });
   const app = buildApp({
     role: config.role,
     logger,
-    studio: { auth, studioOrigin: config.studioOrigin, db, keyring },
+    studio: { auth, studioOrigin: config.studioOrigin, db, keyring, objectStore },
     bridge: {
       db,
       signals: new Signals(subscriber),
