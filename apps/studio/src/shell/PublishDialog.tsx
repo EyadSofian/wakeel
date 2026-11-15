@@ -1,7 +1,8 @@
-import { diffDefinitions } from "@wakeel/contracts";
-import { Banner, Button, Dialog, Field, Input, Skeleton, Textarea } from "@wakeel/ui";
+import { useQuery } from "@tanstack/react-query";
+import { diffDefinitions, EvalPublishStatus } from "@wakeel/contracts";
+import { Banner, Button, Dialog, Field, Input, Skeleton, Switch, Textarea } from "@wakeel/ui";
 import { type FormEvent, useMemo, useState } from "react";
-import { fieldErrors } from "../api/client";
+import { api, fieldErrors } from "../api/client";
 import { usePublish, useVersion, useVersions } from "../api/versions";
 import { useCanvasStore } from "../canvas/context";
 import { waitForSaved } from "../emulator/run-from";
@@ -23,6 +24,15 @@ export function PublishDialog() {
   const live = versions.data?.find((v) => v.live);
   const liveVersion = useVersion(workspaceId, botId, live?.id);
   const draft = useDraftDefinition();
+  const evalStatus = useQuery({
+    enabled: open,
+    queryKey: ["eval-publish-status", workspaceId, botId],
+    queryFn: async () =>
+      EvalPublishStatus.parse(await api("GET", `/v1/workspaces/${workspaceId}/bots/${botId}/evals/publish-status`)),
+    refetchInterval: open ? 5000 : false,
+  });
+  const gate = draft?.manifest.settings.blockPublishOnFailingEvals === true;
+  const failedEvals = (evalStatus.data?.failed ?? 0) + (evalStatus.data?.errors ?? 0);
   const [label, setLabel] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -66,7 +76,7 @@ export function PublishDialog() {
             variant="primary"
             type="submit"
             form="publish-form"
-            disabled={blocked || publish.isPending || saving || label.trim() === ""}
+            disabled={blocked || (gate && failedEvals > 0) || publish.isPending || saving || label.trim() === ""}
           >
             Publish
           </Button>
@@ -108,6 +118,33 @@ export function PublishDialog() {
                 </div>
               ))}
             </dl>
+          )}
+        </section>
+        <section aria-label="Eval status" className="flex flex-col gap-3">
+          <h3 className="text-small font-medium text-primary">Eval status</h3>
+          {evalStatus.isPending && <Skeleton className="h-4 w-1/2" />}
+          {evalStatus.isError && <ProblemBanner error={evalStatus.error} />}
+          {evalStatus.data && (
+            <p className="text-body text-secondary">
+              {evalStatus.data.passed + failedEvals === 0
+                ? "No completed evals for this draft."
+                : `${evalStatus.data.passed} passed · ${evalStatus.data.failed} failed · ${evalStatus.data.errors} errors`}
+            </p>
+          )}
+          <Switch
+            label="Block publishing on unsuccessful evals"
+            checked={gate}
+            onChange={(enabled) =>
+              canvas.getState().updateManifest((manifest) => ({
+                ...manifest,
+                settings: { ...manifest.settings, blockPublishOnFailingEvals: enabled },
+              }))
+            }
+          />
+          {gate && failedEvals > 0 && (
+            <Banner tone="error" title="Unsuccessful evals block publishing">
+              Review the results and rerun the failing suites.
+            </Banner>
           )}
         </section>
         {blocked ? (
