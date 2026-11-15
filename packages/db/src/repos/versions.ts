@@ -6,6 +6,7 @@ import {
   type DefinitionIssue,
   newId,
   SCHEMA_VERSION,
+  TableId,
   type ValidationContext,
   validateDefinition,
   type Workflow,
@@ -75,6 +76,11 @@ export function definitionHash(def: BotDefinition): string {
   return createHash("sha256").update(canonicalJson(def)).digest("hex");
 }
 
+async function ownedTableIds(tx: Tx, botId: string): Promise<Set<string>> {
+  const tables = await tx.execute(sql`select id from bot_tables where bot_id = ${botId}`);
+  return new Set(tables.rows.map((row) => TableId.parse(row["id"])));
+}
+
 /** The bot's draft assembled into one definition: the manifest and its workflows, main first. */
 export async function assembleDraft(tx: Tx, botId: string): Promise<BotDefinition> {
   const docs = await listDraftDocs(tx, botId);
@@ -98,7 +104,11 @@ export async function publishDraft(
   await getBot(tx, input.botId);
   const definition = await assembleDraft(tx, input.botId);
   const knowledgeBaseIds = new Set((await listKnowledgeBases(tx, input.botId)).map((b) => b.id));
-  const issues = validateDefinition(definition, { ...input.context, knowledgeBaseIds });
+  const issues = validateDefinition(definition, {
+    ...input.context,
+    knowledgeBaseIds,
+    tableIds: await ownedTableIds(tx, input.botId),
+  });
   const errors = issues.filter((i) => i.severity === "error");
   if (errors.length > 0) {
     throw new AppError(
@@ -183,8 +193,8 @@ export async function rollbackTo(
   const bot = await getBot(tx, botId);
   const version = await getVersion(tx, botId, versionId);
   const knowledgeBaseIds = new Set((await listKnowledgeBases(tx, botId)).map((b) => b.id));
-  const issues = validateDefinition(version.definition, { knowledgeBaseIds });
-  const missing = issues.filter((i) => i.code === "kb_unknown");
+  const issues = validateDefinition(version.definition, { knowledgeBaseIds, tableIds: await ownedTableIds(tx, botId) });
+  const missing = issues.filter((i) => i.code === "kb_unknown" || i.code === "table_unknown");
   if (missing.length)
     throw new AppError(
       "definition_invalid",

@@ -10,3 +10,5 @@ export * from "./schema/kb";
 export * from "./schema/platform";
 export * from "./schema/runtime";
 export * from "./sql";
+export * from "./tables/filter";
+export * from "./tables/repo";

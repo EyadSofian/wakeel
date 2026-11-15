@@ -25,13 +25,22 @@ export const TableSchema = z.object({
 });
 export type TableSchema = z.infer<typeof TableSchema>;
 
+/** Bot-scoped Studio table schema resource (ADR-047). */
+export const NewTableRequest = TableSchema.omit({ id: true }).strict();
+export const PatchTableRequest = NewTableRequest.partial();
+export const TableSchemaResponse = TableSchema.extend({ revision: z.string() });
+export const ListTableSchemasResponse = z.object({
+  data: z.array(TableSchemaResponse),
+  nextCursor: TableId.nullable(),
+});
+
 /**
  * Filter AST. Compiled to parameterised SQL; never interpolated.
  * `V` is the value type: `Json` at the API and in code, `Expression` inside card definitions.
  */
 const ops = <V extends z.ZodType>(value: V) =>
   z
-    .object({
+    .strictObject({
       eq: value,
       ne: value,
       gt: value,
