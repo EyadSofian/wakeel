@@ -1,6 +1,6 @@
 # ADR-049 — Trace payload access and partition retention
 
-Status: proposed · Date: 2026-11-15 · Task: 10.1
+Status: accepted (Eyad approved in writing on 2026-11-15) · Date: 2026-11-15 · Task: 10.1
 
 ## Context
 
@@ -23,7 +23,7 @@ historical previews have no recoverable original bytes.
 
 ## Recommendation
 
-Choose option 1.
+Option 1 approved.
 
 - Prepare payloads before building stored spans so redaction precedes byte measurement,
   preview generation, uploads, persistence and SSE. Reuse the known secret redaction rules.
