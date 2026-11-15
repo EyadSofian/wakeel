@@ -1,6 +1,6 @@
 # ADR-046 — Knowledge management and test search in Studio
 
-Status: proposed · Date: 2026-11-15 · Task: 8.8
+Status: accepted (Eyad approved in writing on 2026-11-15) · Date: 2026-11-15 · Task: 8.8
 
 ## Context
 
