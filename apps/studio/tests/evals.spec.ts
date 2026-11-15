@@ -21,6 +21,9 @@ const run = {
   createdAt: "2026-11-15T12:00:00Z",
 };
 const root = `/v1/workspaces/${WS}/bots/${BOT}/evals`;
+const turnId = "turn_01m7a256m0a13warwhczsjhx9b";
+const conversationId = "conv_01m7a256m0a13warwhczsjhx9b";
+const replyText = "دي فاتورة ORD-12";
 for (const theme of ["light", "dark"] as const) {
   for (const width of [1280, 1440]) {
     test(`runs and reviews an Arabic case in ${theme} at ${width}`, async ({ page }) => {
@@ -30,6 +33,23 @@ for (const theme of ["light", "dark"] as const) {
       let kicked = false;
       await page.route(`**${root}/**`, async (route) => {
         const path = new URL(route.request().url()).pathname;
+        if (path === `${root}/runs/${run.id}/turns/${turnId}/messages`) {
+          return route.fulfill({
+            json: {
+              data: [
+                {
+                  id: "msg_01m7a256m0a13warwhczsjhx9b",
+                  conversationId,
+                  turnId,
+                  direction: "out",
+                  seq: 1,
+                  createdAt: run.createdAt,
+                  payload: { type: "text", text: replyText },
+                },
+              ],
+            },
+          });
+        }
         if (path === `${root}/suites`) return route.fulfill({ json: { data: [suite], nextCursor: null } });
         if (path === `${root}/suites/${suite.id}`) return route.fulfill({ json: { ...suite, cases: [item] } });
         if (path === `${root}/suites/${suite.id}/cases/${item.id}`) {
@@ -54,7 +74,7 @@ for (const theme of ["light", "dark"] as const) {
                 result: {
                   status: "passed",
                   durationMs: 120,
-                  turns: [{ index: 0, assertions: [{ assertion, passed: true }] }],
+                  turns: [{ index: 0, turnId, conversationId, assertions: [{ assertion, passed: true }] }],
                 },
               },
             ],
@@ -76,6 +96,8 @@ for (const theme of ["light", "dark"] as const) {
       await expect(results.getByText("ar-EG 1/1")).toBeVisible();
       await results.getByText(item.script.name).click();
       await expect(results.getByText("contains")).toBeVisible();
+      await results.getByRole("button", { name: "Show replies" }).click();
+      await expect(results.getByText(replyText)).toBeVisible();
       await expect(page).toHaveScreenshot(`evals-rtl-${theme}-${width}.png`);
     });
   }

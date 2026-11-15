@@ -12,7 +12,7 @@ export function useEvalSuites(path: string, enabled = true) {
     queryKey: ["eval-suites", path],
     initialPageParam: "",
     queryFn: async ({ pageParam }) =>
-      page.parse(await api("GET", `${path}/suites?cursor=${pageParam || ""}`.replace(/\?cursor=$/, ""))),
+      page.parse(await api("GET", `${path}/suites${pageParam ? `?cursor=${encodeURIComponent(pageParam)}` : ""}`)),
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
 }

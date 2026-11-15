@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { EvalCase, EvalCaseEntry, EvalRun, EvalRunDetail, EvalSuite, EvalTarget } from "@wakeel/contracts";
-import { Badge, Button, EmptyState, Field, Input, Select, Sheet, Skeleton, Textarea } from "@wakeel/ui";
+import { EvalCase, EvalCaseEntry, EvalRun, EvalRunDetail, EvalSuite, EvalTarget, Message } from "@wakeel/contracts";
+import { Badge, Button, EmptyState, Field, Input, MessageBubble, Select, Sheet, Skeleton, Textarea } from "@wakeel/ui";
 import { type FormEvent, useState } from "react";
 import { z } from "zod";
 import { api } from "../../api/client";
@@ -223,7 +223,7 @@ function SuiteView({
       )}
       {result.isError && <ProblemBanner error={result.error} />}
       {selectedRun && result.isPending && <Skeleton className="h-12 w-full" />}
-      {result.data && <RunView run={result.data} workspaceId={workspaceId} />}
+      {result.data && <RunView run={result.data} workspaceId={workspaceId} path={path} />}
       <Sheet
         open={editing !== undefined}
         title={editing === "new" ? "Add case" : "Edit case"}
@@ -307,7 +307,7 @@ const names: Record<z.infer<typeof EvalRun>["status"], string> = {
   failed: "Failed",
   error: "Error",
 };
-function RunView({ run, workspaceId }: { run: Run; workspaceId: string }) {
+function RunView({ run, workspaceId, path }: { run: Run; workspaceId: string; path: string }) {
   const [trace, setTrace] = useState<string>();
   const tags = new Map<string, { passed: number; total: number }>();
   const done = new Map(run.results.map((item) => [item.caseId, item.result]));
@@ -363,9 +363,10 @@ function RunView({ run, workspaceId }: { run: Run; workspaceId: string }) {
                   ))}
                 </ul>
                 {turn.turnId && (
-                  <Button size="compact" className="self-start" onClick={() => setTrace(turn.turnId)}>
-                    Open trace
-                  </Button>
+                  <TurnOutput
+                    path={`${path}/runs/${run.id}/turns/${turn.turnId}/messages`}
+                    openTrace={() => setTrace(turn.turnId)}
+                  />
                 )}
               </section>
             ))}
@@ -382,5 +383,44 @@ function RunView({ run, workspaceId }: { run: Run; workspaceId: string }) {
         {trace && <TraceDetail key={trace} workspaceId={workspaceId} turn={trace} />}
       </Sheet>
     </section>
+  );
+}
+
+function TurnOutput({ path, openTrace }: { path: string; openTrace: () => void }) {
+  const [show, setShow] = useState(false);
+  const messages = useQuery({
+    enabled: show,
+    queryKey: ["eval-turn-messages", path],
+    queryFn: async () => z.object({ data: z.array(Message) }).parse(await api("GET", path)),
+  });
+  return (
+    <>
+      <div className="flex flex-wrap gap-3">
+        <Button size="compact" aria-expanded={show} onClick={() => setShow(!show)}>
+          {show ? "Hide replies" : "Show replies"}
+        </Button>
+        <Button size="compact" onClick={openTrace}>
+          Open trace
+        </Button>
+      </div>
+      {show &&
+        (messages.isError ? (
+          <ProblemBanner error={messages.error} />
+        ) : messages.isPending ? (
+          <Skeleton className="h-8 w-full" />
+        ) : messages.data.data.length ? (
+          messages.data.data.map((message) => (
+            <MessageBubble
+              key={message.id}
+              disabled
+              direction="out"
+              payload={message.payload}
+              citations={message.citations}
+            />
+          ))
+        ) : (
+          <p className="text-small text-secondary">The bot sent no replies.</p>
+        ))}
+    </>
   );
 }
