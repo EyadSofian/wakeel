@@ -4,6 +4,7 @@ import { EGRESS_LIMITS } from "@wakeel/config";
 import { BRAND } from "@wakeel/config/brand";
 import { AppError, ERRORS, formatPath, newRequestId, type Problem, verifyCapabilityToken } from "@wakeel/contracts";
 import type { Logger } from "@wakeel/telemetry";
+import { METRICS_CONTENT_TYPE, renderMetrics } from "@wakeel/telemetry";
 import type { Clock } from "./clock";
 import { type Dial, directDial, type FetchLog, formatBytes, performFetch } from "./fetch";
 import { FetchRequest } from "./protocol";
@@ -69,6 +70,10 @@ export function createEgressServer(options: EgressOptions): Server {
     const requestId = newRequestId({ now: options.clock.now() });
     const path = new URL(req.url ?? "/", "http://egress").pathname;
     try {
+      if (path === "/metrics" && req.method === "GET") {
+        res.writeHead(200, { "content-type": METRICS_CONTENT_TYPE }).end(renderMetrics());
+        return;
+      }
       if (path === "/health" && req.method === "GET") {
         return sendJson(res, 200, { status: "ok" });
       }

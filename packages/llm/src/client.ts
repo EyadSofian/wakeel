@@ -103,6 +103,7 @@ export interface CredentialSource {
 }
 
 export interface LlmDeps {
+  onError?(provider: string): void;
   registry?: Registry;
   models?: ModelFactory;
   credentials: CredentialSource;
@@ -173,6 +174,7 @@ export function createLlm(deps: LlmDeps): LlmClient {
         try {
           return await attempt(model);
         } catch (error) {
+          deps.onError?.(model.provider);
           last = error;
           if (error instanceof AppError) throw error;
           if (isAuthFailure(error))

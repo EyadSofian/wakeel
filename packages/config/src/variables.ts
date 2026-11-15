@@ -208,6 +208,11 @@ function jsonEnv<S extends z.ZodType>(schema: S) {
 }
 
 export const workerEnv = defineEnv({
+  metricsPort: {
+    env: "METRICS_PORT",
+    schema: z.coerce.number().int().min(1).max(65535).default(9100),
+    description: "Private-network Prometheus scrape port for the worker.",
+  },
   traceRetention: {
     env: "TRACE_RETENTION_BY_PLAN",
     schema: jsonEnv(z.record(z.string(), z.number().int().positive().max(36500))).default({}),
