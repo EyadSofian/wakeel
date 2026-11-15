@@ -5,6 +5,8 @@ import {
   claimDelivery,
   type Database,
   type DeliveryStream,
+  getConversation,
+  insertUsageEvent,
   type Keyring,
   loadDeliveryStream,
   openSigningSecrets,
@@ -205,6 +207,19 @@ async function record(
 ): Promise<void> {
   const { disabled, consecutiveDead } = await deps.db.withWorkspace(workspaceId, async (tx) => {
     const r = await recordAttempt(tx, delivery.id, outcome);
+    if (outcome.durationMs !== undefined) {
+      const conversation = await getConversation(tx, stream.conversation.id);
+      await insertUsageEvent(tx, {
+        kind: "webhook_deliveries",
+        unit: "deliveries",
+        quantity: 1,
+        mode: conversation.mode as "live" | "emulator" | "eval",
+        botId: stream.connection.botId,
+        conversationId: stream.conversation.id,
+        sourceKey: `delivery:${delivery.id}`,
+        detail: { status: outcome.status },
+      });
+    }
     if (r.disabled) {
       await audit(
         tx,

@@ -18,7 +18,7 @@ import {
   type SearchCitations,
   type Tool,
 } from "@wakeel/contracts";
-import { type Database, getWorkspace, recentTranscript } from "@wakeel/db";
+import { type Database, getWorkspace, insertUsageEvent, recentTranscript } from "@wakeel/db";
 import type { AiPort, AutonomyPort, CodePort, KnowledgePort, TablePort } from "@wakeel/engine";
 import { type LlmClient, registry } from "@wakeel/llm";
 import type { AutonomyRunPort, BuilderTool } from "@wakeel/sandbox-client";
@@ -120,6 +120,7 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
       // Every call the block made, for its `tool.call` spans (§6.5, task 6.9).
       const tools: ToolCallTrace[] = [];
       let outcome: Awaited<ReturnType<AutonomyRunPort["run"]>>;
+      const codeStarted = now();
       try {
         outcome = await w.runPort.run({
           source: request.source,
@@ -194,6 +195,20 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
             ...(retrievalCitations ? { retrievalCitations } : {}),
           } satisfies RunOutcome;
         throw error;
+      } finally {
+        await w.db
+          .withWorkspace(turn.workspaceId, (tx) =>
+            insertUsageEvent(tx, {
+              kind: "code_ms",
+              unit: "ms",
+              quantity: Math.max(0, now() - codeStarted),
+              mode: turn.mode,
+              botId: turn.botId,
+              conversationId: turn.conversationId,
+              turnId: turn.turnId,
+            }),
+          )
+          .catch(() => w.logger.warn({ code: "usage_write_failed" }, "autonomy code usage was not written"));
       }
       if (suspended)
         return {

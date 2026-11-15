@@ -12,6 +12,7 @@ import {
   webhookDeliveries,
 } from "../schema/runtime";
 import { currentWorkspace } from "./scope";
+import { countConversationUsage } from "./usage";
 import type { StoredSigningSecret } from "./webhooks";
 
 /**
@@ -319,6 +320,7 @@ export async function insertUserMessage(
   tx: Tx,
   input: { conversationId: string; payload: Record<string, Json>; type: string; externalId?: string },
 ): Promise<{ id: string; seq: number; createdAt: Date }> {
+  await tx.execute(sql`select id from conversations where id=${input.conversationId} for update`);
   const [row] = await tx
     .insert(messages)
     .values({
@@ -333,6 +335,7 @@ export async function insertUserMessage(
     })
     .returning({ id: messages.id, seq: messages.seq, createdAt: messages.createdAt });
   if (!row) throw new Error("insert returned no row");
+  await countConversationUsage(tx, input.conversationId);
   return row;
 }
 
