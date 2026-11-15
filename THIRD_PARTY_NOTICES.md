@@ -532,3 +532,26 @@ GitHub, Inc. and contributors. Its source is executed as a pinned CI action, not
 - lightningcss 1.33.0
 
 <!-- END GENERATED -->
+
+
+## Text Embeddings Inference (retrieval eval and reranker deployment)
+
+- Source: https://github.com/huggingface/text-embeddings-inference
+- Commit: `e80ef225ed0e6cb1717ce632a6a84b6cf211bb67` (CPU image 1.9.4)
+- Image: `ghcr.io/huggingface/text-embeddings-inference@sha256:8419f533857b503ebf6ec292a95d4f1cf9c0464ac8b8abeef39518cf110e5726`
+- Licence: Apache-2.0, https://github.com/huggingface/text-embeddings-inference/blob/e80ef225ed0e6cb1717ce632a6a84b6cf211bb67/LICENSE
+- Use: unmodified inference image, configured for authenticated reranking. Info/debug logging is disabled because upstream's startup Args debug output includes its API key.
+
+## BGE reranker weights
+
+- Source: https://huggingface.co/BAAI/bge-reranker-v2-m3
+- Commit: `953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e`
+- Licence: Apache-2.0, recorded in the model card at that revision.
+- Use: multilingual cross-encoder serving through TEI. No model source was copied into the application.
+
+## BGE reranker CPU export
+
+- Source: https://huggingface.co/newtechstudio/bge-reranker-v2-m3-onnx
+- Commit: `5ae1fc0cfa7c2097ba2303c8a0db443d0597b3a7`
+- Licence: Apache-2.0, recorded in the pinned model card.
+- Use: CPU-compatible ONNX export of the BAAI cross-encoder, loaded by the pinned TEI service.
