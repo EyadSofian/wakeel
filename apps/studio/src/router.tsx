@@ -19,6 +19,7 @@ import { ConnectionsScreen } from "./routes/connections/ConnectionsScreen";
 import { Gallery } from "./routes/Gallery";
 import { KnowledgeScreen } from "./routes/knowledge/KnowledgeScreen";
 import { ModelsSettings } from "./routes/settings/models/ModelsSettings";
+import { TablesScreen } from "./routes/tables/TablesScreen";
 import { VariablesScreen } from "./routes/variables/VariablesScreen";
 import { CompareScreen } from "./routes/versions/CompareScreen";
 import { VersionsScreen } from "./routes/versions/VersionsScreen";
@@ -170,6 +171,23 @@ const knowledgeDetailRoute = createRoute({
   },
 });
 
+const tablesRoute = createRoute({
+  getParentRoute: () => botRoute,
+  path: "/tables",
+  component: function TablesRoute() {
+    const { workspaceId, botId } = botRoute.useParams();
+    return <TablesScreen workspaceId={workspaceId} botId={botId} />;
+  },
+});
+const tableDetailRoute = createRoute({
+  getParentRoute: () => botRoute,
+  path: "/tables/$tableId",
+  component: function TableDetailRoute() {
+    const { workspaceId, botId, tableId } = tableDetailRoute.useParams();
+    return <TablesScreen workspaceId={workspaceId} botId={botId} tableId={tableId} />;
+  },
+});
+
 /** Connections (task 5.5, design system §5.11): the list, and one connection's tabs as addresses. */
 const botConnectionsRoute = createRoute({
   getParentRoute: () => botRoute,
@@ -291,6 +309,8 @@ export const router = createRouter({
         versionCompareRoute,
         botConnectionsRoute,
         knowledgeRoute,
+        tablesRoute,
+        tableDetailRoute,
         knowledgeDetailRoute,
         connectionSetupRoute,
         connectionDeliveriesRoute,
