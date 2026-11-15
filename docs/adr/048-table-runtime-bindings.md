@@ -1,6 +1,6 @@
 # ADR-048 — Table runtime binding, replies and write safety
 
-Status: proposed · Date: 2026-11-15 · Task: 9.3
+Status: accepted (Eyad approved in writing on 2026-11-15) · Date: 2026-11-15 · Task: 9.3
 
 ## Context
 
@@ -21,7 +21,7 @@ specify how runtime table writes should behave during emulator and eval runs.
 
 ## Recommendation
 
-Choose option 1.
+Option 1 approved.
 
 - Use column names in runtime calls and row outputs, with stable IDs at the DB boundary.
   Preserve the guest row's `id` field. Reserve that column name before enabling runtime access.
