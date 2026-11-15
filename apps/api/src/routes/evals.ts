@@ -10,9 +10,12 @@ import {
   EvalSuite,
   EvalSuiteId,
   EvalTarget,
+  Message,
   NewEvalSuite,
+  TurnId,
 } from "@wakeel/contracts";
 import {
+  botMessagesOfTurn,
   createEvalRun,
   createEvalSuite,
   getEvalRun,
@@ -32,6 +35,7 @@ const bot = z.object({ botId: BotId });
 const suite = bot.extend({ suiteId: EvalSuiteId });
 const item = suite.extend({ caseId: EvalCaseId });
 const run = bot.extend({ runId: EvalRunId });
+const runTurn = run.extend({ turnId: TurnId });
 const limit = z.coerce.number().int().min(1).max(100).default(30);
 const suiteDetail = EvalSuite.extend({ cases: z.array(EvalCaseEntry) });
 
@@ -99,5 +103,25 @@ export async function evalRoutes(
     return reply
       .header("cache-control", "no-store")
       .send(EvalRunDetail.parse(await studio.db.withWorkspace(workspaceId, (tx) => getEvalRun(tx, botId, runId))));
+  });
+  app.get(`${root}/runs/:runId/turns/:turnId/messages`, async (req, reply) => {
+    const { workspaceId } = await requirePermission(studio, req, reply, "eval.run");
+    const { botId, runId, turnId } = runTurn.parse(req.params);
+    const data = await studio.db.withWorkspace(workspaceId, async (tx) => {
+      const result = await getEvalRun(tx, botId, runId);
+      const turn = result.results.flatMap((item) => item.result.turns).find((item) => item.turnId === turnId);
+      if (!turn?.conversationId) throw new AppError("not_found");
+      const conversationId = turn.conversationId;
+      return (await botMessagesOfTurn(tx, turnId)).map((message) =>
+        Message.parse({
+          ...message,
+          conversationId,
+          turnId,
+          externalId: message.externalId ?? undefined,
+          createdAt: message.createdAt.toISOString(),
+        }),
+      );
+    });
+    return reply.header("cache-control", "no-store").send({ data });
   });
 }

@@ -26,6 +26,7 @@ const DESTINATIONS: {
     | "/w/$workspaceId/b/$botId/versions"
     | "/w/$workspaceId/b/$botId/knowledge"
     | "/w/$workspaceId/b/$botId/tables"
+    | "/w/$workspaceId/b/$botId/evals"
     | "/w/$workspaceId/b/$botId/conversations"
     | "/w/$workspaceId/b/$botId/connections";
 }[] = [
@@ -34,7 +35,7 @@ const DESTINATIONS: {
   { label: "Tables", icon: Database, to: "/w/$workspaceId/b/$botId/tables" },
   { label: "Variables", icon: Braces, to: "/w/$workspaceId/b/$botId/variables" },
   { label: "Versions", icon: GitCommitHorizontal, to: "/w/$workspaceId/b/$botId/versions" },
-  { label: "Evals", icon: FlaskConical },
+  { label: "Evals", icon: FlaskConical, to: "/w/$workspaceId/b/$botId/evals" },
   { label: "Conversations", icon: MessagesSquare, to: "/w/$workspaceId/b/$botId/conversations" },
   // Task 5.5 (ADR-030): the bridges that talk to this bot.
   { label: "Connections", icon: Cable, to: "/w/$workspaceId/b/$botId/connections" },
@@ -77,6 +78,7 @@ function RailLink({
     | "/w/$workspaceId/b/$botId/variables"
     | "/w/$workspaceId/b/$botId/knowledge"
     | "/w/$workspaceId/b/$botId/tables"
+    | "/w/$workspaceId/b/$botId/evals"
     | "/w/$workspaceId/b/$botId/conversations"
     | "/w/$workspaceId/b/$botId/connections";
   workspaceId: string;
