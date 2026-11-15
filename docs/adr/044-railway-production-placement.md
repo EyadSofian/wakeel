@@ -1,6 +1,6 @@
 # ADR-044 — Railway production placement and the isolated execution host
 
-Status: proposed · Date: 2026-11-15 · Security-critical: human review required
+Status: accepted (Eyad approved the proposal in writing on 2026-11-15; execution host not yet available) · Date: 2026-11-15 · Security-critical: human review required
 
 ## Context
 
@@ -66,3 +66,12 @@ not merge or waive launch gates itself.
 Approve option 1 and identify the Linux host (an existing SSH alias/address and user, or an approved
 provisioning target). If all workloads must run inside Railway, explicitly amend the isolation
 requirements through a reviewed ADR rather than silently accepting development settings.
+
+
+## Approval and deployment constraint
+
+Eyad approved this proposal in writing on 2026-11-15 and confirmed that Railway is currently his only host.
+The approved isolation requirements remain in force. No external execution host has been supplied or
+provisioned. Railway control-plane preparation and tested application uploads are authorized; the
+production execution and fresh-environment acceptance checks remain blocked until a compatible host
+or a separately approved isolation design is available. No runtime verification flag may be fabricated.
