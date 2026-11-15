@@ -50,6 +50,9 @@ importers:
       '@wakeel/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@wakeel/retrieval':
+        specifier: workspace:*
+        version: link:../../packages/retrieval
       '@wakeel/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
@@ -426,6 +429,12 @@ importers:
       '@wakeel/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@wakeel/db':
+        specifier: workspace:*
+        version: link:../db
+      '@wakeel/llm':
+        specifier: workspace:*
+        version: link:../llm
       linkedom:
         specifier: 0.18.14
         version: 0.18.14

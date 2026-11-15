@@ -12,6 +12,7 @@ import { connectionRoutes } from "./routes/connections";
 import { emulatorRoutes } from "./routes/emulator";
 import { fileRoutes } from "./routes/files";
 import { invitationRoutes } from "./routes/invitations";
+import { type KnowledgeDeps, knowledgeRoutes } from "./routes/knowledge";
 import { memberRoutes } from "./routes/members";
 import { modelRoutes } from "./routes/models";
 import { portableRoutes } from "./routes/portable";
@@ -32,6 +33,7 @@ export interface AppOptions {
   readiness?: Record<string, ReadinessCheck>;
   /** Per-check limit for /health/ready. */
   readinessTimeoutMs?: number;
+  knowledge?: KnowledgeDeps;
   /** The Studio API (sign-in, workspaces, members); mounted for roles studio and all. */
   studio?: Omit<StudioDeps, "now"> & { now?: () => Date };
   /** The Bridge API (task 4.5); mounted for roles bridge and all. */
@@ -119,6 +121,10 @@ export function buildApp(options: AppOptions) {
     void app.register(versionRoutes, deps);
     void app.register(configVarRoutes, deps);
     void app.register(fileRoutes, deps);
+    void app.register(knowledgeRoutes, {
+      studio: deps,
+      ...(options.knowledge ? { knowledge: options.knowledge } : {}),
+    });
     void app.register(portableRoutes, deps);
     void app.register(traceRoutes, deps);
     void app.register(modelRoutes, { studio: deps, keyring: deps.keyring });

@@ -14,6 +14,8 @@ import {
   redisEnv,
 } from "@wakeel/config";
 import { createDatabase, s3ObjectStore } from "@wakeel/db";
+import { createLlm } from "@wakeel/llm";
+import { recordUsage, rerankThroughEgress, workspaceCredentials } from "@wakeel/retrieval/service";
 import { createLogger } from "@wakeel/telemetry";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
@@ -73,7 +75,25 @@ if (config) {
     accessKeyId: config.s3AccessKeyId,
     secretAccessKey: config.s3SecretAccessKey.reveal(),
   });
+  const syncQueue = new Queue("kb-sync", { connection: { url: redisUrl, maxRetriesPerRequest: null } });
+  const llm = createLlm({
+    credentials: workspaceCredentials(db, keyring),
+    onUsage: recordUsage(db),
+    rerankFetch: rerankThroughEgress({ egressUrl: config.egressUrl, egressToken: config.egressToken.reveal() }),
+  });
   const app = buildApp({
+    knowledge: {
+      llm,
+      enqueueSync: async (job) => {
+        await syncQueue.add("sync", job, {
+          jobId: job.sourceId,
+          attempts: 3,
+          backoff: { type: "exponential", delay: 30_000 },
+          removeOnComplete: true,
+          removeOnFail: true,
+        });
+      },
+    },
     role: config.role,
     logger,
     studio: { auth, studioOrigin: config.studioOrigin, db, keyring, objectStore },
@@ -108,7 +128,14 @@ if (config) {
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "shutting down");
     await app.close();
-    await Promise.allSettled([db.close(), redis.quit(), subscriber.quit(), turnQueue.close(), webhookQueue.close()]);
+    await Promise.allSettled([
+      db.close(),
+      redis.quit(),
+      subscriber.quit(),
+      turnQueue.close(),
+      webhookQueue.close(),
+      syncQueue.close(),
+    ]);
     process.exit(0);
   };
   process.once("SIGTERM", () => void shutdown("SIGTERM"));

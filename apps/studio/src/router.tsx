@@ -17,6 +17,7 @@ import { BotLayout } from "./routes/bot/BotLayout";
 import { ConnectionDetail, type ConnectionTab } from "./routes/connections/ConnectionDetail";
 import { ConnectionsScreen } from "./routes/connections/ConnectionsScreen";
 import { Gallery } from "./routes/Gallery";
+import { KnowledgeScreen } from "./routes/knowledge/KnowledgeScreen";
 import { ModelsSettings } from "./routes/settings/models/ModelsSettings";
 import { VariablesScreen } from "./routes/variables/VariablesScreen";
 import { CompareScreen } from "./routes/versions/CompareScreen";
@@ -152,6 +153,23 @@ const versionCompareRoute = createRoute({
   },
 });
 
+const knowledgeRoute = createRoute({
+  getParentRoute: () => botRoute,
+  path: "/knowledge",
+  component: function KnowledgeRoute() {
+    const { workspaceId, botId } = botRoute.useParams();
+    return <KnowledgeScreen workspaceId={workspaceId} botId={botId} />;
+  },
+});
+const knowledgeDetailRoute = createRoute({
+  getParentRoute: () => botRoute,
+  path: "/knowledge/$kbId",
+  component: function KnowledgeDetailRoute() {
+    const { workspaceId, botId, kbId } = knowledgeDetailRoute.useParams();
+    return <KnowledgeScreen workspaceId={workspaceId} botId={botId} kbId={kbId} />;
+  },
+});
+
 /** Connections (task 5.5, design system §5.11): the list, and one connection's tabs as addresses. */
 const botConnectionsRoute = createRoute({
   getParentRoute: () => botRoute,
@@ -272,6 +290,8 @@ export const router = createRouter({
         botVersionsRoute,
         versionCompareRoute,
         botConnectionsRoute,
+        knowledgeRoute,
+        knowledgeDetailRoute,
         connectionSetupRoute,
         connectionDeliveriesRoute,
         connectionTestRoute,

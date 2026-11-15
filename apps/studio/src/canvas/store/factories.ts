@@ -114,7 +114,12 @@ function workflowVariable(wf: Workflow, base: string, type: Variable["type"] = "
  * write it to; cards that need a knowledge base, a table or a sub-workflow are unavailable until the
  * bot has one, with the reason shown in the menu.
  */
-export function createMenuCard(type: MenuCardType, wf: Workflow, workflows: readonly Workflow[]): MenuCard {
+export function createMenuCard(
+  type: MenuCardType,
+  wf: Workflow,
+  workflows: readonly Workflow[],
+  kbId?: string,
+): MenuCard {
   const base = { id: newElementId("card"), disabled: false };
   switch (type) {
     case "capture": {
@@ -178,7 +183,9 @@ export function createMenuCard(type: MenuCardType, wf: Workflow, workflows: read
       };
     }
     case "kb_search":
-      return { unavailable: "Create a knowledge base first" };
+      return kbId
+        ? { card: { ...base, type, kbIds: [kbId], query: "{{event.text}}", topK: 5 } }
+        : { unavailable: "Create a knowledge base first" };
     case "table":
       return { unavailable: "Create a table first" };
     case "call_workflow": {

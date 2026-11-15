@@ -15,6 +15,7 @@ import type { Tx } from "../client";
 import { botDraftDocs, bots, botVersions } from "../schema/bots";
 import { users } from "../schema/platform";
 import { getBot, listDraftDocs } from "./bots";
+import { listKnowledgeBases } from "./kb";
 import { currentWorkspace } from "./scope";
 
 /**
@@ -96,7 +97,8 @@ export async function publishDraft(
   await tx.select({ id: bots.id }).from(bots).where(eq(bots.id, input.botId)).for("update");
   await getBot(tx, input.botId);
   const definition = await assembleDraft(tx, input.botId);
-  const issues = validateDefinition(definition, input.context ?? {});
+  const knowledgeBaseIds = new Set((await listKnowledgeBases(tx, input.botId)).map((b) => b.id));
+  const issues = validateDefinition(definition, { ...input.context, knowledgeBaseIds });
   const errors = issues.filter((i) => i.severity === "error");
   if (errors.length > 0) {
     throw new AppError(
@@ -176,8 +178,21 @@ export async function rollbackTo(
   botId: string,
   versionId: string,
 ): Promise<{ from: string | null; to: VersionSummary }> {
+  // Serialize the published pointer with resource deletion.
+  await tx.select({ id: bots.id }).from(bots).where(eq(bots.id, botId)).for("update");
   const bot = await getBot(tx, botId);
   const version = await getVersion(tx, botId, versionId);
+  const knowledgeBaseIds = new Set((await listKnowledgeBases(tx, botId)).map((b) => b.id));
+  const issues = validateDefinition(version.definition, { knowledgeBaseIds });
+  const missing = issues.filter((i) => i.code === "kb_unknown");
+  if (missing.length)
+    throw new AppError(
+      "definition_invalid",
+      { count: missing.length },
+      {
+        errors: missing.map((i) => ({ path: i.path, code: i.code, message: i.message })),
+      },
+    );
   await tx.update(bots).set({ publishedVersionId: version.id, updatedAt: new Date() }).where(eq(bots.id, botId));
   return { from: bot.publishedVersionId, to: version };
 }

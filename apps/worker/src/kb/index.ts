@@ -13,7 +13,7 @@ export function ingestEnqueuer(queue: Queue): (job: IngestJob) => Promise<void> 
   return async (job) => {
     await queue.add("stage", job, {
       // One live job per document stage: a duplicate request while it waits is dropped.
-      jobId: `${job.documentId}:${job.stage}`,
+      jobId: `${job.documentId}-${job.stage}`,
       attempts: 5,
       backoff: { type: "exponential", delay: 2_000 },
       removeOnComplete: true,
@@ -35,11 +35,11 @@ export interface SyncJob {
 export function syncEnqueuer(queue: Queue): (job: SyncJob) => Promise<void> {
   return async (job) => {
     await queue.add("sync", job, {
-      jobId: `sync:${job.sourceId}`,
+      jobId: job.sourceId,
       attempts: 3,
       backoff: { type: "exponential", delay: 30_000 },
       removeOnComplete: true,
-      removeOnFail: 1_000,
+      removeOnFail: true,
     });
   };
 }
