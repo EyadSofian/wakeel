@@ -90,6 +90,16 @@ export const ERRORS = {
   kb_not_ready: { status: 409, title: "\"{kb}\" is still being indexed", fix: "Wait for indexing to finish." },
   document_parse_failed: { status: 422, title: "We could not read \"{document}\"", fix: "If it is a scan, upload a clearer copy; otherwise try exporting it again as PDF." },
   source_fetch_failed: { status: 502, title: "We could not fetch {url}: {message}", fix: "Check that the page is public." },
+  table_write_disabled: {
+    status: 403,
+    title: "This run cannot change table rows",
+    fix: "Use Studio to edit the table or run the published bot.",
+  },
+  table_replay_conflict: {
+    status: 409,
+    title: "The table operation changed after the turn resumed",
+    fix: "Check the existing table rows before starting another turn.",
+  },
   table_row_invalid: { status: 422, title: "Row does not match the table: {message}", fix: "Fix the highlighted column." },
   table_limit_reached: { status: 409, title: "\"{table}\" reached {limit} rows", fix: "Delete rows you no longer need, or raise the limit." },
   unique_violation: { status: 409, title: "A row with this {column} already exists", fix: "Use a different value, or update the existing row." },

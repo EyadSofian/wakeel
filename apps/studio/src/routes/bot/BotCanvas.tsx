@@ -101,7 +101,7 @@ function Frame({ workspaceId, botId, state }: { workspaceId: string; botId: stri
         <div className="relative h-full">
           {/* A workflow opens with its own viewport: fitted, or centred on what a jump selected. */}
           <Canvas key={active} issues={grouped} />
-          <CodeDrawer />
+          <CodeDrawer workspaceId={workspaceId} botId={botId} />
         </div>
       ) : (
         <div className="mx-auto max-w-page px-9 py-9">

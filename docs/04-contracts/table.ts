@@ -109,3 +109,13 @@ export const InsertTableRowsRequest = z.strictObject({
 export const PatchTableRowRequest = z.strictObject({ values: TableRowValues });
 export const UpsertTableRowRequest = PatchTableRowRequest.extend({ on: Identifier });
 export const ImportTableRowsRequest = z.strictObject({ csv: z.string().min(1).max(1_000_000) });
+
+/** A trusted caller binds the target before the worker executes a table operation (ADR-048). */
+export const TableRuntimeCall = z.object({
+  target: z.union([z.strictObject({ id: TableId }), z.strictObject({ name: Identifier })]),
+  operation: TableOperation,
+  surface: z.enum(["card", "code", "tool"]),
+  input: Json,
+  idempotencyKey: z.string().min(1).max(200),
+});
+export type TableRuntimeCall = z.infer<typeof TableRuntimeCall>;

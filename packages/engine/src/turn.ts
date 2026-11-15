@@ -494,6 +494,7 @@ class TurnRun {
         sandbox: this.#ports.sandbox,
         code: this.#ports.code,
         ...(this.#ports.knowledge ? { knowledge: this.#ports.knowledge } : {}),
+        ...(this.#ports.tables ? { tables: this.#ports.tables } : {}),
         ...(this.#state.retrievalCitations ? { retrievalCitations: this.#state.retrievalCitations } : {}),
         ...(reply ? { reply } : {}),
         turnId: this.#input.turnId,

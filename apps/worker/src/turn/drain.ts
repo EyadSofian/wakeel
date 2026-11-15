@@ -4,6 +4,7 @@ import {
   acquireConversationLease,
   appendOutbox,
   assembleDraft,
+  clearTableReceipts,
   type Database,
   eventsOfTurn,
   finishTurn,
@@ -13,6 +14,7 @@ import {
   insertBotMessages,
   type Keyring,
   LeaseLostError,
+  listRuntimeTableNames,
   listTurnSpans,
   loadConfigEnv,
   loadVersionDefinition,
@@ -41,6 +43,7 @@ import {
   runTurn,
   type SandboxPort,
   type StepCommit,
+  type TablePort,
   type TurnResult,
   toStepError,
 } from "@wakeel/engine";
@@ -49,6 +52,7 @@ import type { AutonomyTurn } from "./autonomy";
 import { eventScope, isTextMessage } from "./event-scope";
 import { botMessageId } from "./message-id";
 import { scrubSecrets } from "./redact";
+import { type TableOperationTrace, turnTables } from "./tables";
 import { migrateToVersion } from "./version";
 
 /** ADR-008: a lease lasts 30 s and a heartbeat renews it every 10 s. */
@@ -61,7 +65,13 @@ export interface TurnDeps {
   owner: string;
   logger: Logger;
   /** The engine's sandbox ports for one turn (a capability token is minted per exec). */
-  enginePorts(turn: { workspaceId: string; conversationId: string; turnId: string; knowledge?: KnowledgePort }): {
+  enginePorts(turn: {
+    workspaceId: string;
+    conversationId: string;
+    turnId: string;
+    knowledge?: KnowledgePort;
+    tables: { names: string[]; execute: TablePort["execute"] };
+  }): {
     sandbox: SandboxPort;
     code: CodePort;
   };
@@ -84,7 +94,7 @@ export interface TurnDeps {
    * The Autonomous Node for one turn (task 6.6). Absent: reaching an Autonomous Node fails the step
    * with a clear code, as before the model layer existed.
    */
-  autonomy?(turn: AutonomyTurn, code: CodePort, knowledge?: KnowledgePort): AutonomyPort;
+  autonomy?(turn: AutonomyTurn, code: CodePort, knowledge?: KnowledgePort, tables?: TablePort): AutonomyPort;
   knowledge?(turn: AutonomyTurn, record: (trace: RetrievalRecord) => void): KnowledgePort;
   /** Writes handoff summaries (task 5.4). Absent: summaries are empty. */
   summarizeHandoff?(input: HandoffSummaryInput): Promise<string>;
@@ -308,16 +318,21 @@ class ConversationRun {
     };
     const retrievalTraces: RetrievalRecord[] = [];
     const knowledge = this.deps.knowledge?.(modelTurn, (record) => retrievalTraces.push(record));
+    const tableOps: TableOperationTrace[] = [];
+    const tableNames = await this.#tx((tx) => listRuntimeTableNames(tx, conversation.botId));
+    const tables = turnTables(this.deps.db, { ...modelTurn, epoch: this.epoch }, (op) => tableOps.push(op));
     const sandbox = this.deps.enginePorts({
       workspaceId: this.workspaceId,
       conversationId: this.conversationId,
       turnId: turn.id,
       ...(knowledge ? { knowledge } : {}),
+      tables: { names: tableNames, execute: tables.execute },
     });
-    const autonomy = this.deps.autonomy?.(modelTurn, sandbox.code, knowledge);
+    const autonomy = this.deps.autonomy?.(modelTurn, sandbox.code, knowledge, tables);
     const ai = this.deps.ai?.(modelTurn);
     const ports: EnginePorts = {
       ...sandbox,
+      tables,
       ...(knowledge ? { knowledge } : {}),
       ...(autonomy ? { autonomy } : {}),
       ...(ai ? { ai } : {}),
@@ -338,7 +353,11 @@ class ConversationRun {
         : {}),
       commitStep: (commit) =>
         this.#commitStep(
-          { ...commit, ...(retrievalTraces.length ? { retrieval: retrievalTraces.splice(0) } : {}) },
+          {
+            ...commit,
+            ...(retrievalTraces.length ? { retrieval: retrievalTraces.splice(0) } : {}),
+            ...(tableOps.length ? { tableOps: tableOps.splice(0) } : {}),
+          },
           conversation,
           turn.id,
         ),
@@ -413,6 +432,7 @@ class ConversationRun {
           },
         ]);
         await finishTurn(tx, { turnId: turn.id, status: "failed", stepCount: turn.stepCount, error: { ...error } });
+        if (conversation.mode === "live") await clearTableReceipts(tx, turn.id);
       });
     }
 
@@ -497,7 +517,11 @@ class ConversationRun {
   }
 
   /** One step, one transaction (§4.4 "Persistence"): state, messages, outbox, user, step counter. */
-  async #commitStep(commit: StepCommit, conversation: { connectionId: string; endUserId: string }, turnId: string) {
+  async #commitStep(
+    commit: StepCommit & { tableOps?: TableOperationTrace[] },
+    conversation: { connectionId: string; endUserId: string; mode: string },
+    turnId: string,
+  ) {
     await this.#tx(async (tx) => {
       const ended = commit.events.find((e) => e.type === "conversation.ended");
       const handoff = commit.events.find((e) => e.type === "handoff.requested");
@@ -554,6 +578,7 @@ class ConversationRun {
       await this.#appendOutbox(tx, conversation, outbox);
       if (commit.user) await updateEndUser(tx, conversation.endUserId, commit.user);
       await recordTurnProgress(tx, turnId, commit.stepSeq);
+      if (conversation.mode === "live") await clearTableReceipts(tx, turnId, commit.stepSeq);
     });
     // The step's spans, after its commit: an uncommitted step never appears in the trace.
     if (this.#trace && this.#before) {

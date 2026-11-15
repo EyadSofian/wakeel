@@ -27,6 +27,7 @@ import {
 /** What the builder needs from a step commit; the engine's `StepCommit` fits it as is. */
 export interface TraceStep {
   retrieval?: readonly RetrievalRecord[];
+  tableOps?: readonly Extract<Span, { kind: "table.op" }>["attrs"][];
   stepSeq: number;
   state: ConversationState;
   failures: readonly {
@@ -249,6 +250,15 @@ export class TraceBuilder {
           reranked: inlinePayload(trace.reranked),
           returned: trace.returned,
         },
+      });
+    }
+    for (const attrs of step.tableOps ?? []) {
+      out.push({
+        ...this.#base(this.#seq++, `Table ${attrs.operation}`, at, at),
+        parentId: parent,
+        kind: "table.op",
+        status: "ok",
+        attrs,
       });
     }
     for (const f of step.failures) {

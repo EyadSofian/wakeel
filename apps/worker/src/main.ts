@@ -124,9 +124,10 @@ if (config) {
     db,
     owner: `${hostname()}:${process.pid}`,
     logger,
-    enginePorts: ({ workspaceId, knowledge }) => ({
+    enginePorts: ({ workspaceId, knowledge, tables }) => ({
       sandbox: createExpressionPort(sandbox),
       code: createCodePort(sandbox, {
+        tables,
         ...(knowledge ? { kbSearch: knowledge.search.bind(knowledge) } : {}),
         // One token per exec, valid a little longer than the longest code run (ADR-023 §4).
         capabilityToken: (exec) =>
@@ -137,8 +138,12 @@ if (config) {
       await publisher.publish(channel, message);
     },
     enqueueWebhook: webhooks.now,
-    autonomy: (turn, code, knowledge) =>
-      autonomyPort({ db, llm, runPort, logger, ...(knowledge ? { knowledge } : {}) }, turn, code),
+    autonomy: (turn, code, knowledge, tables) =>
+      autonomyPort(
+        { db, llm, runPort, logger, ...(knowledge ? { knowledge } : {}), ...(tables ? { tables } : {}) },
+        turn,
+        code,
+      ),
     knowledge: (turn, record) => turnKnowledge({ db, llm }, turn, record),
     // AI cards and the handoff summary use the same client: workspace keys, one usage event per call.
     ai: (turn) => aiPort({ llm }, turn),

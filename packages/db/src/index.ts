@@ -14,3 +14,4 @@ export { importTableCsv } from "./tables/csv";
 export * from "./tables/filter";
 export * from "./tables/repo";
 export * from "./tables/rows";
+export * from "./tables/runtime";

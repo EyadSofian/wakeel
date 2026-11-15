@@ -68,6 +68,7 @@ function nameConflict(error: unknown): never {
 
 export async function createTable(tx: Tx, botId: string, input: TableDefinition): Promise<TableRecord> {
   const schema = checkedSchema({ ...input, id: newId("tbl") });
+  assertColumnNames(schema);
   await tx.execute(sql`select id from bots where id = ${botId} for update`);
   await getBot(tx, botId);
   const count = await tx.execute(sql`select count(*)::int as count from bot_tables where bot_id = ${botId}`);
@@ -80,6 +81,11 @@ export async function createTable(tx: Tx, botId: string, input: TableDefinition)
     returning ${tableFields}`)
     .catch(nameConflict);
   return tableRecord(result.rows[0]);
+}
+
+function assertColumnNames(schema: TableSchema) {
+  if (schema.columns.some((column) => column.name === "id"))
+    throw new AppError("validation_failed", {}, { detail: "Use a different name than id for this column." });
 }
 
 function assertRevision(current: TableRecord, revision: string) {
@@ -95,11 +101,19 @@ export function searchText(data: Record<string, Json>, columns: Column[], normal
   return values.length ? normalize(values.join(" ")) : "";
 }
 
-export async function ensureUnique(tx: Tx, table: TableRecord, rows: Record<string, Json>[], except?: string) {
+export async function ensureUnique(
+  tx: Tx,
+  table: TableRecord,
+  rows: Record<string, Json>[],
+  except?: string | string[],
+) {
   for (const column of table.columns.filter((column) => column.unique)) {
     const values = rows.flatMap((data) => (data[column.id] == null ? [] : [data[column.id]]));
     if (!values.length) continue;
-    const otherRow = except === undefined ? sql`` : sql`and r.id <> ${except}`;
+    const otherRow =
+      except === undefined
+        ? sql``
+        : sql`and not (r.id = any(${sql.param(Array.isArray(except) ? except : [except])}::text[]))`;
     const conflict = await tx.execute(sql`with pending as (
       select value from jsonb_array_elements(${JSON.stringify(values)}::jsonb)
     )
@@ -205,6 +219,7 @@ export async function updateTable(
   const current = await readTable(tx, scope, true);
   assertRevision(current, revision);
   const next = checkedSchema({ ...input, id: current.id });
+  assertColumnNames(next);
   await checkColumnChanges(tx, current, next, normalize);
   const result = await tx
     .execute(sql`update bot_tables set name = ${next.name}, description = ${next.description ?? null},

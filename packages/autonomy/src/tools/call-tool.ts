@@ -5,6 +5,8 @@ import {
   type IoField,
   type Json,
   type SearchRequest,
+  TableOperation,
+  type TableRuntimeCall,
   validateJson,
 } from "@wakeel/contracts";
 import { ToolSuspended, toolCallIdFor } from "./suspension";
@@ -33,6 +35,7 @@ export type ToolCodeOutcome =
   | { ok: false; message: string };
 
 export interface ToolDeps {
+  table?(request: TableRuntimeCall): Promise<Json>;
   kbSearch?(request: SearchRequest): Promise<Json>;
   definition: BotDefinition;
   code: ToolCodeRunner;
@@ -102,8 +105,24 @@ export async function callTool(
         });
       return deps.kbSearch({ query: call.input, kbIds: tool.kbIds, topK: tool.topK });
     }
-    case "table":
-      throw new AppError("tool_failed", { tool: tool.name, message: "tables are not available yet" });
+    case "table": {
+      const operation = TableOperation.safeParse(call.operation);
+      if (!operation.success || !tool.operations.includes(operation.data)) {
+        throw new AppError("tool_input_invalid", {
+          tool: tool.name,
+          message: "use one of this tool's allowed methods",
+        });
+      }
+      if (!deps.table)
+        throw new AppError("tool_failed", { tool: tool.name, message: "table operations are unavailable" });
+      return deps.table({
+        target: { id: tool.tableId },
+        operation: operation.data,
+        surface: "tool",
+        input: call.input,
+        idempotencyKey: deps.idempotencyKey,
+      });
+    }
   }
 }
 
