@@ -4,6 +4,7 @@ export * from "./migrate";
 export * from "./object-store";
 export * from "./repos/conversation-history";
 export * from "./repos/index";
+export * from "./repos/replay";
 export * from "./rls";
 export * from "./roles";
 export * from "./schema/bots";

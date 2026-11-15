@@ -1,5 +1,12 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { ConversationHistoryPage, ConversationStatus, ConversationTranscriptPage, Trace } from "@wakeel/contracts";
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
+import {
+  ConversationHistoryPage,
+  ConversationStatus,
+  ConversationTranscriptPage,
+  ReplayResult,
+  ReplayTurnResponse,
+  Trace,
+} from "@wakeel/contracts";
 import { Badge, Button, EmptyState, Field, Input, MessageBubble, Select, Sheet, Skeleton } from "@wakeel/ui";
 import { useRef, useState } from "react";
 import { api } from "../../api/client";
@@ -267,7 +274,14 @@ function Transcript({ path, workspaceId }: { path: string; workspaceId: string }
           opener.current?.focus();
         }}
       >
-        {turn && <TraceDetail key={turn} workspaceId={workspaceId} turn={turn} />}
+        {turn && (
+          <TraceDetail
+            key={turn}
+            workspaceId={workspaceId}
+            turn={turn}
+            replayBase={path.slice(0, path.lastIndexOf("/conversations"))}
+          />
+        )}
       </Sheet>
     </section>
   );
@@ -292,7 +306,7 @@ function TranscriptHeader({ conversation }: { conversation: Item }) {
   );
 }
 
-function TraceDetail({ workspaceId, turn }: { workspaceId: string; turn: string }) {
+function TraceDetail({ workspaceId, turn, replayBase }: { workspaceId: string; turn: string; replayBase: string }) {
   const trace = useQuery({
     queryKey: ["history-trace", workspaceId, turn],
     queryFn: async () => Trace.parse(await api("GET", `/v1/workspaces/${workspaceId}/turns/${turn}/trace`)),
@@ -314,6 +328,7 @@ function TraceDetail({ workspaceId, turn }: { workspaceId: string; turn: string 
   const current = spans.find((span) => span.id === selected);
   return (
     <div className="flex flex-col gap-4 p-6">
+      <ReplayPanel base={replayBase} turn={turn} />
       <ol aria-label="Steps" className="flex flex-col gap-2">
         {stepRows(spans).map(({ span }) => (
           <li key={span.id}>
@@ -342,5 +357,72 @@ function TraceDetail({ workspaceId, turn }: { workspaceId: string; turn: string 
           <p className="text-small text-secondary">{statusName(current.status)}</p>
         ))}
     </div>
+  );
+}
+
+function ReplayPanel({ base, turn }: { base: string; turn: string }) {
+  const [allow, setAllow] = useState(false);
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const replay = useMutation({
+    mutationFn: async () =>
+      ReplayTurnResponse.parse(
+        await api("POST", `${base}/emulator/replay/${turn}`, { requestId, allowSideEffects: allow }),
+      ),
+  });
+  const result = useQuery({
+    queryKey: ["replay-result", base, replay.data?.turnId],
+    enabled: Boolean(replay.data),
+    queryFn: async () => ReplayResult.parse(await api("GET", `${base}/emulator/replay/${replay.data?.turnId}`)),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status && status !== "running" && status !== "queued" ? false : 1000;
+    },
+    retry: false,
+  });
+  return (
+    <section aria-label="Replay on draft" className="flex flex-col gap-3 rounded-sm border border-hairline p-4">
+      <p className="text-small text-secondary">Run the recorded input on the current draft from its defaults.</p>
+      <label className="flex items-start gap-2 text-small">
+        <input
+          type="checkbox"
+          checked={allow}
+          onChange={(event) => {
+            setAllow(event.target.checked);
+            setRequestId(crypto.randomUUID());
+            replay.reset();
+          }}
+        />
+        Allow code with external side effects for this replay
+      </label>
+      <Button disabled={replay.isPending} onClick={() => replay.mutate()}>
+        Replay on draft
+      </Button>
+      {replay.isError && <ProblemBanner error={replay.error} />}
+      {replay.data && (
+        <p role="status" className="text-small">
+          {result.data ? statusName(result.data.status) : "Waiting for replay"}
+        </p>
+      )}
+      {result.isError && <ProblemBanner error={result.error} />}
+      {result.data?.messages.map((message) => (
+        <MessageBubble
+          key={message.id}
+          disabled
+          direction={message.direction}
+          payload={message.payload}
+          citations={message.citations}
+        />
+      ))}
+      {result.data?.trace?.spans
+        .filter((span) => span.kind === "error")
+        .map(
+          (span) =>
+            span.kind === "error" && (
+              <p key={span.id} dir="auto" className="text-small text-error">
+                {span.attrs.message} {span.attrs.fix}
+              </p>
+            ),
+        )}
+    </section>
   );
 }

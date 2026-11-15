@@ -47,6 +47,7 @@ export interface AutonomyTurn {
   /** The rolling summary in the conversation's state, if any. */
   summary?: string;
   env: Record<string, Json>;
+  replay?: { allowSideEffects: boolean };
 }
 
 export interface AutonomyWiring {
@@ -131,6 +132,7 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
           onTool: async (call) => {
             if (suspended) throw new AppError("tool_failed", { tool: call.tool, message: "the block already ended" });
             const tool = request.node.tools.find((t) => t.name === call.tool);
+            const blocked = turn.replay && !turn.replay.allowSideEffects && tool?.type === "code" && tool.sideEffects;
             const started = now();
             const record = (end: { output?: Json; error?: string }) =>
               tools.push({
@@ -149,6 +151,7 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
                 durationMs: Math.max(0, now() - started),
               });
             try {
+              if (blocked) throw new AppError("replay_side_effect_blocked");
               const output = await callTool(request.node, call, {
                 definition: turn.definition,
                 code: toolCode(code, citationAccess),

@@ -1586,3 +1586,24 @@ test("redacts large Arabic trace payloads, scopes the reference and retries expi
   );
   expect(partitions[0]?.next_month).toMatch(/^trace_spans_/);
 });
+
+test("a fresh replay leaves its live source unchanged and blocks Code cards until confirmed", async () => {
+  const c = await seed([card({ type: "code", source: "return 1;" })]);
+  let calls = 0;
+  const code: CodePort = {
+    run: async () => {
+      calls++;
+      return ok();
+    },
+  };
+  for (const allowed of [false, true]) {
+    const event = await send(c, "إعادة ORD-12");
+    await db.withWorkspace(c.ws, (tx) =>
+      tx.execute(sql`update inbound_events set payload = payload ||
+      ${JSON.stringify({ replay: { sourceTurnId: newId("turn"), allowSideEffects: allowed, group: newId("turn") } })}::jsonb
+      where id=${event.id}`),
+    );
+    await drainConversation(deps({ code }).d, c.conversationId);
+    expect(calls).toBe(allowed ? 1 : 0);
+  }
+});
