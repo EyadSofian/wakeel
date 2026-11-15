@@ -25,11 +25,12 @@ const DESTINATIONS: {
     | "/w/$workspaceId/b/$botId/variables"
     | "/w/$workspaceId/b/$botId/versions"
     | "/w/$workspaceId/b/$botId/knowledge"
+    | "/w/$workspaceId/b/$botId/tables"
     | "/w/$workspaceId/b/$botId/connections";
 }[] = [
   { label: "Workflows", icon: Workflow, to: "/w/$workspaceId/b/$botId" },
   { label: "Knowledge", icon: BookOpen, to: "/w/$workspaceId/b/$botId/knowledge" },
-  { label: "Tables", icon: Database },
+  { label: "Tables", icon: Database, to: "/w/$workspaceId/b/$botId/tables" },
   { label: "Variables", icon: Braces, to: "/w/$workspaceId/b/$botId/variables" },
   { label: "Versions", icon: GitCommitHorizontal, to: "/w/$workspaceId/b/$botId/versions" },
   { label: "Evals", icon: FlaskConical },
@@ -74,6 +75,7 @@ function RailLink({
     | "/w/$workspaceId/b/$botId"
     | "/w/$workspaceId/b/$botId/variables"
     | "/w/$workspaceId/b/$botId/knowledge"
+    | "/w/$workspaceId/b/$botId/tables"
     | "/w/$workspaceId/b/$botId/connections";
   workspaceId: string;
   botId?: string;
