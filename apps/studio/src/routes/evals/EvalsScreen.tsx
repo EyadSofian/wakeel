@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { EvalCase, EvalCaseEntry, EvalRun, EvalRunDetail, EvalSuite, EvalTarget, Message } from "@wakeel/contracts";
 import { Badge, Button, EmptyState, Field, Input, MessageBubble, Select, Sheet, Skeleton, Textarea } from "@wakeel/ui";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { z } from "zod";
 import { api } from "../../api/client";
 import { evalsPath, useEvalSuites } from "../../api/evals";
@@ -117,6 +117,7 @@ function SuiteView({
   const versions = useVersions(workspaceId, botId);
   const [target, setTarget] = useState("draft");
   const [editing, setEditing] = useState<Case | "new">();
+  const editorTrigger = useRef<HTMLElement | null>(null);
   const [runId, setRunId] = useState<string>();
   const suite = useQuery({
     queryKey: ["eval-suite", base],
@@ -177,7 +178,14 @@ function SuiteView({
         >
           Run all
         </Button>
-        <Button onClick={() => setEditing("new")}>Add case</Button>
+        <Button
+          onClick={(event) => {
+            editorTrigger.current = event.currentTarget;
+            setEditing("new");
+          }}
+        >
+          Add case
+        </Button>
       </div>
       {run.isError && <ProblemBanner error={run.error} />}
       {versions.isError && <ProblemBanner error={versions.error} />}
@@ -188,7 +196,15 @@ function SuiteView({
         <ul className="divide-y divide-hairline rounded-lg border border-hairline bg-surface">
           {suite.data.cases.map((item) => (
             <li key={item.id} className="flex flex-wrap items-center gap-4 px-5 py-3">
-              <button type="button" className="text-accent hover:underline" dir="auto" onClick={() => setEditing(item)}>
+              <button
+                type="button"
+                className="text-accent hover:underline"
+                dir="auto"
+                onClick={(event) => {
+                  editorTrigger.current = event.currentTarget;
+                  setEditing(item);
+                }}
+              >
                 {item.script.name}
               </button>
               {[...new Set(item.script.tags)].map((tag) => (
@@ -227,6 +243,11 @@ function SuiteView({
       <Sheet
         open={editing !== undefined}
         title={editing === "new" ? "Add case" : "Edit case"}
+        onCloseAutoFocus={(event) => {
+          // This controlled sheet has separate add/edit triggers, so restore the actual opener.
+          event.preventDefault();
+          editorTrigger.current?.focus();
+        }}
         onOpenChange={(open) => {
           if (!open) setEditing(undefined);
         }}

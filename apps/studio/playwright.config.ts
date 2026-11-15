@@ -20,7 +20,7 @@ export default defineConfig({
   },
   projects: [
     { name: "shots", testMatch: /(shots|content)\.spec\.ts/, use: { contextOptions: { reducedMotion: "reduce" } } },
-    { name: "motion", testMatch: /motion(-canvas|-emulator|-models)?\.spec\.ts/ },
+    { name: "motion", testMatch: /motion(-canvas|-emulator|-models|-evals)?\.spec\.ts/ },
     // Flows on the mock API that need no dev stack: trace playback of a recorded turn (task 6.9).
     {
       name: "flows",

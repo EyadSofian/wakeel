@@ -1,0 +1,21 @@
+[
+  {
+    "durationMs": 80,
+    "frames": [
+      {
+        "offset": null,
+        "easing": "linear",
+        "composite": "auto",
+        "opacity": "0",
+        "computedOffset": 0
+      },
+      {
+        "offset": null,
+        "easing": "linear",
+        "composite": "auto",
+        "opacity": "1",
+        "computedOffset": 1
+      }
+    ]
+  }
+]
