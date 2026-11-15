@@ -288,3 +288,46 @@ describe("expressions of the cards", () => {
     expect(messages).toEqual([{ type: "text", text: "المجموع 450 EGP", format: "markdown" }]);
   });
 });
+
+test("Code API searches preserve earlier citations through two sandbox round trips", async () => {
+  const kbId = newId("kb"),
+    documentId = newId("doc"),
+    chunkId = newId("chk");
+  const seen: unknown[] = [];
+  const port = createCodePort(createSandboxClient({ url }), {
+    kbSearch: async (request, previous) => {
+      seen.push(request);
+      const label = `c${previous?.next ?? 1}`;
+      return {
+        passages: [
+          {
+            documentId,
+            chunkId,
+            title: "السياسة",
+            text: "الاسترجاع خلال ١٤ يومًا",
+            headingPath: [],
+            score: 0.9,
+            cite: `[[${label}]]`,
+            meta: {},
+          },
+        ],
+        citations: {
+          next: (previous?.next ?? 1) + 1,
+          sources: { ...previous?.sources, [label]: { documentId, chunkId, title: "السياسة" } },
+        },
+      };
+    },
+  });
+  const result = await port.run({
+    source: `const first = await kb.search("إزاي أرجع ORD-12؟", { kbIds: ["${kbId}"], filters: { languages: ["ar"] } }); const second = await kb.search({ query: "وين refund؟", kbIds: ["${kbId}"] }); await say(first[0].text + first[0].cite + second[0].cite);`,
+    scopes: {},
+    timeoutMs: 5000,
+    memoryMb: 64,
+    idempotencyKey: "fixture",
+    secretKeys: [],
+  });
+  expect(result.ok).toBe(true);
+  expect(result.retrievalCitations?.next).toBe(3);
+  expect(result.said).toEqual([{ type: "text", text: "الاسترجاع خلال ١٤ يومًا[[c1]][[c2]]" }]);
+  expect(seen[0]).toMatchObject({ query: "إزاي أرجع ORD-12؟", filters: { languages: ["ar"] } });
+});

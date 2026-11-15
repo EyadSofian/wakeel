@@ -145,6 +145,16 @@ declare namespace Guest {
     readonly cite: string;
     readonly meta: { readonly [key: string]: Guest.Json };
   };
+  type SearchRequest = {
+    readonly query: string;
+    readonly kbIds: string[];
+    readonly topK?: number;
+    readonly filters?: {
+      readonly documentIds?: string[];
+      readonly sourceIds?: string[];
+      readonly languages?: string[];
+    };
+  };
 
   /** Operators a column condition can use. */
   interface Operators<V> {
@@ -241,9 +251,10 @@ declare const axios: {
   patch(url: string, data?: Guest.Json, config?: Guest.AxiosConfig): Promise<Guest.AxiosResponse>;
 };
 
-/** Knowledge bases of this workspace. */
+/** Knowledge bases explicitly selected from this bot. */
 declare const kb: {
-  search(query: string, options?: { kbIds?: string[]; topK?: number }): Promise<Guest.Passage[]>;
+  search(request: Guest.SearchRequest): Promise<Guest.Passage[]>;
+  search(query: string, options: Omit<Guest.SearchRequest, "query">): Promise<Guest.Passage[]>;
 };
 
 /** Models, through the bot's model settings. */

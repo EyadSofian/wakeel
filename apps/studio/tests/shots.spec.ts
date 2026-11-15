@@ -344,6 +344,14 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
     await page.getByRole("button", { name: /^conversation\.topic: / }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
   }
+  if (screen.id === "settings-models" && state === "rerank-key") {
+    await page.getByRole("button", { name: "Add the Rerank server key" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel("Server address").fill("https://rerank.example.test");
+    await dialog.getByLabel("API key").fill("synthetic-rerank-key");
+    await settled(dialog);
+  }
   if (screen.id === "settings-models" && state === "edit") {
     await page.getByRole("button", { name: "Add the OpenAI key" }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
@@ -444,6 +452,12 @@ for (const screen of selectedScreens()) {
           await page.goto(screen.route);
           if (screen.mock && state !== "loading") await page.waitForLoadState("networkidle");
           await page.evaluate(() => document.fonts.ready);
+          if (screen.id === "settings-models" && state === "loading") {
+            await expect(page.locator("table tbody tr")).toHaveCount(6);
+            await expect(
+              page.getByRole("region", { name: "Defaults" }).locator('[aria-hidden="true"] > *'),
+            ).toHaveCount(3);
+          }
           // The shell scrolls inside <main>, so fullPage alone would stop at the viewport. Grow the
           // viewport by the hidden content height so the shot shows the whole screen.
           const hidden = await page.evaluate(() => {

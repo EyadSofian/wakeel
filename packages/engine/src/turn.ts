@@ -10,6 +10,7 @@ import {
   type Frame,
   type Json,
   LIMITS,
+  mapCitations,
   type Node,
   StepOutcome,
   type WaitSpec,
@@ -132,6 +133,7 @@ class TurnRun {
     this.#executors = executors;
     this.#index = indexDefinition(input.definition);
     this.#state = structuredClone(input.state);
+    if (!input.committedSteps) delete this.#state.retrievalCitations;
     this.#user = structuredClone(input.user);
     this.#stepSeq = input.committedSteps ?? 0;
     this.#committedSeq = this.#stepSeq;
@@ -491,6 +493,8 @@ class TurnRun {
         scopes: this.#scopes(frame),
         sandbox: this.#ports.sandbox,
         code: this.#ports.code,
+        ...(this.#ports.knowledge ? { knowledge: this.#ports.knowledge } : {}),
+        ...(this.#state.retrievalCitations ? { retrievalCitations: this.#state.retrievalCitations } : {}),
         ...(reply ? { reply } : {}),
         turnId: this.#input.turnId,
         stepSeq: this.#stepSeq,
@@ -529,6 +533,7 @@ class TurnRun {
         node,
         location,
         memory: this.#state.autonomy[key],
+        ...(this.#state.retrievalCitations ? { retrievalCitations: this.#state.retrievalCitations } : {}),
         ...(resume ? { resume } : {}),
         scopes: this.#scopes(frame),
         turnId: this.#input.turnId,
@@ -618,6 +623,7 @@ class TurnRun {
       this.#fail(error, location, via.failurePort);
       return;
     }
+    if (result.retrievalCitations) this.#state.retrievalCitations = structuredClone(result.retrievalCitations);
     this.#emitMessages(result.messages ?? []);
     if (result.logs?.length) this.#logs.push(...result.logs);
     if (result.exit) this.#eventExit = result.exit;
@@ -640,8 +646,12 @@ class TurnRun {
 
   #emitMessages(messages: readonly BotMessagePayload[]): void {
     if (messages.length === 0) return;
-    this.#messages.push(...messages);
-    this.#messageCount += messages.length;
+    const delivered = messages.filter(
+      (m) =>
+        m.type !== "text" || mapCitations(m.text, this.#state.retrievalCitations?.sources ?? {}).text.trim() !== "",
+    );
+    this.#messages.push(...delivered);
+    this.#messageCount += delivered.length;
     this.#touch();
   }
 

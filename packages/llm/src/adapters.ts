@@ -2,6 +2,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogle } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { AppError } from "@wakeel/contracts";
 import type { EmbeddingModel, LanguageModel } from "ai";
 import type { ModelEntry } from "./registry";
 
@@ -24,6 +25,7 @@ export interface ModelFactory {
 
 export const aiSdkModels: ModelFactory = {
   language(model, c) {
+    if (model.kind !== "chat") throw new AppError("model_not_configured");
     switch (model.provider) {
       case "anthropic":
         return createAnthropic({ apiKey: c.apiKey })(model.providerModel);
@@ -37,6 +39,9 @@ export const aiSdkModels: ModelFactory = {
         return createOpenAICompatible({ name: "compatible", apiKey: c.apiKey, baseURL: requireBaseUrl(model, c) })(
           model.providerModel,
         );
+      case "cohere":
+      case "tei":
+        throw new AppError("model_not_configured");
     }
   },
   embedding(model, c) {
@@ -53,11 +58,16 @@ export const aiSdkModels: ModelFactory = {
         }).embeddingModel(model.providerModel);
       case "anthropic":
         throw new Error(`${model.id}: Anthropic has no embedding models`);
+      case "cohere":
+      case "tei":
+        throw new AppError("model_not_configured");
     }
   },
 };
 
 function requireBaseUrl(model: ModelEntry, c: Credential): string {
   if (!c.baseURL) throw new Error(`${model.id}: an OpenAI-compatible model needs a base URL with its key`);
-  return c.baseURL;
+  // The SDK owns its transport here and would bypass the SSRF guard. No compatible model ships
+  // with an egress transport yet; fail closed instead of enabling arbitrary provider URLs.
+  throw new AppError("fetch_blocked", { host: new URL(c.baseURL).hostname });
 }

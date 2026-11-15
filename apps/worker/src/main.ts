@@ -33,8 +33,10 @@ import {
   ingestEnqueuer,
   ingestProcessor,
   mimeOf,
+  rerankThroughEgress,
   syncEnqueuer,
   syncProcessor,
+  turnKnowledge,
 } from "./kb/index";
 import {
   aiPort,
@@ -100,6 +102,7 @@ if (config) {
   const usage = recordUsage(db);
   const llm = createLlm({
     credentials: workspaceCredentials(db, keyring),
+    rerankFetch: rerankThroughEgress({ egressUrl: config.egressUrl, egressToken: config.egressToken.reveal() }),
     onUsage: (e) => usage(e).catch((err: unknown) => logger.error({ err, model: e.model }, "usage event not written")),
   });
   const runPort = createAutonomyRunPort(sandbox);
@@ -121,9 +124,10 @@ if (config) {
     db,
     owner: `${hostname()}:${process.pid}`,
     logger,
-    enginePorts: ({ workspaceId }) => ({
+    enginePorts: ({ workspaceId, knowledge }) => ({
       sandbox: createExpressionPort(sandbox),
       code: createCodePort(sandbox, {
+        ...(knowledge ? { kbSearch: knowledge.search.bind(knowledge) } : {}),
         // One token per exec, valid a little longer than the longest code run (ADR-023 §4).
         capabilityToken: (exec) =>
           mintCapabilityToken(capabilityKey, { ws: workspaceId, exec, exp: Math.floor(Date.now() / 1000) + 90 }),
@@ -133,7 +137,9 @@ if (config) {
       await publisher.publish(channel, message);
     },
     enqueueWebhook: webhooks.now,
-    autonomy: (turn, code) => autonomyPort({ db, llm, runPort, logger }, turn, code),
+    autonomy: (turn, code, knowledge) =>
+      autonomyPort({ db, llm, runPort, logger, ...(knowledge ? { knowledge } : {}) }, turn, code),
+    knowledge: (turn, record) => turnKnowledge({ db, llm }, turn, record),
     // AI cards and the handoff summary use the same client: workspace keys, one usage event per call.
     ai: (turn) => aiPort({ llm }, turn),
     summarizeHandoff: modelHandoffSummary({ db, model: llm }),

@@ -1,4 +1,4 @@
-import { AppError, newId } from "@wakeel/contracts";
+import { AppError, KbSettings, newId } from "@wakeel/contracts";
 import { and, asc, count, eq, sql } from "drizzle-orm";
 import type { Tx } from "../client";
 import { kbChunks, kbDocuments, kbIngestionJobs, kbSources, knowledgeBases } from "../schema/kb";
@@ -9,13 +9,17 @@ import { currentWorkspace } from "./scope";
  * Every function runs inside `withWorkspace`; RLS decides what a call can see.
  */
 
-export type KnowledgeBase = typeof knowledgeBases.$inferSelect;
+export type KnowledgeBase = Omit<typeof knowledgeBases.$inferSelect, "settings"> & { settings: KbSettings };
+const checkedKb = (row: typeof knowledgeBases.$inferSelect): KnowledgeBase => ({
+  ...row,
+  settings: KbSettings.parse(row.settings),
+});
 export type KbSource = typeof kbSources.$inferSelect;
 export type KbDocument = typeof kbDocuments.$inferSelect;
 export type IngestionStage = "fetch" | "parse" | "normalise" | "chunk" | "embed" | "index";
 export const INGESTION_STAGES: readonly IngestionStage[] = ["fetch", "parse", "normalise", "chunk", "embed", "index"];
 /** Per-KB ingestion settings (ADR-041 §4): the vision model for the OCR tier and its page cap. */
-export type KbSettings = { ocrModel?: string; maxOcrPages?: number };
+export type { KbSettings } from "@wakeel/contracts";
 
 const one = <T>(rows: T[]): T => {
   const [row] = rows;
@@ -40,29 +44,33 @@ export async function createKnowledgeBase(
   tx: Tx,
   input: { botId: string; name: string; description?: string; embeddingModel: string; settings?: KbSettings },
 ): Promise<KnowledgeBase> {
-  return one(
-    await tx
-      .insert(knowledgeBases)
-      .values({
-        id: newId("kb"),
-        workspaceId: currentWorkspace,
-        botId: input.botId,
-        name: input.name,
-        description: input.description ?? "",
-        embeddingModel: input.embeddingModel,
-        settings: input.settings ?? {},
-      })
-      .returning()
-      .catch(nameTaken),
+  return checkedKb(
+    one(
+      await tx
+        .insert(knowledgeBases)
+        .values({
+          id: newId("kb"),
+          workspaceId: currentWorkspace,
+          botId: input.botId,
+          name: input.name,
+          description: input.description ?? "",
+          embeddingModel: input.embeddingModel,
+          settings: KbSettings.parse(input.settings ?? {}),
+        })
+        .returning()
+        .catch(nameTaken),
+    ),
   );
 }
 
 export async function getKnowledgeBase(tx: Tx, kbId: string): Promise<KnowledgeBase> {
-  return one(await tx.select().from(knowledgeBases).where(eq(knowledgeBases.id, kbId)));
+  return checkedKb(one(await tx.select().from(knowledgeBases).where(eq(knowledgeBases.id, kbId))));
 }
 
 export async function listKnowledgeBases(tx: Tx, botId: string): Promise<KnowledgeBase[]> {
-  return tx.select().from(knowledgeBases).where(eq(knowledgeBases.botId, botId)).orderBy(asc(knowledgeBases.createdAt));
+  return (
+    await tx.select().from(knowledgeBases).where(eq(knowledgeBases.botId, botId)).orderBy(asc(knowledgeBases.createdAt))
+  ).map(checkedKb);
 }
 
 export async function updateKnowledgeBase(
@@ -70,13 +78,19 @@ export async function updateKnowledgeBase(
   kbId: string,
   patch: { name?: string; description?: string; settings?: KbSettings },
 ): Promise<KnowledgeBase> {
-  return one(
-    await tx
-      .update(knowledgeBases)
-      .set({ ...patch, updatedAt: sql`now()` })
-      .where(eq(knowledgeBases.id, kbId))
-      .returning()
-      .catch(nameTaken),
+  return checkedKb(
+    one(
+      await tx
+        .update(knowledgeBases)
+        .set({
+          ...patch,
+          ...(patch.settings ? { settings: KbSettings.parse(patch.settings) } : {}),
+          updatedAt: sql`now()`,
+        })
+        .where(eq(knowledgeBases.id, kbId))
+        .returning()
+        .catch(nameTaken),
+    ),
   );
 }
 

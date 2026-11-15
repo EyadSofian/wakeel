@@ -99,6 +99,41 @@ const step = (
   ...extra,
 });
 
+test("retrieval spans preserve all stage candidates and failure status", () => {
+  const builder = new TraceBuilder(ctx, definition);
+  builder.turnStarted(T0);
+  const chunkId = newId("chk"),
+    kbId = newId("kb");
+  const spans = builder.stepCommitted(
+    step(1, ids.greet, ids.say, "next", {
+      retrieval: [
+        {
+          query: "استرجاع",
+          queryNormalised: "استرجاع",
+          kbIds: [kbId],
+          dense: [{ chunkId, score: 0.8 }],
+          lexical: [],
+          fused: [{ chunkId, score: 1 / 61 }],
+          reranked: [],
+          returned: 0,
+          startedAt: T0.toISOString(),
+          durationMs: 20,
+          error: "model_unavailable",
+        },
+      ],
+    }),
+    { state: state(), user: { vars: {}, attributes: {} } },
+    at(30),
+  );
+  const found = spans.find((s) => s.kind === "kb.search");
+  expect(found).toMatchObject({
+    kind: "kb.search",
+    status: "error",
+    attrs: { query: "استرجاع", dense: { inline: true, value: [{ chunkId, score: 0.8 }] }, returned: 0 },
+  });
+  for (const span of spans) expect(Span.safeParse(span).success).toBe(true);
+});
+
 /** Applies upserts in order, as the store does: the latest copy of each span id wins. */
 function store(batches: Span[][]): Span[] {
   const byId = new Map<string, Span>();

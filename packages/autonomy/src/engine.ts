@@ -5,6 +5,7 @@ import {
   type BotDefinition,
   type BotMessagePayload,
   type Json,
+  type SearchCitations,
   type Variable,
 } from "@wakeel/contracts";
 import { buildPrompt } from "./prompt/build";
@@ -31,6 +32,7 @@ export type ScopeName = "bot" | "user" | "conversation" | "workflow" | "event" |
 export type Scopes = { readonly [K in ScopeName]?: Json };
 
 export interface AutonomyStepInput {
+  retrievalCitations?: SearchCitations;
   node: AutonomousNode;
   location: { workflowId: string; nodeId: string };
   memory: AutonomyMemory | undefined;
@@ -66,6 +68,7 @@ export type AutonomyOutcome =
   | { type: "handoff"; reason: string; summary: string; variables: Record<string, Json> };
 
 export interface AutonomyStepResult {
+  retrievalCitations?: SearchCitations;
   outcome: AutonomyOutcome;
   messages?: BotMessagePayload[];
   writes?: VariableWrite[];
@@ -146,6 +149,7 @@ export interface AutonomyModel {
 export type RunOutcome =
   | {
       ok: true;
+      retrievalCitations?: SearchCitations;
       /** The block ran `return`. */
       returned: boolean;
       value?: Json;
@@ -154,10 +158,16 @@ export type RunOutcome =
       logs?: { level: "debug" | "info" | "warn" | "error"; message: string }[];
       tools?: ToolCallTrace[];
     }
-  | { ok: false; error: { message: string; line?: number }; tools?: ToolCallTrace[] }
+  | {
+      ok: false;
+      retrievalCitations?: SearchCitations;
+      error: { message: string; line?: number };
+      tools?: ToolCallTrace[];
+    }
   /** A tool call ended the block at the call site (ADR-035): nothing after it ran, no patch exists. */
   | {
       ok: false;
+      retrievalCitations?: SearchCitations;
       suspended: PendingToolCall & { reason?: string };
       logs?: { level: "debug" | "info" | "warn" | "error"; message: string }[];
       tools?: ToolCallTrace[];
@@ -170,6 +180,7 @@ export type RunOutcome =
 export interface AutonomyCode {
   run(request: {
     node: AutonomousNode;
+    retrievalCitations?: SearchCitations;
     source: string;
     scopes: Record<string, Json>;
     idempotencyKey: string;
@@ -288,9 +299,19 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
       };
       // Citation tokens never reach the user (§6.5). Until kb_search exists there are no sources.
       // A text that was nothing but tokens is dropped rather than sent empty.
+      let retrievalCitations = input.retrievalCitations;
       const messages = result.messages
-        .map((m) => (m.type === "text" ? { ...m, text: mapCitations(m.text, {}).text } : m))
-        .filter((m) => m.type !== "text" || m.text.trim() !== "");
+        .map((m) =>
+          m.type === "text"
+            ? {
+                ...m,
+                text: m.text.replace(/\s*\[\[(c\d+)\]\]/g, (marker, token: string) =>
+                  retrievalCitations?.sources[token] ? marker : "",
+                ),
+              }
+            : m,
+        )
+        .filter((m) => m.type !== "text" || mapCitations(m.text, retrievalCitations?.sources ?? {}).text.trim() !== "");
       const logs: NonNullable<AutonomyStepResult["logs"]> = [];
       if (result.recovered) logs.push({ level: "warn", message: "protocol_recovered: the reply had no directives" });
 
@@ -300,6 +321,7 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
         ...(logs.length > 0 ? { logs } : {}),
         ...extra,
         memory,
+        ...(retrievalCitations ? { retrievalCitations } : {}),
         iteration: trace,
       });
 
@@ -317,11 +339,13 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
         trace.code = result.run.code;
         const run = await deps.code.run({
           node,
+          ...(retrievalCitations ? { retrievalCitations } : {}),
           source: result.run.code,
           scopes: { ...(input.scopes as Record<string, Json>), memo: memory.memo as Json },
           idempotencyKey: `${input.idempotencyKey}:run`,
           deadline: input.deadline,
         });
+        retrievalCitations = run.retrievalCitations ?? retrievalCitations;
         trace.tools = run.tools ?? [];
         if (!run.ok && "suspended" in run) {
           for (const l of run.logs ?? []) logs.push(l);
@@ -389,6 +413,7 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
           ...(messages.length > 0 ? { messages } : {}),
           ...(logs.length > 0 ? { logs } : {}),
           memory,
+          ...(retrievalCitations ? { retrievalCitations } : {}),
           iteration: trace,
         };
       }
@@ -404,6 +429,7 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
           ...(turn ? { turn } : {}),
           ...(logs.length > 0 ? { logs } : {}),
           memory,
+          ...(retrievalCitations ? { retrievalCitations } : {}),
           iteration: trace,
         };
         switch (exit.kind) {

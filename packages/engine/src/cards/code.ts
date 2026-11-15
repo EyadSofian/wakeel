@@ -18,6 +18,7 @@ export const code: ExecutorOf<"code"> = async (ctx) => {
   const timeoutMs = Math.max(1, Math.min(card.timeoutMs, ctx.deadline - ctx.now));
   const outcome = await ctx.code.run({
     source: card.source,
+    ...(ctx.retrievalCitations ? { retrievalCitations: ctx.retrievalCitations } : {}),
     scopes: ctx.scopes,
     timeoutMs,
     memoryMb: LIMITS.codeMemoryMb,
@@ -28,11 +29,17 @@ export const code: ExecutorOf<"code"> = async (ctx) => {
   const logs = outcome.logs.map(toLog);
   if (!outcome.ok) {
     const error = toStepError(runError(outcome, timeoutMs, ctx.turnId), ctx.turnId);
-    return { outcome: { type: "fail", error }, messages, logs };
+    return {
+      outcome: { type: "fail", error },
+      messages,
+      logs,
+      ...(outcome.retrievalCitations ? { retrievalCitations: outcome.retrievalCitations } : {}),
+    };
   }
   const { writes, turn } = toWrites(ctx.location.workflowId, definition, outcome.patches, ctx.scopes.turn);
   return {
     outcome: { type: "next" },
+    ...(outcome.retrievalCitations ? { retrievalCitations: outcome.retrievalCitations } : {}),
     messages,
     logs,
     writes,

@@ -1,4 +1,4 @@
-import { AppError } from "@wakeel/contracts";
+import { AppError, ModelProvider } from "@wakeel/contracts";
 import { z } from "zod";
 import shipped from "./models.json" with { type: "json" };
 
@@ -11,10 +11,10 @@ const PerMTok = z.number().nonnegative();
 
 export const ModelEntry = z.object({
   id: z.string().min(1).max(100),
-  provider: z.enum(["anthropic", "openai", "google", "openai-compatible"]),
+  provider: ModelProvider,
   /** The provider's own model id. */
   providerModel: z.string().min(1),
-  kind: z.enum(["chat", "embedding"]),
+  kind: z.enum(["chat", "embedding", "rerank"]),
   contextWindow: z.number().int().positive(),
   maxOutput: z.number().int().positive(),
   capabilities: z.object({ vision: z.boolean(), caching: z.boolean(), structuredOutput: z.boolean() }),

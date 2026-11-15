@@ -476,6 +476,8 @@ export async function mockApi(
           { provider: "anthropic", set, last4: set ? "Q2xk" : null, baseUrl: null, updatedAt: set ? T0 : null },
           { provider: "openai", set: false, last4: null, baseUrl: null, updatedAt: null },
           { provider: "google", set: false, last4: null, baseUrl: null, updatedAt: null },
+          { provider: "cohere", set: false, last4: null, baseUrl: null, updatedAt: null },
+          { provider: "tei", set: false, last4: null, baseUrl: null, updatedAt: null },
           {
             provider: "openai-compatible",
             set,
@@ -500,7 +502,21 @@ export async function mockApi(
         keySet,
       });
       return json(route, 200, {
-        data: [model("claude-opus-5-5", 4, 20), model("claude-sonnet-5-5", 2, 10), model("claude-haiku-5-5", 0.1, 0.5)],
+        data: [
+          model("claude-opus-5-5", 4, 20),
+          model("claude-sonnet-5-5", 2, 10),
+          model("claude-haiku-5-5", 0.1, 0.5),
+          {
+            ...model("bge-reranker-v2-m3", 0, 0),
+            provider: "tei",
+            keySet: false,
+            kind: "rerank",
+            contextWindow: 8192,
+            prices: null,
+            capabilities: { vision: false, caching: false, structuredOutput: false },
+            autonomy: "unsupported",
+          },
+        ],
         nextCursor: null,
       });
     }

@@ -79,7 +79,7 @@ function ProviderKeys({ workspaceId, enabled }: { workspaceId: string; enabled: 
           </THead>
           <tbody>
             {keys.isPending
-              ? [0, 1, 2, 3].map((i) => (
+              ? [0, 1, 2, 3, 4, 5].map((i) => (
                   <Tr key={i} aria-hidden="true">
                     {[0, 1, 2, 3].map((c) => (
                       <Td key={c}>
@@ -214,7 +214,13 @@ function KeyDialog({
     e.preventDefault();
     if (!provider) return;
     put.mutate(
-      { provider, apiKey, ...(provider === "openai-compatible" && baseUrl.trim() ? { baseUrl: baseUrl.trim() } : {}) },
+      {
+        provider,
+        apiKey,
+        ...((provider === "openai-compatible" || provider === "tei") && baseUrl.trim()
+          ? { baseUrl: baseUrl.trim() }
+          : {}),
+      },
       { onSuccess: close },
     );
   };
@@ -250,12 +256,8 @@ function KeyDialog({
             />
           )}
         </Field>
-        {provider === "openai-compatible" ? (
-          <Field
-            label="Server address"
-            help="The https address of the server's OpenAI-compatible API."
-            error={errors["baseUrl"]}
-          >
+        {provider === "openai-compatible" || provider === "tei" ? (
+          <Field label="Server address" help="The HTTPS address of the provider server." error={errors["baseUrl"]}>
             {(p) => (
               <Input
                 {...p}
@@ -277,24 +279,26 @@ function Defaults({ workspaceId, canEdit }: { workspaceId: string; canEdit: bool
   const workspace = useWorkspace(workspaceId);
   const models = useModels(workspaceId);
   const save = useModelDefaults(workspaceId);
-  const settings = workspace.data?.settings as { defaultModel?: string; utilityModel?: string } | undefined;
+  const settings = workspace.data?.settings as
+    | { defaultModel?: string; utilityModel?: string; rerankModel?: string }
+    | undefined;
   const [defaultModel, setDefault] = useState<string | null>(null);
   const [utilityModel, setUtility] = useState<string | null>(null);
+  const [rerankModel, setRerank] = useState<string | null>(null);
   const errors = fieldErrors(save.error);
   useEffect(() => {
     setDefault(settings?.defaultModel ?? null);
     setUtility(settings?.utilityModel ?? null);
-  }, [settings?.defaultModel, settings?.utilityModel]);
+    setRerank(settings?.rerankModel ?? null);
+  }, [settings?.defaultModel, settings?.utilityModel, settings?.rerankModel]);
 
   return (
-    <Section
-      title="Defaults"
-      description="The model a step uses when it names none, and a cheaper one for summaries and quick checks."
-    >
+    <Section title="Defaults" description="Choose models for replies, summaries and knowledge search.">
       {models.isError ? <ProblemBanner error={models.error} /> : null}
       {save.isError && Object.keys(errors).length === 0 ? <ProblemBanner error={save.error} /> : null}
       {models.isPending ? (
         <div className="flex max-w-inspector-max flex-col gap-6" aria-hidden="true">
+          <Skeleton className="h-8 w-full" />
           <Skeleton className="h-8 w-full" />
           <Skeleton className="h-8 w-full" />
         </div>
@@ -303,7 +307,7 @@ function Defaults({ workspaceId, canEdit }: { workspaceId: string; canEdit: bool
           className="flex max-w-inspector-max flex-col gap-6"
           onSubmit={(e) => {
             e.preventDefault();
-            save.mutate({ defaultModel, utilityModel });
+            save.mutate({ defaultModel, utilityModel, rerankModel });
           }}
         >
           <Field
@@ -333,6 +337,23 @@ function Defaults({ workspaceId, canEdit }: { workspaceId: string; canEdit: bool
                 models={models.data}
                 value={utilityModel}
                 onValueChange={setUtility}
+                disabled={!canEdit}
+                allowNone="None"
+              />
+            )}
+          </Field>
+          <Field
+            label="Rerank model"
+            help="Ranks knowledge passages after hybrid search."
+            error={errors["rerankModel"]}
+          >
+            {(p) => (
+              <ModelPicker
+                {...p}
+                kind="rerank"
+                models={models.data}
+                value={rerankModel}
+                onValueChange={setRerank}
                 disabled={!canEdit}
                 allowNone="None"
               />

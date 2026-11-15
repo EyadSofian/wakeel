@@ -1,5 +1,5 @@
 import type { Span } from "@wakeel/contracts";
-import { type BotDefinition, type Json, TurnId } from "@wakeel/contracts";
+import { type BotDefinition, type Json, mapPayloadCitations, type RetrievalRecord, TurnId } from "@wakeel/contracts";
 import {
   acquireConversationLease,
   appendOutbox,
@@ -30,6 +30,7 @@ import {
   versionToRun,
   writeConversation,
 } from "@wakeel/db";
+import type { KnowledgePort } from "@wakeel/engine";
 import {
   type AiPort,
   type AutonomyPort,
@@ -60,7 +61,7 @@ export interface TurnDeps {
   owner: string;
   logger: Logger;
   /** The engine's sandbox ports for one turn (a capability token is minted per exec). */
-  enginePorts(turn: { workspaceId: string; conversationId: string; turnId: string }): {
+  enginePorts(turn: { workspaceId: string; conversationId: string; turnId: string; knowledge?: KnowledgePort }): {
     sandbox: SandboxPort;
     code: CodePort;
   };
@@ -83,7 +84,8 @@ export interface TurnDeps {
    * The Autonomous Node for one turn (task 6.6). Absent: reaching an Autonomous Node fails the step
    * with a clear code, as before the model layer existed.
    */
-  autonomy?(turn: AutonomyTurn, code: CodePort): AutonomyPort;
+  autonomy?(turn: AutonomyTurn, code: CodePort, knowledge?: KnowledgePort): AutonomyPort;
+  knowledge?(turn: AutonomyTurn, record: (trace: RetrievalRecord) => void): KnowledgePort;
   /** Writes handoff summaries (task 5.4). Absent: summaries are empty. */
   summarizeHandoff?(input: HandoffSummaryInput): Promise<string>;
   /** The model layer for AI cards (task 6.7). Absent: AI cards fail with `model_not_configured`. */
@@ -293,11 +295,6 @@ class ConversationRun {
     this.#before = { state, user: { vars: user.vars, attributes: user.attributes } };
     await this.#writeSpans(this.#trace.turnStarted(new Date(clock.now())));
     if (migrated) await this.#writeSpans(this.#trace.versionMigrated(migrated, new Date(clock.now())));
-    const sandbox = this.deps.enginePorts({
-      workspaceId: this.workspaceId,
-      conversationId: this.conversationId,
-      turnId: turn.id,
-    });
     const summarize = this.deps.summarizeHandoff;
     const modelTurn: AutonomyTurn = {
       workspaceId: this.workspaceId,
@@ -309,10 +306,19 @@ class ConversationRun {
       ...(state.summary ? { summary: state.summary.text } : {}),
       env: config.values,
     };
-    const autonomy = this.deps.autonomy?.(modelTurn, sandbox.code);
+    const retrievalTraces: RetrievalRecord[] = [];
+    const knowledge = this.deps.knowledge?.(modelTurn, (record) => retrievalTraces.push(record));
+    const sandbox = this.deps.enginePorts({
+      workspaceId: this.workspaceId,
+      conversationId: this.conversationId,
+      turnId: turn.id,
+      ...(knowledge ? { knowledge } : {}),
+    });
+    const autonomy = this.deps.autonomy?.(modelTurn, sandbox.code, knowledge);
     const ai = this.deps.ai?.(modelTurn);
     const ports: EnginePorts = {
       ...sandbox,
+      ...(knowledge ? { knowledge } : {}),
       ...(autonomy ? { autonomy } : {}),
       ...(ai ? { ai } : {}),
       clock,
@@ -330,7 +336,12 @@ class ConversationRun {
               }),
           }
         : {}),
-      commitStep: (commit) => this.#commitStep(commit, conversation, turn.id),
+      commitStep: (commit) =>
+        this.#commitStep(
+          { ...commit, ...(retrievalTraces.length ? { retrieval: retrievalTraces.splice(0) } : {}) },
+          conversation,
+          turn.id,
+        ),
       emitEphemeral: async (e) => {
         await this.#tx((tx) =>
           this.#appendOutbox(tx, conversation, [
@@ -506,13 +517,17 @@ class ConversationRun {
               ? undefined
               : null,
       });
+      const outgoing = commit.messages.map((payload) =>
+        mapPayloadCitations(payload, commit.state.retrievalCitations?.sources ?? {}),
+      );
       const stored = await insertBotMessages(
         tx,
         this.conversationId,
-        commit.messages.map((m, i) => ({
+        outgoing.map((m, i) => ({
           id: botMessageId(turnId, commit.stepSeq, i),
-          type: m.type,
-          payload: m as unknown as Record<string, Json>,
+          type: m.payload.type,
+          payload: m.payload as unknown as Record<string, Json>,
+          citations: m.citations,
           turnId,
         })),
       );
@@ -526,8 +541,8 @@ class ConversationRun {
               conversationId: this.conversationId,
               seq: row.seq,
               direction: "out",
-              payload: commit.messages[i] as unknown as Json,
-              citations: [],
+              payload: outgoing[i]?.payload as unknown as Json,
+              citations: outgoing[i]?.citations ?? [],
               turnId,
               createdAt: row.createdAt.toISOString(),
             },

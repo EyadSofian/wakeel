@@ -8,6 +8,10 @@ import type {
   ConversationState,
   EventScope,
   Json,
+  Passage,
+  RetrievalRecord,
+  SearchCitations,
+  SearchRequest,
   StepEffects,
   StepOutcome,
   WaitSpec,
@@ -71,6 +75,7 @@ export interface StepFailure extends StepError {
  * index, and the events into the outbox.
  */
 export interface StepCommit {
+  retrieval?: RetrievalRecord[];
   turnId: string;
   /** 1-based and contiguous within a turn, including across a resume. */
   stepSeq: number;
@@ -134,6 +139,7 @@ export interface StepLog {
 
 /** What a card executor (or an autonomous iteration) returns: one outcome and its side effects. */
 export interface StepResult {
+  retrievalCitations?: SearchCitations;
   outcome: StepOutcome;
   messages?: BotMessagePayload[];
   /** Validated by the engine against each variable's declared scope and type before anything is applied. */
@@ -151,6 +157,8 @@ export interface StepResult {
 
 /** What a card executor receives. */
 export interface CardContext<C extends Card = Card> {
+  knowledge?: KnowledgePort;
+  retrievalCitations?: SearchCitations;
   card: C;
   location: StepLocation & { cardId: string };
   definition: BotDefinition;
@@ -179,7 +187,7 @@ export interface CardContext<C extends Card = Card> {
  * (extraction, classification). The worker resolves the key, records usage and retries.
  */
 export interface AiRequest {
-  purpose: "ai_generate" | "ai_extract" | "ai_branch" | "capture_extract";
+  purpose: "ai_generate" | "ai_extract" | "ai_branch" | "capture_extract" | "kb_answer";
   model: string;
   system: string;
   messages: { role: "user" | "assistant"; content: string }[];
@@ -203,6 +211,7 @@ export type AutonomyResume =
   | { kind: "tool_result"; toolCallId: string; event: EventScope };
 
 export interface AutonomyStepInput {
+  retrievalCitations?: SearchCitations;
   node: AutonomousNode;
   location: StepLocation;
   memory: AutonomyMemory | undefined;
@@ -237,6 +246,7 @@ export interface CodeScopePatch {
 export type CodeScope = "workflow" | "conversation" | "user" | "turn";
 
 export interface CodeRequest {
+  retrievalCitations?: SearchCitations;
   /** The body of the Code card. */
   source: string;
   scopes: ExpressionScopes;
@@ -257,6 +267,7 @@ export interface CodeLog {
 export type CodeOutcome =
   | {
       ok: true;
+      retrievalCitations?: SearchCitations;
       value: Json | null;
       patches: Partial<Record<CodeScope, CodeScopePatch>>;
       said: unknown[];
@@ -264,6 +275,7 @@ export type CodeOutcome =
     }
   | {
       ok: false;
+      retrievalCitations?: SearchCitations;
       code: "code_error" | "code_syntax_error" | "code_timeout" | "code_memory_exceeded" | "internal_error";
       message: string;
       line?: number;
@@ -281,7 +293,15 @@ export interface CodePort {
   run(request: CodeRequest): Promise<CodeOutcome>;
 }
 
+export interface KnowledgePort {
+  search(
+    request: SearchRequest,
+    citations?: SearchCitations,
+  ): Promise<{ passages: Passage[]; citations: SearchCitations }>;
+}
+
 export interface EnginePorts {
+  knowledge?: KnowledgePort;
   sandbox: SandboxPort;
   code: CodePort;
   clock: ClockPort;

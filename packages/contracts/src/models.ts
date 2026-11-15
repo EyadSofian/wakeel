@@ -6,7 +6,7 @@ import { IsoDateTime } from "./common";
  * default and utility models. Model ids come from the registry in packages/llm (ADR-010).
  */
 
-export const MODEL_PROVIDERS = ["anthropic", "openai", "google", "openai-compatible"] as const;
+export const MODEL_PROVIDERS = ["anthropic", "openai", "google", "openai-compatible", "cohere", "tei"] as const;
 export const ModelProvider = z.enum(MODEL_PROVIDERS);
 export type ModelProvider = z.infer<typeof ModelProvider>;
 
@@ -14,7 +14,7 @@ export type ModelProvider = z.infer<typeof ModelProvider>;
 export const ModelSummary = z.object({
   id: z.string(),
   provider: ModelProvider,
-  kind: z.enum(["chat", "embedding"]),
+  kind: z.enum(["chat", "embedding", "rerank"]),
   contextWindow: z.number().int(),
   capabilities: z.object({ vision: z.boolean(), caching: z.boolean(), structuredOutput: z.boolean() }),
   autonomy: z.enum(["supported", "experimental", "unsupported", "untested"]),
@@ -48,6 +48,7 @@ export type PutModelKeyRequest = z.infer<typeof PutModelKeyRequest>;
 export const ModelDefaultsRequest = z.object({
   defaultModel: z.string().min(1).max(100).nullable(),
   utilityModel: z.string().min(1).max(100).nullable(),
+  rerankModel: z.string().min(1).max(100).nullable().optional(),
 });
 export type ModelDefaultsRequest = z.infer<typeof ModelDefaultsRequest>;
 

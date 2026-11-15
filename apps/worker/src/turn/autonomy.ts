@@ -18,6 +18,7 @@ import {
   type ModelProvider,
   modelBaseUrlSecret,
   modelKeySecret,
+  type SearchCitations,
   type Tool,
 } from "@wakeel/contracts";
 import {
@@ -28,7 +29,7 @@ import {
   readSecretValue,
   recentTranscript,
 } from "@wakeel/db";
-import type { AiPort, AutonomyPort, CodePort } from "@wakeel/engine";
+import type { AiPort, AutonomyPort, CodePort, KnowledgePort } from "@wakeel/engine";
 import { type LlmClient, registry, type UsageEvent } from "@wakeel/llm";
 import type { AutonomyRunPort, BuilderTool } from "@wakeel/sandbox-client";
 import type { Logger } from "@wakeel/telemetry";
@@ -59,6 +60,7 @@ export interface AutonomyTurn {
 }
 
 export interface AutonomyWiring {
+  knowledge?: KnowledgePort;
   db: Database;
   llm: LlmClient;
   /** Runs the model's code (`kind: "autonomy_run"`). */
@@ -90,10 +92,10 @@ export function workspaceCredentials(db: Database, keyring: Keyring) {
         const key = await readSecretValue(tx, keyring, workspaceId, modelKeySecret(provider));
         if (!key) return undefined;
         const baseUrl =
-          provider === "openai-compatible"
+          provider === "openai-compatible" || provider === "tei"
             ? await readSecretValue(tx, keyring, workspaceId, modelBaseUrlSecret(provider))
             : undefined;
-        return { apiKey: key.reveal(), ...(baseUrl ? { baseUrl: baseUrl.reveal() } : {}) };
+        return { apiKey: key.reveal(), ...(baseUrl ? { baseURL: baseUrl.reveal() } : {}) };
       });
     },
     // No plan offers platform keys yet (Phase 13): every workspace brings its own.
@@ -108,8 +110,11 @@ export function recordUsage(db: Database) {
     await db.withWorkspace(e.workspaceId, (tx) =>
       insertUsageEvent(tx, {
         kind: e.kind,
-        quantity: e.usage.inputTokens + e.usage.cachedInputTokens + e.usage.cacheWriteTokens + e.usage.outputTokens,
-        unit: "tokens",
+        quantity:
+          e.kind === "rerank_units"
+            ? (e.rerankUnits ?? 0)
+            : e.usage.inputTokens + e.usage.cachedInputTokens + e.usage.cacheWriteTokens + e.usage.outputTokens,
+        unit: e.kind === "rerank_units" ? "units" : "tokens",
         model: e.model,
         costMicroUsd: e.costMicroUsd,
         mode: e.mode,
@@ -149,6 +154,13 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
 
   const run: AutonomyCode = {
     async run(request) {
+      let retrievalCitations = request.retrievalCitations;
+      const citationAccess = {
+        get: () => retrievalCitations,
+        set: (next: SearchCitations | undefined) => {
+          retrievalCitations = next;
+        },
+      };
       const timeoutMs = Math.max(1_000, Math.min(RUN_MAX_MS, request.deadline - now()));
       // A workflow tool ends the block at the call site (ADR-035 §1): the call is never answered and
       // the exec is stopped, so nothing after it runs, tool calls included.
@@ -184,7 +196,18 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
             try {
               const output = await callTool(request.node, call, {
                 definition: turn.definition,
-                code: toolCode(code),
+                code: toolCode(code, citationAccess),
+                ...(w.knowledge
+                  ? {
+                      kbSearch: async (query) => {
+                        const knowledge = w.knowledge;
+                        if (!knowledge) throw new AppError("model_not_configured");
+                        const result = await knowledge.search(query, retrievalCitations);
+                        retrievalCitations = result.citations;
+                        return result.passages.map((p) => ({ ...p, token: p.cite })) as unknown as Json;
+                      },
+                    }
+                  : {}),
                 scopes: request.scopes,
                 idempotencyKey: request.idempotencyKey,
                 warn: (message, data) => w.logger.warn(data, message),
@@ -204,22 +227,36 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
           },
         });
       } catch (error) {
-        if (suspended) return { ok: false, suspended, tools } satisfies RunOutcome;
+        if (suspended)
+          return {
+            ok: false,
+            suspended,
+            tools,
+            ...(retrievalCitations ? { retrievalCitations } : {}),
+          } satisfies RunOutcome;
         throw error;
       }
-      if (suspended) return { ok: false, suspended, tools } satisfies RunOutcome;
+      if (suspended)
+        return {
+          ok: false,
+          suspended,
+          tools,
+          ...(retrievalCitations ? { retrievalCitations } : {}),
+        } satisfies RunOutcome;
       const logs = outcome.logs.map((l) => ({ level: l.level, message: l.args.map(logText).join(" ") }));
       if (!outcome.ok) {
         // A sandbox failure that is not the code's own is ours: never hand it to the model as its bug.
         if (outcome.code === "internal_error") throw new AppError("internal_error", {}, { detail: outcome.message });
         return {
           ok: false,
+          ...(retrievalCitations ? { retrievalCitations } : {}),
           error: { message: outcome.message, ...(outcome.line !== undefined ? { line: outcome.line } : {}) },
           tools,
         };
       }
       return {
         ok: true,
+        ...(retrievalCitations ? { retrievalCitations } : {}),
         // The sandbox cannot tell `return null` from no return; both mean "nothing to read back".
         returned: outcome.value !== null,
         ...(outcome.value !== null ? { value: outcome.value } : {}),
@@ -329,10 +366,18 @@ function logText(arg: unknown): string {
 }
 
 /** The engine's code port as a tool runner: a code tool's exec has the node's scopes, read only. */
-function toolCode(code: CodePort): ToolCodeRunner {
+function toolCode(
+  code: CodePort,
+  citations?: { get(): SearchCitations | undefined; set(next: SearchCitations | undefined): void },
+): ToolCodeRunner {
   return {
     run: async (request) => {
-      const outcome = await code.run({ ...request, scopes: request.scopes as never });
+      const outcome = await code.run({
+        ...request,
+        scopes: request.scopes as never,
+        ...(citations?.get() ? { retrievalCitations: citations.get() } : {}),
+      });
+      if (outcome.retrievalCitations) citations?.set(outcome.retrievalCitations);
       return outcome.ok
         ? { ok: true, value: outcome.value, patches: outcome.patches, said: outcome.said }
         : { ok: false, message: outcome.message };
