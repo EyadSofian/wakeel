@@ -15,7 +15,7 @@ export async function maintainTraces(
   retention: Readonly<Record<string, number>>,
   reportFailure: () => void,
 ) {
-  await db.platform.execute(sql`select lookup.prepare_trace_partitions()`);
+  await db.platform.execute(sql`select trace_maintenance.prepare_trace_partitions()`);
   const tenants = await db.platform.select({ id: workspaces.id, plan: workspaces.plan }).from(workspaces);
   for (const tenant of tenants) {
     const days = Object.hasOwn(retention, tenant.plan) ? (retention[tenant.plan] ?? 30) : 30;
@@ -39,5 +39,5 @@ export async function maintainTraces(
     }
     await db.withWorkspace(tenant.id, (tx) => acknowledgeTracePayloadDeletes(tx, deleted));
   }
-  await db.platform.execute(sql`select lookup.drop_empty_trace_partition()`);
+  await db.platform.execute(sql`select trace_maintenance.drop_empty_trace_partition()`);
 }

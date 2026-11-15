@@ -9,10 +9,14 @@ call app_internal.enable_tenant_rls('trace_payload_deletions');
 
 create index trace_spans_retention_idx on trace_spans (workspace_id, started_at);
 
+create schema trace_maintenance;
+revoke all on schema trace_maintenance from public;
+grant usage on schema trace_maintenance to app_rw;
+
 -- The worker can request current/next UTC partitions. It cannot supply table names or DDL.
-create function lookup.prepare_trace_partitions() returns void
+create function trace_maintenance.prepare_trace_partitions() returns void
 language plpgsql security definer
-set search_path = pg_catalog, public
+set search_path = pg_catalog
 as $$
 declare
   month_start date := date_trunc('month', now() at time zone 'UTC');
@@ -48,13 +52,13 @@ begin
   perform set_config('app.workspace_id', coalesce(original_scope, ''), true);
 end
 $$;
-revoke all on function lookup.prepare_trace_partitions() from public;
-grant execute on function lookup.prepare_trace_partitions() to app_rw;
+revoke all on function trace_maintenance.prepare_trace_partitions() from public;
+grant execute on function trace_maintenance.prepare_trace_partitions() to app_rw;
 
 -- Drop an old partition only after every tenant's visible slice is empty.
-create function lookup.drop_empty_trace_partition() returns void
+create function trace_maintenance.drop_empty_trace_partition() returns void
 language plpgsql security definer
-set search_path = pg_catalog, public
+set search_path = pg_catalog
 as $$
 declare
   part text;
@@ -85,5 +89,5 @@ begin
   perform set_config('app.workspace_id', coalesce(original_scope, ''), true);
 end
 $$;
-revoke all on function lookup.drop_empty_trace_partition() from public;
-grant execute on function lookup.drop_empty_trace_partition() to app_rw;
+revoke all on function trace_maintenance.drop_empty_trace_partition() from public;
+grant execute on function trace_maintenance.drop_empty_trace_partition() to app_rw;
