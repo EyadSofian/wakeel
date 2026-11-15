@@ -1,4 +1,4 @@
-import { newId } from "@wakeel/contracts";
+import { newElementId, newId } from "@wakeel/contracts";
 import pg from "pg";
 import { afterAll, beforeAll, expect, inject, test } from "vitest";
 import { createBot, createDatabase, createWorkspace, type Database, sql } from "../src/index";
@@ -20,7 +20,7 @@ async function tenant() {
   return { ws, botId: bot.id, tableId: newId("tbl"), rowId: newId("row") };
 }
 
-const columns = JSON.stringify([{ id: newId("col"), name: "order", type: "string" }]);
+const columns = JSON.stringify([{ id: newElementId("col"), name: "order", type: "string" }]);
 let a: Awaited<ReturnType<typeof tenant>>;
 let b: Awaited<ReturnType<typeof tenant>>;
 
