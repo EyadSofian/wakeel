@@ -67,9 +67,11 @@ describe("allows", () => {
 describe("repository", () => {
   const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+  // These integration checks parse the whole tree or boot TypeScript in child processes. The
+  // 5-second unit budget expires under CI's concurrent container suites before assertions run.
   test("the repository is clean", () => {
     expect(checkRepository(root)).toEqual([]);
-  });
+  }, 30_000);
 
   test("the CLI fails the build on a finding and passes a clean tree", () => {
     const dir = mkdtempSync(join(tmpdir(), "no-dynamic-code-"));
@@ -88,5 +90,5 @@ describe("repository", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 });
