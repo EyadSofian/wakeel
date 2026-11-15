@@ -1,6 +1,6 @@
 # ADR-045 — Resolve the Studio surface rules before release
 
-Status: proposed · Date: 2026-11-15 · Tasks: 0.8, 8.6 visual review
+Status: resolved by Eyad on 2026-11-15 · Date: 2026-11-15 · Tasks: 0.8, 8.6 visual review
 
 ## Context
 
@@ -37,3 +37,9 @@ continue while this decision is pending, but its visual review must keep the inh
 The correction affects the entire Studio, so changing only the Models table would hide a global
 rule conflict. A complete shared-surface screenshot review is required. The retrieval algorithm,
 contracts, tenant boundaries and production isolation requirements do not change.
+
+## Decision
+
+Eyad approved keeping the current Studio visual style and requested focused verification of
+feature flows. The current shared backdrop, blur, and surface shadows are retained. Review
+feature-specific accessibility and behavior against the existing surfaces.
