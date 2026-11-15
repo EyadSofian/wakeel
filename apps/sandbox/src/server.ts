@@ -8,6 +8,7 @@ import type { AddressInfo } from "node:net";
 import { BRAND } from "@wakeel/config/brand";
 import { AppError, ERRORS, type FieldError, formatPath, newRequestId, type Problem } from "@wakeel/contracts";
 import type { Logger } from "@wakeel/telemetry";
+import { METRICS_CONTENT_TYPE, observeMetric, renderMetrics } from "@wakeel/telemetry";
 import type { SandboxPool } from "./pool.ts";
 import { ExecRequestFrame, NDJSON_CONTENT_TYPE, ToolResultFrame } from "./protocol.ts";
 
@@ -52,6 +53,10 @@ export function createSandboxServer(options: ServerOptions): SandboxServer {
 
 async function route(options: ServerOptions, req: IncomingMessage, res: ServerResponse): Promise<void> {
   const path = (req.url ?? "/").split("?")[0];
+  if (req.method === "GET" && path === "/metrics") {
+    res.writeHead(200, { "content-type": METRICS_CONTENT_TYPE }).end(renderMetrics());
+    return;
+  }
   if (req.method === "GET" && path === "/health/live") {
     sendJson(res, 200, { status: "ok" });
     return;
@@ -120,6 +125,8 @@ async function exec(options: ServerOptions, req: IncomingMessage, res: ServerRes
     if (!res.writableFinished) controller.abort(new Error("the caller closed the exec stream"));
   });
 
+  const started = performance.now();
+  res.once("close", () => observeMetric("wakeel_sandbox_exec_seconds", {}, (performance.now() - started) / 1000));
   const running = options.pool.exec(
     {
       execId: request.execId,

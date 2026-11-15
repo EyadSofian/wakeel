@@ -3,7 +3,7 @@
  * Its environment holds only its own settings (architecture §5.3, layer 2).
  */
 import { commonEnv, loadConfigOrExit, SANDBOX_LIMITS, sandboxEnv } from "@wakeel/config";
-import { createLogger } from "@wakeel/telemetry";
+import { countMetric, createLogger } from "@wakeel/telemetry";
 import { runtimeProblem } from "./boot.ts";
 import { SandboxPool } from "./pool.ts";
 import { createSandboxServer } from "./server.ts";
@@ -18,7 +18,10 @@ if (refused) {
   const pool = new SandboxPool({
     size: config.sandboxPoolSize,
     egressUrl: config.sandboxEgressUrl,
-    onKill: ({ execId, reason }) => logger.warn({ execId, reason }, "runner killed"),
+    onKill: ({ execId, reason }) => {
+      countMetric("wakeel_sandbox_kills_total", { reason });
+      logger.warn({ execId, reason }, "runner killed");
+    },
   });
 
   try {

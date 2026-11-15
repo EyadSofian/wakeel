@@ -14,6 +14,7 @@ export interface DatabaseOptions {
   maxConnections?: number;
   applicationName?: string;
   /** Errors on idle pooled connections (for example a server restart). Defaults to stderr. */
+  onRlsDenied?: () => void;
   onIdleError?: (error: Error) => void;
 }
 
@@ -80,11 +81,24 @@ export function createDatabase(options: DatabaseOptions): Database {
       if (!WorkspaceId.safeParse(workspaceId).success) {
         throw new TypeError("withWorkspace needs a valid workspace id (ws_ followed by 26 characters).");
       }
-      return db.transaction(async (tx) => {
-        // `true` makes the setting local to this transaction, so a pooled connection never carries it over.
-        await tx.execute(sql`select set_config('app.workspace_id', ${workspaceId}, true)`);
-        return fn(tx);
-      }, config);
+      return db
+        .transaction(async (tx) => {
+          // `true` makes the setting local to this transaction, so a pooled connection never carries it over.
+          await tx.execute(sql`select set_config('app.workspace_id', ${workspaceId}, true)`);
+          return fn(tx);
+        }, config)
+        .catch((error: unknown) => {
+          let source = error;
+          while (source instanceof Error && source.cause) source = source.cause;
+          if (
+            source instanceof Error &&
+            "code" in source &&
+            source.code === "42501" &&
+            source.message.includes("row-level security")
+          )
+            options.onRlsDenied?.();
+          throw error;
+        });
     },
 
     async verify() {

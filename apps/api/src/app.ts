@@ -1,5 +1,5 @@
 import { AppError, newRequestId, REQUEST_ID_PATTERN } from "@wakeel/contracts";
-import type { Logger } from "@wakeel/telemetry";
+import { type Logger, METRICS_CONTENT_TYPE, renderMetrics } from "@wakeel/telemetry";
 import Fastify from "fastify";
 import { PROBLEM_CONTENT_TYPE, toAppError, toProblem } from "./problem";
 import { apiKeyRoutes } from "./routes/api-keys";
@@ -111,6 +111,7 @@ export function buildApp(options: AppOptions) {
   // Route groups mount here as phases add them: Studio API under /v1/workspaces (roles studio, all),
   // Bridge API under /v1/bridge (roles bridge, all).
   app.decorate("role", options.role);
+  app.get("/metrics", (_request, reply) => reply.type(METRICS_CONTENT_TYPE).send(renderMetrics()));
 
   if (options.studio && options.role !== "bridge") {
     const deps: StudioDeps = { ...options.studio, now: options.studio.now ?? (() => new Date()) };

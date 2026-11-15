@@ -48,7 +48,14 @@ import {
   type TurnResult,
   toStepError,
 } from "@wakeel/engine";
-import { type Logger, type TraceBefore, TraceBuilder, type TraceContext } from "@wakeel/telemetry";
+import {
+  countMetric,
+  type Logger,
+  observeMetric,
+  type TraceBefore,
+  TraceBuilder,
+  type TraceContext,
+} from "@wakeel/telemetry";
 import type { AutonomyTurn } from "./autonomy";
 import { eventScope, isTextMessage } from "./event-scope";
 import { botMessageId } from "./message-id";
@@ -171,7 +178,10 @@ export async function drainConversation(deps: TurnDeps, conversationId: string):
     const epoch = await deps.db.withWorkspace(workspaceId, (tx) =>
       acquireConversationLease(tx, conversationId, deps.owner, leaseMs),
     );
-    if (epoch === undefined) return { turns: total, stopped: "leased_elsewhere" };
+    if (epoch === undefined) {
+      countMetric("wakeel_lease_contention_total");
+      return { turns: total, stopped: "leased_elsewhere" };
+    }
     const run = new ConversationRun(deps, workspaceId, conversationId, epoch);
     const outcome = await run.drain();
     total += outcome.turns;
@@ -444,6 +454,7 @@ class ConversationRun {
       });
     }
 
+    observeMetric("wakeel_turn_duration_seconds", { mode: modelTurn.mode }, durationMs / 1000);
     await this.#writeSpans(
       this.#trace.turnFinished(
         { status: result?.status ?? "failed", stepSeq: result?.stepSeq ?? turn.stepCount },
@@ -505,6 +516,7 @@ class ConversationRun {
         );
       } else await this.#tx((tx) => upsertSpans(tx, spans));
     } catch {
+      countMetric("wakeel_trace_failures_total", { reason: "write" });
       this.#log.warn({ spans: spans.length, code: "trace_write_failed" }, "trace spans were not written");
     }
   }

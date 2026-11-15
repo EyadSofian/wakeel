@@ -16,7 +16,7 @@ import {
 import { createDatabase, s3ObjectStore } from "@wakeel/db";
 import { createLlm } from "@wakeel/llm";
 import { recordUsage, rerankThroughEgress, workspaceCredentials } from "@wakeel/retrieval/service";
-import { createLogger } from "@wakeel/telemetry";
+import { countMetric, createLogger } from "@wakeel/telemetry";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import { buildApp } from "./app";
@@ -36,7 +36,11 @@ const config = loadConfigOrExit({
 });
 if (config) {
   const logger = createLogger({ service: "api", level: config.logLevel });
-  const db = createDatabase({ url: config.databaseUrl, applicationName: "wakeel-api" });
+  const db = createDatabase({
+    url: config.databaseUrl,
+    applicationName: "wakeel-api",
+    onRlsDenied: () => countMetric("wakeel_rls_denied_total"),
+  });
   const redis = new Redis(config.redisUrl.reveal(), { lazyConnect: true, maxRetriesPerRequest: 1 });
 
   try {
@@ -77,6 +81,7 @@ if (config) {
   });
   const syncQueue = new Queue("kb-sync", { connection: { url: redisUrl, maxRetriesPerRequest: null } });
   const llm = createLlm({
+    onError: (provider) => countMetric("wakeel_llm_errors_total", { provider }),
     credentials: workspaceCredentials(db, keyring),
     onUsage: recordUsage(db),
     rerankFetch: rerankThroughEgress({ egressUrl: config.egressUrl, egressToken: config.egressToken.reveal() }),

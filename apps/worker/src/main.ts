@@ -24,7 +24,7 @@ import {
   createExpressionPort,
   createSandboxClient,
 } from "@wakeel/sandbox-client";
-import { createLogger } from "@wakeel/telemetry";
+import { countMetric, createLogger, gaugeMetric, startMetricsServer } from "@wakeel/telemetry";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import {
@@ -69,7 +69,11 @@ const config = loadConfigOrExit({
 if (config) {
   const logger = createLogger({ service: "worker", level: config.logLevel });
   const redisUrl = config.redisUrl.reveal();
-  const db = createDatabase({ url: config.databaseUrl, applicationName: "wakeel-worker" });
+  const db = createDatabase({
+    url: config.databaseUrl,
+    applicationName: "wakeel-worker",
+    onRlsDenied: () => countMetric("wakeel_rls_denied_total"),
+  });
   try {
     await db.verify();
   } catch (err) {
@@ -102,6 +106,7 @@ if (config) {
   // The model layer (task 6.1): workspace keys only, one usage event per call.
   const usage = recordUsage(db);
   const llm = createLlm({
+    onError: (provider) => countMetric("wakeel_llm_errors_total", { provider }),
     credentials: workspaceCredentials(db, keyring),
     rerankFetch: rerankThroughEgress({ egressUrl: config.egressUrl, egressToken: config.egressToken.reveal() }),
     onUsage: (e) => usage(e).catch((err: unknown) => logger.error({ err, model: e.model }, "usage event not written")),
@@ -264,7 +269,15 @@ if (config) {
   const keepAlive = running.consuming.length === 0 ? setInterval(() => undefined, 60_000) : undefined;
   if (keepAlive) logger.warn({ idle: running.idle }, "no selected queue has a processor; staying up and idle");
 
+  const stopMetrics = await startMetricsServer(config.metricsPort, async () => {
+    for (const queue of [turnQueue, maintenanceQueue, webhookQueue, ingestQueue, syncQueue]) {
+      const counts = await queue.getJobCounts("waiting", "active", "delayed", "failed");
+      for (const [status, value] of Object.entries(counts))
+        gaugeMetric("wakeel_queue_depth", { queue: queue.name, status }, value);
+    }
+  });
   const shutdown = async (signal: string) => {
+    await stopMetrics();
     logger.info({ signal }, "shutting down; waiting for jobs in flight");
     if (keepAlive) clearInterval(keepAlive);
     await running.close();

@@ -12,7 +12,7 @@ import {
   recordAttempt,
 } from "@wakeel/db";
 import type { ClockPort } from "@wakeel/engine";
-import { audit, type Logger } from "@wakeel/telemetry";
+import { audit, countMetric, type Logger } from "@wakeel/telemetry";
 import { retryAt } from "./schedule";
 
 /**
@@ -172,6 +172,7 @@ async function attempt(
       error: { code: result.code, ...(result.detail ? { detail: result.detail } : {}) },
     });
   }
+  countMetric("wakeel_webhook_attempts_total", { status: outcome.status });
   await record(deps, log, workspaceId, stream, delivery, outcome);
   return true;
 }
