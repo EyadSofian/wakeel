@@ -18,8 +18,8 @@ export interface ObjectStore {
   /** Size and type of a stored object, or undefined when there is none. */
   head(key: string): Promise<{ size: number; mime: string | undefined } | undefined>;
   get(key: string): Promise<Uint8Array>;
-  put(key: string, body: Uint8Array, mime: string): Promise<void>;
-  delete(key: string): Promise<void>;
+  put(key: string, body: Uint8Array, mime: string, options?: { signal: AbortSignal }): Promise<void>;
+  delete(key: string, options?: { signal: AbortSignal }): Promise<void>;
 }
 
 export interface S3StoreConfig {
@@ -78,11 +78,13 @@ export function s3ObjectStore(c: S3StoreConfig): ObjectStore {
       const r = await inner.send(new GetObjectCommand({ Bucket: c.bucket, Key: key }));
       return r.Body ? await r.Body.transformToByteArray() : new Uint8Array();
     },
-    async put(key, body, mime) {
-      await inner.send(new PutObjectCommand({ Bucket: c.bucket, Key: key, Body: body, ContentType: mime }));
+    async put(key, body, mime, options) {
+      await inner.send(new PutObjectCommand({ Bucket: c.bucket, Key: key, Body: body, ContentType: mime }), {
+        abortSignal: options?.signal,
+      });
     },
-    async delete(key) {
-      await inner.send(new DeleteObjectCommand({ Bucket: c.bucket, Key: key }));
+    async delete(key, options) {
+      await inner.send(new DeleteObjectCommand({ Bucket: c.bucket, Key: key }), { abortSignal: options?.signal });
     },
   };
 }

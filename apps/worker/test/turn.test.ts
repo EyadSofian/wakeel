@@ -16,12 +16,14 @@ import {
   getDraftDoc,
   type Keyring,
   listDraftDocs,
+  memoryObjectStore,
   publishDraft,
   putConfigValue,
   replaceChunks,
   saveDraftDoc,
   sql,
   startTurn,
+  tracePayloadKey,
   updateDocument,
   updateWorkspace,
   upsertDocument,
@@ -49,6 +51,7 @@ import {
   turnProcessor,
 } from "../src/turn/index";
 import { turnTables } from "../src/turn/tables";
+import { maintainTraces } from "../src/turn/trace-retention";
 import { startWorkers } from "../src/workers";
 
 /**
@@ -1524,4 +1527,62 @@ test("table runtime mutations do not repeat across retries or run against live d
   ).rejects.toThrow();
   const read = { ...request, operation: "find" as const, input: { search: "مرتجع ORD 12" } };
   expect(await turnTables(db, { ...base, mode: "emulator" }, () => {}).execute(read)).toEqual([inserted]);
+});
+
+test("redacts large Arabic trace payloads, scopes the reference and retries expiry", async () => {
+  const secret = "trace-test-canary";
+  const text = "فاتورة ORD-12 ".repeat(1200);
+  const c = await seed([card({ type: "code", source: `// ${text}` })]);
+  const other = await seed([]);
+  const store = memoryObjectStore();
+  await send(c, "مرحبا");
+  const code: CodePort = { run: async () => ({ ...ok(), logs: [{ level: "info", args: [secret, text] }] }) };
+  await drainConversation(
+    deps({ code, traceStore: store, tracePiiPatterns: [/trace-test-canary/gu] }).d,
+    c.conversationId,
+  );
+  const spans = await query<{ id: string; turn_id: string; attrs: unknown; payload_key: string | null }>(
+    "select id, turn_id, attrs, payload_key from trace_spans where conversation_id = $1 and kind = 'code.exec'",
+    [c.conversationId],
+  );
+  const span = spans[0];
+  if (!span?.payload_key) throw new Error("Code span is missing its payload bundle");
+  const payload = new TextDecoder().decode(await store.get(span.payload_key));
+  expect(JSON.parse(payload)).toMatchObject({ source: `// ${text}`, logs: [{ message: "[redacted]", data: [text] }] });
+  expect(JSON.stringify([span.attrs, payload])).not.toContain(secret);
+  expect(await db.withWorkspace(c.ws, (tx) => tracePayloadKey(tx, span.turn_id, span.id, "logs"))).toBe(
+    span.payload_key,
+  );
+  expect(await db.withWorkspace(other.ws, (tx) => tracePayloadKey(tx, span.turn_id, span.id, "logs"))).toBeUndefined();
+
+  await su("update trace_spans set started_at = $1 where conversation_id = $2", [
+    new Date(Date.now() - 31 * 86_400_000),
+    c.conversationId,
+  ]);
+  const later = new Date();
+  let failed = 0;
+  await maintainTraces(
+    db,
+    {
+      delete: async () => {
+        throw new Error("test store temporarily unavailable");
+      },
+    },
+    later,
+    {},
+    () => {
+      failed++;
+    },
+  );
+  expect(failed).toBeGreaterThan(0);
+  expect(store.objects.has(span.payload_key)).toBe(true);
+  await maintainTraces(db, store, later, {}, () => {
+    throw new Error("retry should succeed");
+  });
+  expect(store.objects.has(span.payload_key)).toBe(false);
+  const partitions = await query<{ next_month: string | null }>(
+    "select to_regclass('public.trace_spans_' || to_char(date_trunc('month', now() at time zone 'UTC') + interval '1 month', 'YYYY_MM'))::text as next_month",
+    [],
+  );
+  expect(partitions[0]?.next_month).toMatch(/^trace_spans_/);
 });

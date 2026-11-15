@@ -291,7 +291,7 @@ describe("lookups (ADR-015)", () => {
     }
   });
 
-  test("every security definer function is owned by app_lookup, pins search_path and is not public", async () => {
+  test("every security definer function has a reviewed owner and pinned search path", async () => {
     const { rows } = await query(
       urls.superuser,
       `select p.oid::regprocedure::text as fn, pg_get_userbyid(p.proowner) as owner, p.proconfig as config,
@@ -300,10 +300,16 @@ describe("lookups (ADR-015)", () => {
        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where p.prosecdef and n.nspname not in ('pg_catalog', 'information_schema')`,
     );
-    expect(rows.length).toBe(8);
+    const maintenance = new Set([
+      "trace_maintenance.prepare_trace_partitions()",
+      "trace_maintenance.drop_empty_trace_partition()",
+    ]);
+    expect(rows.filter((row) => maintenance.has(row.fn))).toHaveLength(2);
+    expect(rows.filter((row) => !maintenance.has(row.fn))).toHaveLength(8);
     for (const r of rows) {
-      expect(r, r.fn).toMatchObject({ owner: "app_lookup", public_exec: false, rw_exec: true });
-      expect(r.config).toEqual(["search_path=pg_catalog, public"]);
+      const ddl = maintenance.has(r.fn);
+      expect(r, r.fn).toMatchObject({ owner: ddl ? "app_migrator" : "app_lookup", public_exec: false, rw_exec: true });
+      expect(r.config).toEqual([ddl ? "search_path=pg_catalog" : "search_path=pg_catalog, public"]);
     }
   });
 
