@@ -1,5 +1,15 @@
 import { z } from "zod";
-import { DisplayName, Json } from "./common";
+import {
+  ConversationId,
+  DisplayName,
+  EvalCaseId,
+  EvalRunId,
+  EvalSuiteId,
+  IsoDateTime,
+  Json,
+  TurnId,
+  VersionId,
+} from "./common";
 import { UserData } from "./event";
 
 const Matcher = z.union([
@@ -62,16 +72,45 @@ export const EvalCase = z.object({
 });
 export type EvalCase = z.infer<typeof EvalCase>;
 
+export const EvalTurnResult = z.object({
+  index: z.number().int().nonnegative(),
+  turnId: z.string().optional(),
+  conversationId: ConversationId.optional(),
+  silencePassed: z.boolean().optional(),
+  assertions: z.array(z.object({ assertion: Assertion, passed: z.boolean(), detail: z.string().optional() })),
+});
+export type EvalTurnResult = z.infer<typeof EvalTurnResult>;
 export const EvalResult = z.object({
   status: z.enum(["passed", "failed", "error"]),
-  turns: z.array(
-    z.object({
-      index: z.number().int().nonnegative(),
-      turnId: z.string().optional(),
-      assertions: z.array(z.object({ assertion: Assertion, passed: z.boolean(), detail: z.string().optional() })),
-    }),
-  ),
+  turns: z.array(EvalTurnResult),
   conversationId: z.string().optional(),
   durationMs: z.number().int().nonnegative(),
+  errorCode: z.string().optional(),
 });
 export type EvalResult = z.infer<typeof EvalResult>;
+
+export const EvalTarget = z.union([
+  z.strictObject({ kind: z.literal("draft") }),
+  z.strictObject({ kind: z.literal("version"), versionId: VersionId }),
+]);
+export type EvalTarget = z.infer<typeof EvalTarget>;
+export const NewEvalSuite = z.strictObject({ name: DisplayName });
+export const EvalSuite = NewEvalSuite.extend({ id: EvalSuiteId, revision: z.number().int().positive() });
+export const EvalCaseEntry = z.object({ id: EvalCaseId, script: EvalCase, revision: z.number().int().positive() });
+export const EvalRun = z.object({
+  id: EvalRunId,
+  suiteId: EvalSuiteId,
+  target: EvalTarget,
+  status: z.enum(["queued", "running", "passed", "failed", "error"]),
+  createdAt: IsoDateTime,
+});
+export const EvalRunDetail = EvalRun.extend({
+  cases: z.array(EvalCaseEntry),
+  results: z.array(z.object({ caseId: EvalCaseId, result: EvalResult })),
+});
+export const EvalTurnReceipt = z.object({ conversationId: ConversationId, turnId: TurnId });
+export const EvalPublishStatus = z.object({
+  passed: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  errors: z.number().int().nonnegative(),
+});

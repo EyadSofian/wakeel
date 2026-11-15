@@ -1,0 +1,66 @@
+[
+  {
+    "id": "evt_01m7a256m01rx8cmtzp1vm4byf",
+    "apiVersion": "2026-11-01",
+    "type": "message.created",
+    "createdAt": "2026-11-13T09:00:01.250Z",
+    "connectionId": "conn_01m7a256m055cb8h12kk2gmcpd",
+    "botId": "bot_01m7a256m0a13warwhczsjhx9g",
+    "conversation": { "id": "conv_01m7a256m04g9xyrpss87k6qf9", "externalId": "chatwoot:4512" },
+    "user": { "id": "eu_01m7a256m0wvf791beejhptbe5", "externalId": "contact:88" },
+    "turnId": "turn_01m7a256m0a8whvs28j0cdzm8d",
+    "seq": 3,
+    "data": {
+      "message": {
+        "id": "msg_01m7a256m0xb4g5v3v7remeqyf",
+        "conversationId": "conv_01m7a256m04g9xyrpss87k6qf9",
+        "seq": 7,
+        "direction": "out",
+        "payload": {
+          "type": "text",
+          "text": "طلبك رقم ٤٥١٢٣ في الطريق، وسيصل خلال ٣ أيام عمل [1]. Tracking: https://track.example.com/45123",
+          "format": "markdown"
+        },
+        "citations": [
+          {
+            "index": 1,
+            "documentId": "doc_01m7a256m06dt8rze1qhvgt28d",
+            "chunkId": "chk_01m7a256m0sw8gbp0en86nc8sq",
+            "title": "سياسة الشحن",
+            "snippet": "مدة التوصيل داخل القاهرة من يومين إلى ثلاثة أيام عمل."
+          }
+        ],
+        "turnId": "turn_01m7a256m0a8whvs28j0cdzm8d",
+        "createdAt": "2026-11-13T09:00:01.200Z"
+      }
+    }
+  },
+  {
+    "id": "evt_01m7a256m01rx8cmtzp1vm4byf",
+    "apiVersion": "2026-11-01",
+    "type": "handoff.requested",
+    "createdAt": "2026-11-13T09:02:00+02:00",
+    "connectionId": "conn_01m7a256m055cb8h12kk2gmcpd",
+    "botId": "bot_01m7a256m0a13warwhczsjhx9g",
+    "conversation": { "id": "conv_01m7a256m04g9xyrpss87k6qf9", "externalId": "chatwoot:4512" },
+    "user": { "id": "eu_01m7a256m0wvf791beejhptbe5", "externalId": "contact:88" },
+    "seq": 4,
+    "data": {
+      "reason": "العميل طلب التحدث مع موظف",
+      "summary": "العميل يسأل عن طلب متأخر رقم 45123 ويريد استرداد المبلغ.",
+      "variables": { "orderId": "45123" }
+    }
+  },
+  {
+    "id": "evt_01m7a256m01rx8cmtzp1vm4byf",
+    "apiVersion": "2026-11-01",
+    "type": "typing",
+    "createdAt": "2026-11-13T09:00:00.900Z",
+    "connectionId": "conn_01m7a256m055cb8h12kk2gmcpd",
+    "botId": "bot_01m7a256m0a13warwhczsjhx9g",
+    "conversation": { "id": "conv_01m7a256m04g9xyrpss87k6qf9", "externalId": "chatwoot:4512" },
+    "user": { "id": "eu_01m7a256m0wvf791beejhptbe5", "externalId": "contact:88" },
+    "ephemeral": true,
+    "data": { "state": "on" }
+  }
+]

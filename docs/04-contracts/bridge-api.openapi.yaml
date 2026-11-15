@@ -162,6 +162,7 @@ paths:
               schema: { $ref: "#/components/schemas/Accepted" }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
     get:
       tags: [Delivery]
       operationId: listConversationEvents
@@ -363,6 +364,7 @@ paths:
         "202":
           description: Queued.
         "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
 
   /connection:
     get:
@@ -998,3 +1000,10 @@ components:
               path: { type: string }
               code: { type: string }
               message: { type: string }
+        current:
+          type: object
+          description: Only on `revision_conflict` (Studio API). The server's copy of the document.
+          required: [rev, doc]
+          properties:
+            rev: { type: integer }
+            doc: { description: The document as stored. }

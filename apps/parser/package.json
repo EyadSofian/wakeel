@@ -1,0 +1,14 @@
+{
+  "name": "@wakeel/parser",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "uv run --frozen uvicorn wakeel_parser.app:app --host 127.0.0.1 --port 4500",
+    "test": "uv run --frozen pytest -q",
+    "fixtures": "tsx tests/fixtures/generate.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0"
+  }
+}

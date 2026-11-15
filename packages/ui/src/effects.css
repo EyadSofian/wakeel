@@ -1,0 +1,201 @@
+/*
+ * ADR-033: glass on floating surfaces, depth on cards, press feedback and the live run path. Every
+ * value is a token from tokens.css; removing one effect means removing one class here.
+ *
+ * Transforms use the individual `translate` and `scale` properties so they never fight Motion, which
+ * owns `transform` on the elements it animates.
+ */
+
+/* The app backdrop: two faint accent tints that give glass something to show. Never moves. */
+.wk-ambient {
+  background-color: var(--bg-canvas);
+  background-image: var(--ambient-a), var(--ambient-b), var(--ambient-c);
+  background-attachment: fixed;
+}
+
+/* A floating surface: menus, pickers, popovers, the canvas toolbar and zoom, the minimap. */
+.wk-glass {
+  background-color: var(--glass-surface);
+  border-color: var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--shadow-pop);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* The strongest float: dialogs, the shortcut sheet. More opaque, the modal shadow. */
+.wk-glass-strong {
+  background-color: var(--glass-surface-strong);
+  border-color: var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--shadow-modal);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* A content block resting on the backdrop (tables, empty states): nearly opaque, so text contrast
+   stays as measured, with the glass edge. */
+.wk-panel {
+  background-color: var(--glass-surface-strong);
+  border-color: var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--shadow-node);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* A bar docked over the ambient backdrop: the top bar and the rail. */
+.wk-glass-bar {
+  background-color: var(--glass-surface);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+.wk-scrim-blur {
+  -webkit-backdrop-filter: blur(var(--scrim-blur));
+  backdrop-filter: blur(var(--scrim-blur));
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .wk-glass,
+  .wk-glass-bar {
+    background-color: var(--bg-surface);
+  }
+  .wk-glass-strong,
+  .wk-panel {
+    background-color: var(--bg-surface);
+  }
+}
+
+/* Press feedback for buttons and clickable tiles: a short shrink while held. */
+.wk-press {
+  transition-property: color, background-color, border-color, box-shadow, scale, translate;
+  transition-duration: var(--duration-instant);
+  transition-timing-function: var(--ease-out);
+}
+.wk-press:active:not(:disabled) {
+  scale: var(--press-scale);
+}
+
+/* The primary button: a hairline of light on top, a lift on hover. */
+.wk-primary {
+  box-shadow: var(--shadow-press);
+}
+.wk-primary:hover:not(:disabled) {
+  translate: 0 var(--lift);
+  box-shadow: var(--shadow-press), var(--shadow-lift);
+}
+.wk-primary:active:not(:disabled) {
+  translate: 0 0;
+}
+
+/* Cards that can be picked up or opened lift toward the pointer. */
+.wk-lift {
+  transition-property: translate, box-shadow, border-color, background-color;
+  transition-duration: var(--duration-base);
+  transition-timing-function: var(--ease-out);
+}
+.wk-lift:hover {
+  translate: 0 var(--lift);
+  box-shadow: var(--shadow-lift);
+}
+
+/* The selected node: the accent halo next to its outline. */
+.wk-halo,
+.wk-lift.wk-halo:hover {
+  box-shadow: var(--shadow-halo);
+}
+
+/* A tile that leans toward the pointer; useTilt writes --tilt-x and --tilt-y. */
+.wk-tilt {
+  transform: perspective(var(--size-tilt-perspective)) rotateX(var(--tilt-y, 0deg)) rotateY(var(--tilt-x, 0deg));
+  transform-style: preserve-3d;
+  transition: transform var(--duration-base) var(--ease-out);
+  will-change: transform;
+}
+
+/* The run overlay: transitions the last test followed flow in the direction they were taken. */
+.wk-edge-ran {
+  stroke-dasharray: var(--run-dash) var(--run-dash);
+  animation: wk-flow var(--run-loop) linear infinite;
+}
+@keyframes wk-flow {
+  to {
+    stroke-dashoffset: calc(-2 * var(--run-dash));
+  }
+}
+
+/* Nodes the last test went through: one sweep of light around the border, then a quiet ring. */
+@property --wk-sweep-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+.wk-ran-node {
+  position: relative;
+  border-color: var(--accent-border);
+}
+.wk-ran-node::after {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--size-hairline));
+  padding: var(--size-focus-ring);
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--wk-sweep-angle),
+    transparent 0turn,
+    transparent 0.7turn,
+    var(--run-sweep) 0.9turn,
+    transparent 1turn
+  );
+  mask:
+    linear-gradient(black 0 0) content-box,
+    linear-gradient(black 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0;
+  animation: wk-sweep var(--sweep-duration) var(--ease-out) 1;
+}
+@keyframes wk-sweep {
+  0% {
+    --wk-sweep-angle: 0deg;
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    --wk-sweep-angle: 360deg;
+    opacity: 0;
+  }
+}
+
+/* Lists that enter: each item rises in, staggered by --wk-index (set by the list, capped at 8). */
+.wk-enter {
+  animation: wk-rise var(--duration-slower) var(--ease-out) both;
+  animation-delay: calc(min(var(--wk-index, 0), 8) * var(--stagger-each));
+}
+@keyframes wk-rise {
+  from {
+    opacity: 0;
+    translate: 0 var(--travel);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wk-edge-ran {
+    animation: none;
+  }
+  .wk-ran-node::after {
+    animation: none;
+  }
+  .wk-tilt {
+    transform: none;
+  }
+  .wk-enter {
+    animation: none;
+  }
+}

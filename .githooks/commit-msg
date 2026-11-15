@@ -1,0 +1,21 @@
+#!/bin/sh
+# Subject line: imperative, at most 72 characters, no trailing full stop (CLAUDE.md §2.7).
+subject=$(head -n 1 "$1")
+case "$subject" in
+  Merge*|Revert*|fixup!*|squash!*) exit 0 ;;
+esac
+if [ -z "$subject" ]; then
+  echo "commit-msg: the subject line is empty. Write an imperative summary, for example \"Add egress proxy\"." >&2
+  exit 1
+fi
+if [ "${#subject}" -gt 72 ]; then
+  echo "commit-msg: the subject is ${#subject} characters. Shorten it to 72 or fewer and move detail to the body." >&2
+  exit 1
+fi
+case "$subject" in
+  *.)
+    echo "commit-msg: the subject ends with a full stop. Remove it." >&2
+    exit 1
+    ;;
+esac
+exit 0

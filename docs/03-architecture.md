@@ -80,12 +80,12 @@ Dependency rule: `engine` and `autonomy` import only `contracts` and declare por
 - Row-level security is enabled and **forced** on every tenant-owned table: `using (workspace_id = current_setting('app.workspace_id', true))` and the same `with check`.
 - Database roles: `app_migrator` (owns objects, used only by migrations), `app_rw` (used by api and worker; `NOBYPASSRLS`, no DDL), `app_admin_ro` (support tooling; read-only, still RLS-bound unless a break-glass function is called and audited).
 - All tenant queries run through `withWorkspace(workspaceId, fn)` in `packages/db`, which opens a transaction and issues `select set_config('app.workspace_id', $1, true)`. A lint rule forbids importing the raw pool outside `packages/db`.
-- Cross-tenant lookups that must happen before the workspace is known (API key prefix → workspace, session → memberships, bridge key → connection) go through `security definer` functions that return only the ids needed.
+- Cross-tenant lookups that must happen before the workspace is known (API key prefix → workspace, session → memberships, bridge key → connection) go through `security definer` functions owned by the `nologin bypassrls` role `app_lookup` that return only the ids needed (ADR-015).
 - Test harness: every repository test runs twice, once as tenant A and once as tenant B, and asserts B sees nothing of A.
 
 ### 2.2 Identifiers (ADR-012)
 
-- Database and API ids are `text`: `<prefix>_<ULID lowercase>`, generated in the application. Prefixes: `ws usr mem inv key bot ver conn eu conv msg evt turn out dlv span use kb src doc chk tbl row suite case run file aud`.
+- Database and API ids are `text`: `<prefix>_<ULID lowercase>`, generated in the application. Prefixes: `ws usr ses acc vrf mem inv key sec bot ver conn eu conv msg evt turn out dlv span use kb src doc chk tbl row suite case run file aud`.
 - Ids inside a bot definition (workflow, node, card, edge, variable, tool, exit) are `<prefix>_<10-char nanoid>`, unique within the bot, and never reused.
 
 ### 2.3 Tables
@@ -93,8 +93,10 @@ Dependency rule: `engine` and `autonomy` import only `contracts` and declare por
 All have `created_at`; mutable ones have `updated_at`. `W` = has `workspace_id` + RLS.
 
 **Platform**
-- `users(id, email citext unique, name, password_hash, email_verified_at, locale)`
-- `sessions(id, user_id, token_hash, expires_at, ip, user_agent)`
+- `users(id, email citext unique, name, email_verified boolean, image?, locale)` — auth tables follow better-auth (ADR-015)
+- `sessions(id, user_id, token unique, expires_at, ip_address?, user_agent?)` — the cookie carries the token signed with `AUTH_SECRET`
+- `accounts(id, user_id, provider_id, account_id, password?, access_token?, refresh_token?, id_token?, access_token_expires_at?, refresh_token_expires_at?, scope?)` unique `(provider_id, account_id)`; the password hash lives here
+- `verifications(id, identifier, value, expires_at)`
 - `workspaces(id, name, slug unique, plan, region, settings jsonb)`
 - `memberships W (id, user_id, role)` role ∈ `owner | admin | builder | viewer`; unique `(workspace_id, user_id)`
 - `invitations W (id, email, role, token_hash, expires_at, accepted_at)`
@@ -112,11 +114,11 @@ All have `created_at`; mutable ones have `updated_at`. `W` = has `workspace_id` 
 - `bridge_connections W (id, bot_id, name, target, webhook_url?, signing_secrets jsonb(ciphertext[]), subscribed_events text[], status, consecutive_dead int)` target ∈ `production | draft`; status ∈ `active | paused | disabled`
 - `end_users W (id, bot_id, connection_id, external_id, attributes jsonb, vars jsonb)` unique `(connection_id, external_id)`
 - `conversations W (id, bot_id, connection_id, end_user_id, external_id, mode, status, version_id, state jsonb, state_bytes int, next_in_seq bigint, next_out_seq bigint, lease_owner, lease_until, lease_epoch bigint, last_activity_at, expires_at, ended_at, ended_reason, handoff jsonb)` unique `(connection_id, external_id)`; mode ∈ `live | emulator | eval`
-- `inbound_events W (id, conversation_id, seq bigint, kind, payload jsonb, idempotency_key?, received_at, processed_at?, turn_id?)` unique `(conversation_id, seq)`, unique `(connection_id, idempotency_key)`
+- `inbound_events W (id, connection_id, conversation_id, seq bigint, kind, payload jsonb, idempotency_key?, received_at, processed_at?, turn_id?)` unique `(conversation_id, seq)`, unique `(connection_id, idempotency_key)`
 - `turns W (id, conversation_id, bot_id, version_id, trigger_event_id, status, step_count, usage jsonb, error jsonb, started_at, ended_at)`
 - `messages W (id, conversation_id, seq bigint, direction, type, payload jsonb, citations jsonb, turn_id?, external_id?)` direction ∈ `in | out`
 - `outbox_events W (id, connection_id, conversation_id, seq bigint?, type, payload jsonb, ephemeral bool)` 
-- `webhook_deliveries W (id, outbox_event_id, attempt int, status, next_attempt_at, response_status?, error?, duration_ms?)` status ∈ `pending | delivered | failed | dead`
+- `webhook_deliveries W (id, connection_id, conversation_id, outbox_event_id, seq?, ephemeral, attempt int, status, next_attempt_at, lease_until?, attempted_at?, response_status?, error jsonb?, duration_ms?)` status ∈ `pending | delivered | failed | dead`; one row per attempt, created with the outbox row (ADR-028)
 
 **Knowledge and tables**
 - `knowledge_bases W (id, bot_id, name, description, embedding_model, embedding_dims, index_version int, settings jsonb)`
@@ -129,7 +131,7 @@ All have `created_at`; mutable ones have `updated_at`. `W` = has `workspace_id` 
 
 **Observability, metering, evals**
 - `trace_spans W (id, bot_id, conversation_id, turn_id, parent_id?, seq int, kind, name, status, started_at, duration_ms, attrs jsonb, payload_key?)` range-partitioned monthly on `started_at`
-- `usage_events W (id, bot_id?, kind, quantity numeric, unit, model?, cost_micro_usd bigint, mode, conversation_id?, turn_id?, at)` range-partitioned monthly; `usage_daily W (day, bot_id, kind, model, mode, quantity, cost_micro_usd)`
+- `usage_events W (id, bot_id?, kind, quantity numeric, unit, model?, cost_micro_usd bigint, mode, conversation_id?, turn_id?, detail jsonb, at)` range-partitioned monthly; `usage_daily W (day, bot_id, kind, model, mode, quantity, cost_micro_usd)`
 - `eval_suites W`, `eval_cases W (suite_id, name, script jsonb)`, `eval_runs W (suite_id, target, status, summary jsonb)`, `eval_results W (run_id, case_id, status, detail jsonb, conversation_id)`
 - `files W (id, bot_id?, purpose, key, mime, size, sha256)`
 
@@ -198,6 +200,7 @@ Applying the inbound event:
 | Event | State | Effect |
 |---|---|---|
 | `user_update` | any | merge `end_users.attributes`; no steps run |
+| `message` or custom `event` | session not started (`state.started` absent: a new conversation, or after `ended`) | after the row below applies, set `started` and, if Main has a Trigger with `on.kind = "conversation_started"`, push it on top so its path runs first (ADR-027) |
 | `message` | `handed_off` | record only |
 | `message` | `ended` | start a new session: reset state to `idle`, then as below |
 | `message` | `idle` | push Main workflow at Start |
@@ -208,6 +211,8 @@ Applying the inbound event:
 | `tool_result` | `waiting_external` | resume the suspended tool call |
 | `handoff_release` | `handed_off` | status `idle`; run Trigger `handoff_released` if present |
 | `timeout` (janitor) | `waiting_*` | run the Main workflow's Trigger node with `on.kind = "inactivity"` if one exists, else end with reason `inactivity` |
+| `run_from` (emulator only, ADR-025) | any | clear the stack and any wait, push a frame at `payload.nodeId` in `payload.workflowId`, run; an unknown node fails with `not_found` |
+| `end` (`endConversation`, ADR-029) | any except `ended` | end with reason `manual`: clear the stack, wait and handoff; keep user variables; emit `conversation.ended` |
 
 Step loop: execute the card at the top frame's cursor. A card returns exactly one outcome:
 
@@ -397,7 +402,7 @@ Authenticated by a bridge key (`Authorization: Bearer wk_bridge_…`). Messages 
 
 ### 9.3 Sync and streaming
 - `?wait=<seconds>` (max 55) on the inbound call holds the request until the turn completes and returns the bot's messages and events for that turn. On timeout it returns `202` with `turnId`; the rest arrives by webhook or `GET /turns/{turnId}`.
-- `Accept: text/event-stream` streams the same events as SSE. The emulator uses this.
+- `Accept: text/event-stream` streams the same events as SSE. The emulator uses this, through Studio routes that run the same inbound path for a draft connection per builder session (ADR-025).
 - Webhooks, when configured, are still sent in sync mode; each event carries `turnId` so a caller can de-duplicate.
 
 ### 9.4 Handoff

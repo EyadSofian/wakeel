@@ -1,0 +1,21 @@
+{
+  "name": "@wakeel/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@wakeel/config": "workspace:*",
+    "@wakeel/contracts": "workspace:*",
+    "@wakeel/db": "workspace:*",
+    "better-auth": "1.7.23",
+    "ioredis": "6.0.0",
+    "zod": "4.6.7"
+  }
+}

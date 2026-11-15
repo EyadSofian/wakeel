@@ -1,0 +1,17 @@
+{
+  "name": "@wakeel/tools",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@wakeel/contracts": "workspace:*",
+    "@wakeel/llm": "workspace:*",
+    "@wakeel/sandbox-client": "workspace:*",
+    "@wakeel/db": "workspace:*",
+    "@wakeel/retrieval": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}

@@ -1,0 +1,57 @@
+name: retrieval evals
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 2 * * *"
+  push:
+    branches: [main]
+    paths:
+      - packages/retrieval/**
+      - packages/db/src/repos/search.ts
+      - packages/llm/**
+      - tools/evals-retrieval.ts
+
+permissions:
+  contents: read
+
+concurrency:
+  group: retrieval-evals
+  cancel-in-progress: false
+
+jobs:
+  golden-sets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Compare real dense and hybrid rankings
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TEI_MODEL_REVISION: 5ae1fc0cfa7c2097ba2303c8a0db443d0597b3a7
+          TEI_BASE_URL: http://127.0.0.1:18080
+        run: |
+          test -n "$OPENAI_API_KEY" || { echo 'Set the OpenAI evaluation secret to run retrieval evals.' >&2; exit 1; }
+          docker build -f infra/railway/reranker.Dockerfile -t wakeel-retrieval-eval infra/railway
+          export TEI_API_KEY="$(openssl rand -hex 32)"
+          echo "::add-mask::$TEI_API_KEY"
+          trap 'docker rm -f wakeel-retrieval-eval >/dev/null 2>&1 || true' EXIT
+          API_KEY="$TEI_API_KEY" docker run -d --name wakeel-retrieval-eval -p 127.0.0.1:18080:8080 \
+            -e API_KEY -e MODEL_ID=newtechstudio/bge-reranker-v2-m3-onnx \
+            -e REVISION="$TEI_MODEL_REVISION" wakeel-retrieval-eval >/dev/null
+          curl --retry 90 --retry-all-errors --retry-delay 5 --max-time 5 --fail --silent "$TEI_BASE_URL/health" >/dev/null
+          pnpm evals:retrieval --output "$RUNNER_TEMP/retrieval-eval/baseline.json"
+      - name: Preserve the measured baseline
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: retrieval-golden-sets
+          path: ${{ runner.temp }}/retrieval-eval/baseline.json
+          if-no-files-found: warn
+          retention-days: 30

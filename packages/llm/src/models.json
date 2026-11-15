@@ -1,0 +1,152 @@
+{
+  "$comment": "The model registry (ADR-010). Edited by humans; nothing else in the codebase names a model. Prices are USD per million tokens from each provider's published pricing on the date in priceCheckedAt. A model with prices: null is self-hosted or not yet priced: its calls are metered in tokens with a cost of 0. cacheWritePerMTok is 1.25x input (the documented 5-minute cache-write multiplier). A missing cacheReadPerMTok charges cached reads at the input price, which overstates rather than understates. longContext prices apply when one call's input exceeds thresholdTokens. OpenAI prices are from third-party copies of OpenAI's price list on 2026-11-14 and must be checked against https://developers.openai.com/api/docs/pricing; gpt-4.1 has no cache-read price, so cached reads are charged at the input price. Embedding pricing: https://developers.openai.com/api/docs/models/text-embedding-3-large (2026-11-15). TEI reranker limits and licence: https://huggingface.co/BAAI/bge-reranker-v2-m3/blob/main/config.json and README.md (Apache-2.0). Rerank units are metered separately; no hosted rerank price is inferred.",
+  "models": [
+    {
+      "id": "claude-opus-5-5",
+      "provider": "anthropic",
+      "providerModel": "claude-opus-5-5",
+      "kind": "chat",
+      "contextWindow": 1000000,
+      "maxOutput": 128000,
+      "capabilities": {
+        "vision": true,
+        "caching": true,
+        "structuredOutput": true
+      },
+      "prices": {
+        "inputPerMTok": 4,
+        "outputPerMTok": 20,
+        "cacheReadPerMTok": 0.2,
+        "cacheWritePerMTok": 5
+      },
+      "priceCheckedAt": "2026-11-14",
+      "autonomy": "untested",
+      "fallback": ["claude-sonnet-5-5"]
+    },
+    {
+      "id": "claude-sonnet-5-5",
+      "provider": "anthropic",
+      "providerModel": "claude-sonnet-5-5",
+      "kind": "chat",
+      "contextWindow": 1000000,
+      "maxOutput": 128000,
+      "capabilities": {
+        "vision": true,
+        "caching": true,
+        "structuredOutput": true
+      },
+      "prices": {
+        "inputPerMTok": 2,
+        "outputPerMTok": 10,
+        "cacheReadPerMTok": 0.1,
+        "cacheWritePerMTok": 2.5
+      },
+      "priceCheckedAt": "2026-11-14",
+      "autonomy": "untested",
+      "fallback": ["claude-haiku-5-5"]
+    },
+    {
+      "id": "claude-haiku-5-5",
+      "provider": "anthropic",
+      "providerModel": "claude-haiku-5-5",
+      "kind": "chat",
+      "contextWindow": 1000000,
+      "maxOutput": 128000,
+      "capabilities": {
+        "vision": true,
+        "caching": true,
+        "structuredOutput": true
+      },
+      "prices": {
+        "inputPerMTok": 0.1,
+        "outputPerMTok": 0.5,
+        "cacheWritePerMTok": 0.125,
+        "longContext": {
+          "thresholdTokens": 100000,
+          "inputPerMTok": 0.5,
+          "outputPerMTok": 2.5
+        }
+      },
+      "priceCheckedAt": "2026-11-14",
+      "autonomy": "untested",
+      "fallback": []
+    },
+    {
+      "id": "gpt-4.1",
+      "provider": "openai",
+      "providerModel": "gpt-4.1",
+      "kind": "chat",
+      "contextWindow": 1047576,
+      "maxOutput": 32768,
+      "capabilities": {
+        "vision": true,
+        "caching": true,
+        "structuredOutput": true
+      },
+      "prices": {
+        "inputPerMTok": 2,
+        "outputPerMTok": 8
+      },
+      "priceCheckedAt": "2026-11-14",
+      "autonomy": "unsupported",
+      "fallback": ["gpt-4.1-mini"]
+    },
+    {
+      "id": "gpt-4.1-mini",
+      "provider": "openai",
+      "providerModel": "gpt-4.1-mini",
+      "kind": "chat",
+      "contextWindow": 1047576,
+      "maxOutput": 32768,
+      "capabilities": {
+        "vision": true,
+        "caching": true,
+        "structuredOutput": true
+      },
+      "prices": {
+        "inputPerMTok": 0.4,
+        "outputPerMTok": 1.6,
+        "cacheReadPerMTok": 0.1
+      },
+      "priceCheckedAt": "2026-11-14",
+      "autonomy": "unsupported",
+      "fallback": []
+    },
+    {
+      "maxOutput": 1,
+      "capabilities": {
+        "vision": false,
+        "caching": false,
+        "structuredOutput": false
+      },
+      "autonomy": "unsupported",
+      "fallback": [],
+      "id": "text-embedding-3-large",
+      "provider": "openai",
+      "providerModel": "text-embedding-3-large",
+      "kind": "embedding",
+      "contextWindow": 8192,
+      "prices": {
+        "inputPerMTok": 0.13,
+        "outputPerMTok": 0
+      },
+      "priceCheckedAt": "2026-11-15"
+    },
+    {
+      "maxOutput": 1,
+      "capabilities": {
+        "vision": false,
+        "caching": false,
+        "structuredOutput": false
+      },
+      "autonomy": "unsupported",
+      "fallback": [],
+      "id": "bge-reranker-v2-m3",
+      "provider": "tei",
+      "providerModel": "BAAI/bge-reranker-v2-m3",
+      "kind": "rerank",
+      "contextWindow": 8192,
+      "prices": null
+    }
+  ]
+}

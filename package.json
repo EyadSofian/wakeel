@@ -1,0 +1,43 @@
+{
+  "name": "wakeel",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=22.12.0 <23"
+  },
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
+    "check": "pnpm lint && pnpm licences && turbo run typecheck test",
+    "lint": "biome check . && node tools/lint-rules/tokens-only.ts && node tools/lint-rules/no-dynamic-code.ts",
+    "format": "biome check --write .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "dev:infra": "docker compose up --detach --wait --wait-timeout 120 && docker compose run --rm object-store-init",
+    "dev:infra:down": "docker compose --profile init down",
+    "dev:infra:reset": "docker compose --profile init down --volumes",
+    "db:bootstrap": "tsx --env-file-if-exists=.env packages/db/src/cli/bootstrap.ts",
+    "db:migrate": "tsx --env-file-if-exists=.env packages/db/src/cli/migrate.ts",
+    "ui:contrast": "node tools/contrast.ts",
+    "studio:shots": "pnpm --filter @wakeel/studio shots --",
+    "studio:motion": "pnpm --filter @wakeel/studio motion --",
+    "studio:perf": "pnpm --filter @wakeel/studio perf",
+    "dev": "turbo run dev",
+    "licences": "node tools/licences.ts",
+    "e2e": "pnpm --filter @wakeel/studio e2e",
+    "evals:autonomy": "tsx tools/evals-autonomy.ts",
+    "evals:retrieval": "tsx tools/evals-retrieval.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.7",
+    "@types/node": "22.20.5",
+    "@vitest/coverage-v8": "5.1.0",
+    "tsx": "4.23.15",
+    "turbo": "2.11.11",
+    "typescript": "5.9.3",
+    "vitest": "5.1.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": []
+  }
+}

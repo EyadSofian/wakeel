@@ -1,0 +1,299 @@
+openapi: 3.1.0
+info:
+  title: Wakeel Studio tables
+  version: '1.0'
+paths:
+  /v1/workspaces/{workspaceId}/bots/{botId}/tables:
+    parameters:
+      - $ref: '#/components/parameters/Workspace'
+      - $ref: '#/components/parameters/Bot'
+    get:
+      operationId: listTableSchemas
+      parameters:
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        '200':
+          description: A page of tables
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ListTableSchemasResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createTableSchema
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewTableRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/TableCreated' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/workspaces/{workspaceId}/bots/{botId}/tables/{tableId}:
+    parameters:
+      - $ref: '#/components/parameters/Workspace'
+      - $ref: '#/components/parameters/Bot'
+      - { name: tableId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getTableSchema
+      responses:
+        '200': { $ref: '#/components/responses/TableFound' }
+        default: { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: patchTableSchema
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatchTableRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/TableFound' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: deleteTableSchema
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204': { description: Table deleted }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/workspaces/{workspaceId}/bots/{botId}/tables/{tableId}/rows:
+    parameters: &rowScope
+      - { $ref: '#/components/parameters/Workspace' }
+      - { $ref: '#/components/parameters/Bot' }
+      - { $ref: '#/components/parameters/Table' }
+    post:
+      operationId: insertTableRows
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InsertTableRowsRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/RowsInserted' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/workspaces/{workspaceId}/bots/{botId}/tables/{tableId}/rows/find:
+    parameters: *rowScope
+    post:
+      operationId: findTableRows
+      description: Find rows ordered by the given sort tuple followed by row ID. Use the same query when continuing with a cursor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FindRowsRequest' }
+      responses:
+        '200':
+          description: A page of rows and the table's total row count
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TableRowsPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/workspaces/{workspaceId}/bots/{botId}/tables/{tableId}/rows/import:
+    parameters: *rowScope
+    post:
+      operationId: importTableRows
+      description: Import one CSV batch with current column names in its header. Empty cells become null. A rejected row rolls back the batch.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ImportTableRowsRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/RowsInserted' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/workspaces/{workspaceId}/bots/{botId}/tables/{tableId}/rows/upsert:
+    parameters: *rowScope
+    post:
+      operationId: upsertTableRow
+      description: Atomically insert or patch a row by a non-null value in one declared unique column.
+      parameters:
+        - { name: If-Match, in: header, schema: { type: string }, description: Require the current revision of an existing row. }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpsertTableRowRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/RowResponse' }
+        '201': { $ref: '#/components/responses/RowResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/workspaces/{workspaceId}/bots/{botId}/tables/{tableId}/rows/{rowId}:
+    parameters:
+      - { $ref: '#/components/parameters/Workspace' }
+      - { $ref: '#/components/parameters/Bot' }
+      - { $ref: '#/components/parameters/Table' }
+      - { name: rowId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getTableRow
+      responses:
+        '200': { $ref: '#/components/responses/RowResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: patchTableRow
+      parameters:
+        - { $ref: '#/components/parameters/IfMatch' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatchTableRowRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/RowResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: deleteTableRow
+      parameters:
+        - { $ref: '#/components/parameters/IfMatch' }
+      responses:
+        '204': { description: Row deleted }
+        default: { $ref: '#/components/responses/Problem' }
+components:
+  parameters:
+    Workspace: { name: workspaceId, in: path, required: true, schema: { type: string } }
+    Bot: { name: botId, in: path, required: true, schema: { type: string } }
+    Table: { name: tableId, in: path, required: true, schema: { type: string } }
+    IfMatch: { name: If-Match, in: header, required: true, schema: { type: string } }
+  responses:
+    RowResponse:
+      description: Current row
+      headers:
+        ETag: { schema: { type: string } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/TableRowResponse' }
+    RowsInserted:
+      description: Inserted rows
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data: { type: array, items: { $ref: '#/components/schemas/TableRowResponse' } }
+    TableCreated:
+      description: Table created
+      headers:
+        ETag: { schema: { type: string } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/TableSchemaResponse' }
+    TableFound:
+      description: Current table schema
+      headers:
+        ETag: { schema: { type: string } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/TableSchemaResponse' }
+    Problem:
+      description: Problem details
+      content:
+        application/problem+json:
+          schema: { type: object }
+  schemas:
+    Column:
+      type: object
+      required: [id, name, type]
+      properties:
+        id: { type: string }
+        name: { type: string, pattern: '^[A-Za-z_][A-Za-z0-9_]{0,47}$' }
+        type: { type: string, enum: [string, number, boolean, date, enum, json] }
+        enumValues: { type: array, maxItems: 100, items: { type: string, minLength: 1 } }
+        required: { type: boolean, default: false }
+        unique: { type: boolean, default: false }
+        searchable: { type: boolean, default: false }
+        description: { type: string, maxLength: 300 }
+    PatchTableRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, pattern: '^[A-Za-z_][A-Za-z0-9_]{0,47}$' }
+        description: { type: string, maxLength: 500 }
+        columns:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items: { $ref: '#/components/schemas/Column' }
+    NewTableRequest:
+      allOf:
+        - $ref: '#/components/schemas/PatchTableRequest'
+        - required: [name, columns]
+    TableSchemaResponse:
+      type: object
+      required: [id, name, columns, revision]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        columns: { type: array, items: { $ref: '#/components/schemas/Column' } }
+        revision: { type: string }
+    ListTableSchemasResponse:
+      type: object
+      required: [data, nextCursor]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/TableSchemaResponse' }
+        nextCursor: { type: [string, 'null'] }
+
+    TableRowValues:
+      type: object
+      description: Stable column IDs as keys
+      propertyNames: { pattern: '^col_[a-zA-Z0-9]{10}$' }
+    TableRowResponse:
+      type: object
+      required: [id, data, revision]
+      properties:
+        id: { type: string }
+        data: { $ref: '#/components/schemas/TableRowValues' }
+        revision: { type: string }
+    TableRowsPage:
+      type: object
+      required: [data, nextCursor, rowCount]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/TableRowResponse' } }
+        nextCursor: { type: [string, 'null'] }
+        rowCount: { type: integer, minimum: 0 }
+    FindRowsRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        where: { type: object, description: Filter AST defined in table.ts }
+        search: { type: string, maxLength: 500 }
+        sort:
+          type: array
+          maxItems: 3
+          items:
+            type: object
+            required: [column]
+            properties:
+              column: { type: string }
+              direction: { type: string, enum: [asc, desc], default: asc }
+        limit: { type: integer, minimum: 1, maximum: 500, default: 50 }
+        cursor: { type: string }
+    InsertTableRowsRequest:
+      type: object
+      required: [rows]
+      additionalProperties: false
+      properties:
+        rows: { type: array, minItems: 1, maxItems: 500, items: { $ref: '#/components/schemas/TableRowValues' } }
+    PatchTableRowRequest:
+      type: object
+      required: [values]
+      additionalProperties: false
+      properties:
+        values: { $ref: '#/components/schemas/TableRowValues' }
+    UpsertTableRowRequest:
+      type: object
+      required: [on, values]
+      additionalProperties: false
+      properties:
+        on: { type: string, description: Name of the unique column }
+        values: { $ref: '#/components/schemas/TableRowValues' }
+    ImportTableRowsRequest:
+      type: object
+      required: [csv]
+      additionalProperties: false
+      properties:
+        csv: { type: string, minLength: 1, maxLength: 1000000 }

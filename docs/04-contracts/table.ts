@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ColumnId, Expression, Identifier, Json, TableId } from "./common";
+import { ColumnId, Expression, Identifier, Json, RowId, TableId } from "./common";
 
 export const ColumnType = z.enum(["string", "number", "boolean", "date", "enum", "json"]);
 export type ColumnType = z.infer<typeof ColumnType>;
@@ -25,13 +25,22 @@ export const TableSchema = z.object({
 });
 export type TableSchema = z.infer<typeof TableSchema>;
 
+/** Bot-scoped Studio table schema resource (ADR-047). */
+export const NewTableRequest = TableSchema.omit({ id: true }).strict();
+export const PatchTableRequest = NewTableRequest.partial();
+export const TableSchemaResponse = TableSchema.extend({ revision: z.string() });
+export const ListTableSchemasResponse = z.object({
+  data: z.array(TableSchemaResponse),
+  nextCursor: TableId.nullable(),
+});
+
 /**
  * Filter AST. Compiled to parameterised SQL; never interpolated.
  * `V` is the value type: `Json` at the API and in code, `Expression` inside card definitions.
  */
 const ops = <V extends z.ZodType>(value: V) =>
   z
-    .object({
+    .strictObject({
       eq: value,
       ne: value,
       gt: value,
@@ -85,3 +94,28 @@ export const FindRowsRequest = z.object({
 export type FindRowsRequest = z.infer<typeof FindRowsRequest>;
 
 export const TABLE_LIMITS = { columns: 50, rowBytes: 16_384, insertBatch: 500, findLimit: 500 } as const;
+
+/** Table rows use stable column IDs as keys. Filters and upsert names use the schema's current names. */
+export const TableRowValues = z.record(ColumnId, Json);
+export const TableRowResponse = z.object({ id: RowId, data: TableRowValues, revision: z.string() });
+export const TableRowsPage = z.object({
+  data: z.array(TableRowResponse),
+  nextCursor: z.string().nullable(),
+  rowCount: z.number().int().nonnegative(),
+});
+export const InsertTableRowsRequest = z.strictObject({
+  rows: z.array(TableRowValues).min(1).max(TABLE_LIMITS.insertBatch),
+});
+export const PatchTableRowRequest = z.strictObject({ values: TableRowValues });
+export const UpsertTableRowRequest = PatchTableRowRequest.extend({ on: Identifier });
+export const ImportTableRowsRequest = z.strictObject({ csv: z.string().min(1).max(1_000_000) });
+
+/** A trusted caller binds the target before the worker executes a table operation (ADR-048). */
+export const TableRuntimeCall = z.object({
+  target: z.union([z.strictObject({ id: TableId }), z.strictObject({ name: Identifier })]),
+  operation: TableOperation,
+  surface: z.enum(["card", "code", "tool"]),
+  input: Json,
+  idempotencyKey: z.string().min(1).max(200),
+});
+export type TableRuntimeCall = z.infer<typeof TableRuntimeCall>;

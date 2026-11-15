@@ -1,0 +1,99 @@
+import { BotDefinition, validateDefinition } from "@wakeel/contracts";
+import { describe, expect, it } from "vitest";
+import { usageCounts } from "../src/routes/variables/model";
+import {
+  aiDraft,
+  type CanvasFixture,
+  canvasDraft,
+  codeDraft,
+  DRAFT_SCHEMA_VERSION,
+  variablesDraft,
+  workflowsDraft,
+} from "./canvas-fixtures";
+
+const definition = (kind: CanvasFixture) => {
+  const d = canvasDraft(kind);
+  return BotDefinition.parse({ schemaVersion: DRAFT_SCHEMA_VERSION, manifest: d.manifest, workflows: d.workflows });
+};
+
+describe("canvas review fixtures", () => {
+  it.each(["typical", "rtl", "empty", "dense-300", "issues", "issues-rtl"] as const)(
+    "%s parses with the contract schemas",
+    (kind) => {
+      expect(() => definition(kind)).not.toThrow();
+    },
+  );
+
+  it.each(["typical", "rtl"] as const)("%s has no errors or warnings", (kind) => {
+    expect(validateDefinition(definition(kind))).toEqual([]);
+  });
+
+  it.each(["issues", "issues-rtl"] as const)("%s has at least one error and one warning", (kind) => {
+    const severities = new Set(validateDefinition(definition(kind)).map((i) => i.severity));
+    expect(severities).toEqual(new Set(["error", "warning"]));
+  });
+
+  it("dense-300 is the §5.1 budget size: 300 nodes, 450 transitions", () => {
+    const wf = definition("dense-300").workflows[0];
+    expect(wf?.nodes).toHaveLength(300);
+    expect(wf?.edges).toHaveLength(450);
+  });
+
+  it.each(["default", "rtl", "empty"] as const)("variables %s parses and validates clean", (kind) => {
+    const d = variablesDraft(kind);
+    const def = BotDefinition.parse({ schemaVersion: DRAFT_SCHEMA_VERSION, ...d });
+    expect(validateDefinition(def)).toEqual([]);
+  });
+
+  it.each([false, true])("workflows (rtl %s) parses and validates clean", (rtl) => {
+    const def = BotDefinition.parse({ schemaVersion: DRAFT_SCHEMA_VERSION, ...workflowsDraft(rtl) });
+    expect(validateDefinition(def)).toEqual([]);
+  });
+
+  it("variables: usage counts agree with findUsages", async () => {
+    const { findUsages } = await import("@wakeel/contracts");
+    const d = variablesDraft("default");
+    const counts = usageCounts(d);
+    for (const v of d.manifest.variables) {
+      expect(counts.variable(v), v.name).toBe(findUsages(d, { kind: "variable", variableId: v.id }).length);
+    }
+    for (const wf of d.workflows) {
+      for (const v of wf.variables) {
+        expect(counts.variable(v, wf.id), v.name).toBe(findUsages(d, { kind: "variable", variableId: v.id }).length);
+      }
+      for (const kind of ["input", "output"] as const) {
+        for (const f of kind === "input" ? wf.inputs : wf.outputs) {
+          expect(counts.io(wf.id, kind, f.name), f.name).toBe(
+            findUsages(d, { kind, workflowId: wf.id, name: f.name }).length,
+          );
+        }
+      }
+    }
+    expect(counts.variable(d.manifest.variables[1] as never)).toBeGreaterThan(0);
+  });
+
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+  ])("code (rtl %s, empty %s) parses and validates clean", (rtl, empty) => {
+    const d = codeDraft(rtl, empty);
+    const def = BotDefinition.parse({
+      schemaVersion: DRAFT_SCHEMA_VERSION,
+      manifest: d.manifest,
+      workflows: d.workflows,
+    });
+    expect(validateDefinition(def)).toEqual([]);
+  });
+
+  it.each([false, true])("ai cards (rtl %s) parse with no errors", (rtl) => {
+    const d = aiDraft(rtl);
+    const def = BotDefinition.parse({
+      schemaVersion: DRAFT_SCHEMA_VERSION,
+      manifest: d.manifest,
+      workflows: d.workflows,
+    });
+    // The AI condition's outputs are left unconnected on purpose, which is a warning only.
+    expect(validateDefinition(def).filter((i) => i.severity === "error")).toEqual([]);
+  });
+});

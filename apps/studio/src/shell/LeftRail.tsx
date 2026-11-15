@@ -1,0 +1,150 @@
+import { Link } from "@tanstack/react-router";
+import {
+  BookOpen,
+  Braces,
+  Cable,
+  Database,
+  FlaskConical,
+  GitCommitHorizontal,
+  House,
+  type LucideIcon,
+  MessagesSquare,
+  Settings,
+  Workflow,
+} from "lucide-react";
+
+/**
+ * Left rail destinations (design system §5.1), in order; Settings sits at the bottom. Inside a bot,
+ * those with a screen already are links; the rest arrive with their phases.
+ */
+const DESTINATIONS: {
+  label: string;
+  icon: LucideIcon;
+  to?:
+    | "/w/$workspaceId/b/$botId"
+    | "/w/$workspaceId/b/$botId/variables"
+    | "/w/$workspaceId/b/$botId/versions"
+    | "/w/$workspaceId/b/$botId/knowledge"
+    | "/w/$workspaceId/b/$botId/tables"
+    | "/w/$workspaceId/b/$botId/evals"
+    | "/w/$workspaceId/b/$botId/conversations"
+    | "/w/$workspaceId/b/$botId/connections";
+}[] = [
+  { label: "Workflows", icon: Workflow, to: "/w/$workspaceId/b/$botId" },
+  { label: "Knowledge", icon: BookOpen, to: "/w/$workspaceId/b/$botId/knowledge" },
+  { label: "Tables", icon: Database, to: "/w/$workspaceId/b/$botId/tables" },
+  { label: "Variables", icon: Braces, to: "/w/$workspaceId/b/$botId/variables" },
+  { label: "Versions", icon: GitCommitHorizontal, to: "/w/$workspaceId/b/$botId/versions" },
+  { label: "Evals", icon: FlaskConical, to: "/w/$workspaceId/b/$botId/evals" },
+  { label: "Conversations", icon: MessagesSquare, to: "/w/$workspaceId/b/$botId/conversations" },
+  // Task 5.5 (ADR-030): the bridges that talk to this bot.
+  { label: "Connections", icon: Cable, to: "/w/$workspaceId/b/$botId/connections" },
+];
+
+/** The active destination is a filled accent tile (ADR-017); the rest stay quiet. */
+const railClasses = (active: boolean) =>
+  [
+    "wk-press flex size-tile-lg items-center justify-center rounded-md",
+    active ? "wk-primary bg-accent text-on-accent" : "text-secondary hover:bg-subtle hover:text-primary",
+  ].join(" ");
+
+function RailButton({ label, icon: Icon, active = false }: { label: string; icon: LucideIcon; active?: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      aria-current={active ? "page" : undefined}
+      className={railClasses(active)}
+    >
+      <Icon className="size-icon-lg" strokeWidth={1.75} aria-hidden="true" />
+    </button>
+  );
+}
+
+function RailLink({
+  to,
+  workspaceId,
+  botId = "",
+  label,
+  icon: Icon,
+  active,
+}: {
+  to:
+    | "/w/$workspaceId"
+    | "/w/$workspaceId/b/$botId/versions"
+    | "/w/$workspaceId/settings/general"
+    | "/w/$workspaceId/b/$botId"
+    | "/w/$workspaceId/b/$botId/variables"
+    | "/w/$workspaceId/b/$botId/knowledge"
+    | "/w/$workspaceId/b/$botId/tables"
+    | "/w/$workspaceId/b/$botId/evals"
+    | "/w/$workspaceId/b/$botId/conversations"
+    | "/w/$workspaceId/b/$botId/connections";
+  workspaceId: string;
+  botId?: string;
+  label: string;
+  icon: LucideIcon;
+  active: boolean;
+}) {
+  return (
+    <Link
+      to={to}
+      params={{ workspaceId, botId }}
+      aria-label={label}
+      title={label}
+      aria-current={active ? "page" : undefined}
+      className={railClasses(active)}
+    >
+      <Icon className="size-icon-lg" strokeWidth={1.75} aria-hidden="true" />
+    </Link>
+  );
+}
+
+/**
+ * `active` is the destination the current screen belongs to; screens outside them (the gallery) pass
+ * none. With a workspace, Home and Settings are links; the bot destinations arrive with their phases.
+ */
+export function LeftRail({ active, workspaceId, botId }: { active?: string; workspaceId?: string; botId?: string }) {
+  return (
+    <nav
+      aria-label="Studio"
+      className="flex w-rail shrink-0 flex-col items-center gap-3 wk-glass-bar border-e border-hairline py-5"
+    >
+      {workspaceId === undefined ? (
+        <RailButton label="Home" icon={House} active={active === "Home"} />
+      ) : (
+        <RailLink to="/w/$workspaceId" workspaceId={workspaceId} label="Home" icon={House} active={active === "Home"} />
+      )}
+      <span aria-hidden="true" className="my-2 w-control-sm border-t border-hairline" />
+      {DESTINATIONS.map((d) =>
+        d.to && workspaceId !== undefined && botId !== undefined ? (
+          <RailLink
+            key={d.label}
+            to={d.to}
+            workspaceId={workspaceId}
+            botId={botId}
+            label={d.label}
+            icon={d.icon}
+            active={d.label === active}
+          />
+        ) : (
+          <RailButton key={d.label} label={d.label} icon={d.icon} active={d.label === active} />
+        ),
+      )}
+      <div className="mt-auto">
+        {workspaceId === undefined ? (
+          <RailButton label="Settings" icon={Settings} active={active === "Settings"} />
+        ) : (
+          <RailLink
+            to="/w/$workspaceId/settings/general"
+            workspaceId={workspaceId}
+            label="Settings"
+            icon={Settings}
+            active={active === "Settings"}
+          />
+        )}
+      </div>
+    </nav>
+  );
+}

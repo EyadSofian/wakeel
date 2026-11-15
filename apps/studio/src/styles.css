@@ -1,0 +1,178 @@
+@import "tailwindcss";
+@import "@wakeel/ui/theme.css";
+@import "@wakeel/ui/fonts.css";
+@import "@wakeel/ui/effects.css";
+/* xyflow's layout-only stylesheet; its colours are set below from tokens. */
+@import "@xyflow/react/dist/base.css";
+
+/* Tailwind scans these for class names; the shared UI package lives outside this folder. */
+@source "../../../packages/ui/src";
+
+/*
+ * The canvas (design system §5.1, §4 Canvas). xyflow's base stylesheet handles layout only; every
+ * colour and size here comes from a token. Dots: 16 px grid at 20% of --text-tertiary.
+ */
+
+.wk-canvas .react-flow {
+  /* Transparent so the ambient backdrop (ADR-033) shows faintly behind the dots. */
+  --xy-background-color: transparent;
+  --xy-edge-stroke-default: var(--border-strong);
+  --xy-connectionline-stroke-default: var(--accent-border);
+  --xy-minimap-background-color-default: var(--glass-surface);
+  --xy-minimap-mask-background-color-default: var(--bg-muted);
+  --xy-minimap-node-background-color-default: var(--text-tertiary);
+  --xy-selection-background-color-default: var(--accent-subtle);
+  --xy-selection-border-default: 1px solid var(--accent-border);
+  background: transparent;
+}
+
+.wk-grid .react-flow__background-pattern circle {
+  fill: var(--text-tertiary);
+  fill-opacity: 0.35;
+}
+
+/* Transitions (ADR-017): visible at rest, the accent when selected. */
+.wk-edge {
+  stroke: var(--text-tertiary);
+  stroke-width: 1.5;
+  fill: none;
+}
+.wk-edge-selected {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.wk-arrow-fill {
+  fill: var(--text-tertiary);
+}
+.wk-arrow-fill-selected {
+  fill: var(--accent);
+}
+/* The run overlay (design system §5.1): transitions the last emulator turn followed. */
+.wk-edge-ran {
+  stroke: var(--accent-border);
+  stroke-width: 2;
+}
+.wk-arrow-fill-ran {
+  fill: var(--accent-border);
+}
+/* Trace playback (design system §5.3): the card the replay reaches takes its tint over 200 ms. */
+.wk-card-row {
+  transition:
+    background-color var(--duration-slow) var(--ease-out),
+    border-color var(--duration-slow) var(--ease-out);
+}
+
+/*
+ * Ports (ADR-017): a 10 px dot in the node's category colour with a surface ring, on the node's end
+ * edge; the hit area is 8 px larger on each side. Inputs are a dot on the start edge of the header.
+ */
+.wk-canvas .react-flow__handle.wk-output,
+.wk-canvas .react-flow__handle.wk-input {
+  width: var(--size-port);
+  height: var(--size-port);
+  min-width: 0;
+  min-height: 0;
+  border: 2px solid var(--bg-surface);
+  border-radius: var(--radius-full);
+  background: var(--text-tertiary);
+  transition: background-color var(--duration-instant) var(--ease-out);
+}
+.wk-canvas .react-flow__handle.wk-output {
+  right: calc(-1 * var(--size-port) / 2);
+}
+.wk-canvas .react-flow__handle.wk-input {
+  left: calc(-1 * var(--size-port) / 2);
+}
+/*
+ * Inputs take no pointer events: a transition can be dropped anywhere on a node (task 2.4b), and a
+ * hit area here would sit on top of the transition's end and swallow the press that reconnects it.
+ */
+.wk-canvas .react-flow__handle.wk-input {
+  pointer-events: none;
+}
+.wk-canvas .react-flow__handle.wk-output::before {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--space-4));
+}
+.wk-canvas .react-flow__handle.wk-port-trigger {
+  background: var(--cat-trigger);
+}
+.wk-canvas .react-flow__handle.wk-port-logic {
+  background: var(--cat-logic);
+}
+.wk-canvas .react-flow__handle.wk-port-ai {
+  background: var(--cat-ai);
+}
+.wk-canvas .react-flow__handle.wk-port-tool {
+  background: var(--cat-tool);
+}
+.wk-canvas .react-flow__handle.wk-port-human {
+  background: var(--cat-human);
+}
+.wk-canvas .react-flow__handle.wk-port-flow {
+  background: var(--cat-flow);
+}
+.wk-canvas .react-flow__handle.wk-output:hover,
+.wk-canvas .react-flow__handle.wk-output.connectingfrom,
+.wk-canvas .react-flow__handle.wk-input.connectingto,
+.wk-canvas .react-flow__handle.wk-input.valid {
+  background: var(--accent);
+}
+
+/* Task 2.5: the node a dragged or keyboard transition would enter, and the output it starts from. */
+.wk-canvas .wk-drop-target {
+  box-shadow:
+    inset 3px 0 0 var(--accent-border),
+    var(--shadow-node);
+  border-color: var(--accent-border);
+}
+.wk-canvas .wk-connect-source {
+  background: var(--accent-subtle);
+}
+
+.wk-canvas .react-flow__node:focus-visible,
+.wk-canvas .react-flow__edge:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-lg);
+}
+
+.wk-minimap {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--shadow-pop);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+.wk-minimap .wk-mm-trigger {
+  fill: var(--cat-trigger-border);
+}
+.wk-minimap .wk-mm-logic {
+  fill: var(--cat-logic-border);
+}
+.wk-minimap .wk-mm-ai {
+  fill: var(--cat-ai-border);
+}
+.wk-minimap .wk-mm-tool {
+  fill: var(--cat-tool-border);
+}
+.wk-minimap .wk-mm-human {
+  fill: var(--cat-human-border);
+}
+.wk-minimap .wk-mm-flow {
+  fill: var(--cat-flow-border);
+}
+
+.wk-canvas .react-flow__attribution {
+  background: transparent;
+  font-size: var(--text-micro);
+  color: var(--text-tertiary);
+}
+.wk-canvas .react-flow__attribution a {
+  color: inherit;
+}

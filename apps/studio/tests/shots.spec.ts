@@ -1,0 +1,477 @@
+import { mkdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { expect, type Locator, type Page, test } from "@playwright/test";
+import type { CanvasFixture } from "./canvas-fixtures";
+import { type EmulatorScenario, SENT } from "./emulator-fixtures";
+import { type MockState, mockApi } from "./mock-api";
+import { type Screen, type ScreenState, selectedScreens, THEMES } from "./screens";
+
+/**
+ * `pnpm studio:shots [--screen <id>] [--update]` (design system §8.1). Writes
+ * apps/studio/.shots/<screen>/<state>-<theme>-<width>.png for review, and compares each against its
+ * committed baseline (0.1% threshold). Reduced motion is on so frames are stable.
+ */
+const SHOTS_DIR = fileURLToPath(new URL("../.shots", import.meta.url));
+/** The moment every shot is taken at: the mock bots then read "10 hours ago", "yesterday", "3 days ago". */
+const SHOT_TIME = new Date("2026-11-13T18:40:00.000Z");
+
+const MOCK_STATES: readonly MockState[] = ["default", "empty", "loading", "error", "rtl", "signed-out"];
+
+/** Screen states that only change what is on screen use the default data. */
+const mockStateFor = (screen: Screen, state: ScreenState): MockState => {
+  if (screen.id === "sign-in") return "signed-out";
+  // The emulator's states are its own; the canvas behind it always loads.
+  if (screen.id === "emulator") return "default";
+  if (state === "empty" && screen.id === "canvas") return "default";
+  if (state === "secrets-empty") return "empty";
+  if (
+    [
+      "card-rtl",
+      "agent-rtl",
+      "palette-search",
+      "workflows-rtl",
+      "issues-panel-rtl",
+      "code-drawer-rtl",
+      "card-generate-rtl",
+      "card-handoff-rtl",
+      "secrets-rtl",
+    ].includes(state)
+  )
+    return "rtl";
+  return MOCK_STATES.find((m) => m === state) ?? "default";
+};
+
+const canvasFor = (
+  screen: Screen,
+  state: ScreenState,
+): CanvasFixture | "variables" | "workflows" | "code" | "code-empty" | "ai" =>
+  screen.id === "variables"
+    ? "variables"
+    : state === "card-run-workflow"
+      ? "code"
+      : state.startsWith("card-ai") ||
+          state.startsWith("card-generate") ||
+          state === "card-extract" ||
+          state.startsWith("card-handoff")
+        ? "ai"
+        : state === "code-drawer-empty"
+          ? "code-empty"
+          : state === "card-code" || state.startsWith("code-drawer")
+            ? "code"
+            : state === "dense-300" || state === "issues" || state === "empty"
+              ? state
+              : state === "issues-panel"
+                ? "issues"
+                : state === "issues-panel-rtl"
+                  ? "issues-rtl"
+                  : state.startsWith("workflow")
+                    ? "workflows"
+                    : "typical";
+
+/** Which card row of the first standard node each inspector state opens. */
+const CARD_ROW: Partial<Record<ScreenState, number>> = {
+  "card-say": 0,
+  "card-ask": 1,
+  "card-condition": 2,
+  "card-invalid": 0,
+  "card-rtl": 0,
+  picker: 1,
+  // Greeting's cards in the code fixture: say, ask, condition, run workflow, run code.
+  "card-code": 4,
+  "code-drawer": 4,
+  "code-drawer-rtl": 4,
+  "code-drawer-loading": 4,
+  "code-drawer-error": 4,
+  "code-drawer-empty": 4,
+  "card-run-workflow": 3,
+  // Greeting's cards in the ai fixture: say, ask, condition, run workflow, then the four below.
+  "card-ai-condition": 4,
+  "card-generate": 5,
+  "card-generate-rtl": 5,
+  "card-extract": 6,
+  "card-handoff": 7,
+  "card-handoff-rtl": 7,
+};
+
+const EMULATOR_SCENARIO: Partial<Record<ScreenState, EmulatorScenario>> = {
+  loading: "running",
+  error: "error",
+  rtl: "rtl",
+  bubbles: "bubbles",
+  "trace-payload": "agent",
+};
+const emulatorScenario = (state: ScreenState): EmulatorScenario => EMULATOR_SCENARIO[state] ?? "conversation";
+
+/** Opens the emulator and plays the state's scenario (task 4.6), then lets entrances finish. */
+async function prepareEmulator(page: Page, state: ScreenState): Promise<void> {
+  await playEmulator(page, state);
+  // Choice buttons fade in and the typing dots appear after 300 ms (§5.3): shoot the settled frame.
+  // The typing loop never settles, so it is left out.
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every((a) => a.playState !== "running" || (a.effect?.getTiming().iterations ?? 1) === Number.POSITIVE_INFINITY),
+  );
+}
+
+async function playEmulator(page: Page, state: ScreenState): Promise<void> {
+  await expect(page.locator(".react-flow__node").first()).toBeVisible();
+  const panel = page.getByRole("complementary", { name: "Emulator" });
+  if (state === "run-from") {
+    await page
+      .getByRole("button", { name: /^Actions for / })
+      .nth(1)
+      .click();
+    await page.getByRole("menuitem", { name: /Run from here/ }).click();
+    await expect(panel.getByText("Waiting for the user")).toBeVisible();
+    return;
+  }
+  await page.getByRole("button", { name: "Test", exact: true }).click();
+  await expect(panel).toBeVisible();
+  if (state === "empty") return;
+  if (state === "user-form") {
+    await panel.getByRole("button", { name: /Test user/ }).click();
+    await expect(panel.getByRole("form", { name: "Test user" })).toBeVisible();
+    return;
+  }
+  const scenario = emulatorScenario(state);
+  const twoTurns = state === "variables" || state === "trace" || state === "trace-playback";
+  const texts = twoTurns ? [...SENT.conversation, "5678"] : SENT[scenario];
+  const box = panel.getByRole("textbox", { name: "Message the bot" });
+  for (const [i, text] of texts.entries()) {
+    await box.fill(text);
+    await box.press("Enter");
+    if (scenario === "running") await expect(panel.getByRole("status", { name: "Typing…" })).toBeVisible();
+    else await expect(panel.locator("p", { hasText: / s$|Waiting for the user/ })).toHaveCount(i + 1);
+  }
+  if (state === "trace") {
+    // The second turn's trace, with its branch step selected: details below, card selected on the canvas.
+    await panel.getByTitle("Open this turn's trace").last().click();
+    await panel
+      .getByRole("list", { name: "Steps" })
+      .getByRole("button", { name: /Condition|Branch/ })
+      .click();
+    await expect(panel.getByRole("region", { name: "Step details" })).toBeVisible();
+    // Park the pointer so no row shows its hover background in the shot.
+    await page.mouse.move(0, 0);
+  }
+  if (state === "trace-payload") {
+    // The agent's first model call: its prompt, tokens and cost in PayloadViewer (task 6.9).
+    await panel.getByTitle("Open this turn's trace").last().click();
+    await panel
+      .getByRole("list", { name: "Steps" })
+      .getByRole("button", { name: /Thinking/ })
+      .first()
+      .click();
+    await expect(panel.getByRole("tab", { name: "Prompt" })).toBeVisible();
+    await page.mouse.move(0, 0);
+  }
+  if (state === "trace-playback") {
+    // Two steps into a replay of the three-step turn: the branch card is the current one (task 6.9).
+    await panel.getByTitle("Open this turn's trace").last().click();
+    const next = panel.getByRole("button", { name: "Next step" });
+    for (let i = 0; i < 3; i++) await next.click();
+    await expect(page.locator("[data-active]")).toHaveCount(1);
+    await page.mouse.move(0, 0);
+  }
+  if (state === "variables") {
+    await panel.getByRole("tab", { name: "Variables" }).click();
+    await expect(panel.getByText("2 changed")).toBeVisible();
+  }
+  if (state === "focus") {
+    // Keyboard focus on a choice button, to review the focus ring (checklist 18).
+    await box.focus();
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(page.locator(":focus-visible")).toHaveCount(1);
+  }
+}
+
+/** Overlays fade in with Motion (JavaScript, not CSS), so the shot waits until they are opaque. */
+async function settled(locator: Locator): Promise<void> {
+  await expect(locator).toBeVisible();
+  await expect(locator).toHaveCSS("opacity", "1");
+}
+
+async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<void> {
+  if (screen.id === "emulator") return prepareEmulator(page, state);
+  if (screen.id === "sign-in" && state === "error") {
+    // A rejected sign-in: the banner shows what happened and how to fix it.
+    await page.getByLabel("Email").fill("eyad@engosoft.test");
+    await page.getByLabel("Password").fill("not the password");
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.getByRole("alert")).toBeVisible();
+    return;
+  }
+  if (state === "error") {
+    // React Query retries a 500 twice with backoff; the shot waits for the banner it ends in.
+    await expect(page.getByRole("alert").first()).toBeVisible({ timeout: 15_000 });
+  }
+  if (state === "loading") {
+    await expect(page.locator('[aria-hidden="true"].bg-muted, [aria-busy="true"]').first()).toBeVisible();
+  }
+  if (screen.id === "canvas" && !["loading", "error"].includes(state)) {
+    await expect(page.locator(".react-flow__node").first()).toBeVisible();
+    // Validation runs in a worker; the issue count settles before the shot.
+    await expect(page.locator('[data-validated="true"]')).toBeVisible();
+  }
+  if (state === "node-menu") {
+    const pane = await page.locator(".react-flow__pane").boundingBox();
+    if (!pane) throw new Error("no canvas");
+    await page.mouse.dblclick(pane.x + 60, pane.y + 140);
+    await expect(page.getByRole("dialog", { name: "Add node" })).toBeVisible();
+  }
+  if (state === "publish" || state === "publish-blocked") {
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: /^Publish v/ });
+    await settled(dialog);
+    if (state === "publish") await expect(dialog.getByText("Changes since v3, the live version")).toBeVisible();
+    else await expect(dialog.getByText(/blocks? publishing/)).toBeVisible();
+    await expect(dialog.locator("dl, p").first()).toBeVisible();
+  }
+  if (screen.id === "versions" && !["loading", "error", "empty"].includes(state)) {
+    await expect(page.getByRole("table", { name: "Versions" })).toBeVisible();
+  }
+  if (state === "rollback") {
+    await page.getByRole("button", { name: "Roll back to v2" }).click();
+    await settled(page.getByRole("dialog", { name: "Roll back to v2?" }));
+  }
+  if (state === "restore") {
+    await page.getByRole("button", { name: "Restore v2 to the draft" }).click();
+    const dialog = page.getByRole("dialog", { name: "Restore v2 to the draft?" });
+    await settled(dialog);
+    await expect(dialog.getByRole("button", { name: "Restore v2" })).toBeEnabled();
+  }
+  if (screen.id === "version-compare" && !["loading", "error"].includes(state)) {
+    await expect(page.getByRole("table", { name: "Changes" })).toBeVisible();
+  }
+  if (state === "import") {
+    await page.getByRole("button", { name: "Import bot" }).click();
+    await settled(page.getByRole("dialog", { name: "Import bot" }));
+  }
+  if (state.startsWith("secrets")) {
+    await page.getByRole("tab", { name: "Secrets and settings" }).click();
+    await expect(
+      state === "secrets-empty"
+        ? page.getByText("No config variables yet")
+        : page.getByRole("table", { name: "Config variables" }),
+    ).toBeVisible();
+  }
+  if (state === "node-actions") {
+    // The node's "…" menu (task 2.4, Duplicate and Delete added after 6.9).
+    await page.getByRole("button", { name: "Actions for Greeting" }).click();
+    await settled(page.getByRole("menu"));
+  }
+  if (state === "card-menu") {
+    await page
+      .locator(".react-flow__node")
+      .filter({ hasText: "Greeting" })
+      .getByRole("button", { name: "Add card" })
+      .click();
+    await expect(page.getByRole("dialog", { name: "Add card" })).toBeVisible();
+  }
+  if (state === "shortcuts") {
+    await page.keyboard.press("?");
+    await expect(page.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeVisible();
+  }
+  if (state === "cursor") {
+    // Keyboard: select Greeting, go inside, move to the Condition card's "Order" output, start connecting.
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Enter");
+    for (let i = 0; i < 4; i++) await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("ArrowRight");
+  }
+  if (state.startsWith("agent")) {
+    // Select the Autonomous Node by its header (task 6.8).
+    await page
+      .locator(".react-flow__node")
+      .filter({ hasText: state === "agent-rtl" ? "مساعد الطلبات" : "Order assistant" })
+      .locator("header")
+      .click();
+    const inspector = page.getByRole("complementary", { name: /^Inspector: / });
+    await expect(inspector).toBeVisible();
+    if (state === "agent-tool") {
+      await inspector.getByRole("button", { name: "Add a code tool" }).click();
+      // The new tool is saved at once; shoot after the save state settles.
+      await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+    }
+    if (state === "agent-exit") await inspector.getByRole("button", { name: /^resolved/ }).click();
+  }
+  const index = CARD_ROW[state];
+  if (index !== undefined) {
+    // Open a card of the first standard node in the inspector by clicking its row on the canvas.
+    await page.locator(".react-flow__node [data-card] > div:first-child").nth(index).click();
+    await expect(page.getByRole("complementary", { name: /^Inspector: / })).toBeVisible();
+    if (state === "card-invalid") {
+      // A broken placeholder, typed but not yet committed: the field shows what happened and the fix.
+      const text = page.getByRole("complementary").getByLabel("Text", { exact: true });
+      await text.click();
+      await text.press("End");
+      await text.pressSequentially(" {{user.name");
+      await expect(page.getByRole("complementary").getByRole("alert")).toBeVisible();
+    }
+  }
+  if (state.startsWith("code-drawer")) {
+    // Monaco is a separate download: hold it back for the loading state, refuse it for the error.
+    if (state === "code-drawer-loading") await page.route(/\/assets\/.*\.js$/, () => undefined);
+    if (state === "code-drawer-error") await page.route(/\/assets\/.*\.js$/, (route) => route.abort());
+    const drawer = page.getByRole("region", { name: /^Code of Run code in / });
+    await page.getByRole("complementary").getByRole("button", { name: "Edit code" }).click();
+    await settled(drawer);
+    if (state === "code-drawer-loading")
+      await expect(drawer.getByRole("status", { name: "Loading the code editor" })).toBeVisible();
+    else if (state === "code-drawer-error") await expect(drawer.getByRole("alert")).toContainText("did not load");
+    else {
+      await expect(drawer.locator(".monaco-editor .view-lines")).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      // Leave the editor so no caret blinks in the shot.
+      await drawer.getByRole("heading", { name: "Run code" }).click();
+    }
+  }
+  if (state === "picker") {
+    // The Ask card's "Save the answer to" picker, open, with a new name typed.
+    const picker = page.getByRole("complementary").getByLabel("Save the answer to");
+    await picker.click();
+    await page.getByRole("combobox", { name: "Search variables" }).fill("order");
+    await expect(page.getByRole("listbox", { name: "Variables" }).getByRole("option").first()).toBeVisible();
+  }
+  if (screen.id === "variables" && !["loading", "error"].includes(state) && !state.startsWith("secrets")) {
+    await expect(page.getByRole("heading", { name: "Conversation" })).toBeVisible();
+  }
+  if (state === "usages") {
+    await page.getByRole("button", { name: /^conversation\.topic: / }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+  }
+  if (screen.id === "settings-models" && state === "rerank-key") {
+    await page.getByRole("button", { name: "Add the Rerank server key" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel("Server address").fill("https://rerank.example.test");
+    await dialog.getByLabel("API key").fill("synthetic-rerank-key");
+    await settled(dialog);
+  }
+  if (screen.id === "settings-models" && state === "edit") {
+    await page.getByRole("button", { name: "Add the OpenAI key" }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.getByRole("dialog").getByLabel("API key").fill("sk-not-a-real-key-000000");
+  }
+  if (state === "edit" && screen.id !== "settings-models") {
+    await page.getByRole("button", { name: "Edit user.plan" }).click();
+    await page.getByRole("dialog").getByLabel("Name").fill("tier");
+    await expect(page.getByRole("dialog")).toContainText("will change to user.tier");
+  }
+  if (state === "delete-blocked") {
+    await page.getByRole("button", { name: "Delete conversation.topic" }).click();
+    await expect(page.getByRole("dialog", { name: "conversation.topic is in use" })).toBeVisible();
+  }
+  if (state === "palette" || state === "palette-search") {
+    await page.keyboard.press("ControlOrMeta+k");
+    await expect(page.getByRole("combobox", { name: "Search commands and places" })).toBeFocused();
+    if (state === "palette-search") await page.keyboard.type("الطلبات");
+    await settled(page.getByRole("dialog", { name: "Command palette" }));
+  }
+  if (state === "issues-panel-empty") {
+    // A clean bot has no issue count in the top bar; the palette still opens the panel.
+    await page.keyboard.press("ControlOrMeta+k");
+    await page.keyboard.type("Show issues");
+    await page.keyboard.press("Enter");
+    await settled(page.getByRole("dialog", { name: "Issues" }));
+  }
+  if (state === "issues-panel" || state === "issues-panel-rtl") {
+    await page.getByRole("button", { name: /Show issues$/ }).click();
+    await settled(page.getByRole("dialog", { name: "Issues" }));
+  }
+  if (state.startsWith("workflow")) {
+    await page.getByRole("tab", { name: "Workflows" }).click();
+    await expect(page.getByRole("list", { name: "Workflows" })).toBeVisible();
+  }
+  if (state === "workflow-menu" || state === "workflow-delete") {
+    await page.getByRole("button", { name: "More for Track order" }).click();
+    await settled(page.getByRole("menu"));
+  }
+  if (state === "workflow-delete") {
+    await page.getByRole("menuitem", { name: "Delete workflow" }).click();
+    await settled(page.getByRole("dialog", { name: 'Delete workflow "Track order"?' }));
+  }
+  if (state === "save-offline") {
+    // §4 SaveIndicator: the network is gone, so an edit stays in the browser and the top bar says so.
+    await page.route("**/v1/**/docs/**", (route) =>
+      route.request().method() === "PUT" ? route.abort("internetdisconnected") : route.fallback(),
+    );
+    await page.locator(".react-flow__node").nth(1).locator("header").click();
+    await page.keyboard.press("Shift+ArrowDown");
+    await expect(page.getByRole("status").filter({ hasText: "Offline — changes kept locally" })).toBeVisible();
+    await page.keyboard.press("Escape");
+  }
+  if (state === "selection") {
+    // Two nodes: one by click, one by Shift+click (design system §5.1 Selection).
+    await page.locator(".react-flow__node").nth(2).locator("header").click();
+    await page
+      .locator(".react-flow__node")
+      .nth(3)
+      .locator("header")
+      .click({ modifiers: ["Shift"] });
+  }
+  if (screen.id.startsWith("connection") && !["loading", "error"].includes(state)) {
+    await expect(page.locator("main h1").first()).not.toBeEmpty();
+    await expect(page.locator('main [aria-hidden="true"].bg-muted')).toHaveCount(0);
+  }
+  if (screen.id === "connection-test" && (state === "tested" || state === "rtl")) {
+    // A test event the receiver refused, and one message with the bot's reply.
+    await page.getByRole("button", { name: "Send test event" }).click();
+    await expect(page.getByRole("alert")).toBeVisible();
+    await page
+      .getByLabel("Message", { exact: true })
+      .fill(state === "rtl" ? "عايز أعرف حالة طلبي 5678" : "Where is my order 5678?");
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(page.getByRole("list", { name: "Replies" })).toBeVisible();
+    await page.mouse.move(0, 0);
+  }
+  if (state === "focus") {
+    // Keyboard focus on the first control, to review the focus ring (checklist 18).
+    await page.keyboard.press("Tab");
+    await expect(page.locator(":focus-visible")).toHaveCount(1);
+  }
+}
+
+for (const screen of selectedScreens()) {
+  for (const theme of THEMES) {
+    for (const [width, height] of screen.sizes) {
+      for (const state of screen.states) {
+        const name = `${state}-${theme}-${width}`;
+        test(`${screen.id} ${name}`, async ({ page }) => {
+          await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
+          await page.setViewportSize({ width, height });
+          if (screen.mock) {
+            await mockApi(page, mockStateFor(screen, state), canvasFor(screen, state), emulatorScenario(state));
+          }
+          // Relative dates ("3 days ago") follow the clock; a fixed one keeps shots the same every day.
+          await page.clock.setFixedTime(SHOT_TIME);
+          await page.goto(screen.route);
+          if (screen.mock && state !== "loading") await page.waitForLoadState("networkidle");
+          await page.evaluate(() => document.fonts.ready);
+          if (screen.id === "settings-models" && state === "loading") {
+            await expect(page.locator("table tbody tr")).toHaveCount(6);
+            await expect(
+              page.getByRole("region", { name: "Defaults" }).locator('[aria-hidden="true"] > *'),
+            ).toHaveCount(3);
+          }
+          // The shell scrolls inside <main>, so fullPage alone would stop at the viewport. Grow the
+          // viewport by the hidden content height so the shot shows the whole screen.
+          const hidden = await page.evaluate(() => {
+            const main = document.querySelector("main");
+            return main ? main.scrollHeight - main.clientHeight : 0;
+          });
+          if (hidden > 0) await page.setViewportSize({ width, height: height + hidden });
+          await prepare(page, screen, state);
+
+          mkdirSync(`${SHOTS_DIR}/${screen.id}`, { recursive: true });
+          await page.screenshot({ path: `${SHOTS_DIR}/${screen.id}/${name}.png`, fullPage: true });
+          await expect(page).toHaveScreenshot(`${screen.id}/${name}.png`, { fullPage: true });
+        });
+      }
+    }
+  }
+}

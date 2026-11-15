@@ -1,0 +1,163 @@
+/** api service entry: load config, check dependencies, listen, shut down cleanly. */
+import { createAuthService } from "@wakeel/auth";
+import { egressSender } from "@wakeel/bridge";
+import {
+  API_LIMITS,
+  apiEnv,
+  authEnv,
+  commonEnv,
+  databaseEnv,
+  egressClientEnv,
+  loadConfigOrExit,
+  masterKeyEnv,
+  objectStoreEnv,
+  redisEnv,
+} from "@wakeel/config";
+import { createDatabase, s3ObjectStore } from "@wakeel/db";
+import { createLlm } from "@wakeel/llm";
+import { recordUsage, rerankThroughEgress, workspaceCredentials } from "@wakeel/retrieval/service";
+import { countMetric, createLogger } from "@wakeel/telemetry";
+import { Queue } from "bullmq";
+import { Redis } from "ioredis";
+import { buildApp } from "./app";
+import { Signals } from "./routes/bridge/signals";
+
+const config = loadConfigOrExit({
+  ...commonEnv,
+  ...databaseEnv,
+  ...redisEnv,
+  ...apiEnv,
+  ...authEnv,
+  // testWebhook signs and sends through egress (ADR-029 §4).
+  ...egressClientEnv,
+  ...masterKeyEnv,
+  // Uploads are presigned against the object store (ADR-039).
+  ...objectStoreEnv,
+});
+if (config) {
+  const logger = createLogger({ service: "api", level: config.logLevel });
+  const db = createDatabase({
+    url: config.databaseUrl,
+    applicationName: "wakeel-api",
+    onRlsDenied: () => countMetric("wakeel_rls_denied_total"),
+  });
+  const redis = new Redis(config.redisUrl.reveal(), { lazyConnect: true, maxRetriesPerRequest: 1 });
+
+  try {
+    // Refuse to start as a role that bypasses row-level security (ADR-004).
+    const { role } = await db.verify();
+    await redis.connect();
+    logger.info({ dbRole: role, apiRole: config.role }, "dependencies ready");
+  } catch (err) {
+    logger.fatal({ err }, "cannot start");
+    process.exit(1);
+  }
+
+  const auth = createAuthService({
+    db,
+    redis,
+    secret: config.authSecret.reveal(),
+    baseUrl: config.apiPublicUrl,
+    studioOrigin: config.studioOrigin,
+    signInFailuresPerMinute: API_LIMITS.signInFailuresPerMinute,
+  });
+
+  // The Bridge API enqueues turns and waits on their signals (§4.2, §9.3).
+  const redisUrl = config.redisUrl.reveal();
+  const subscriber = new Redis(redisUrl);
+  const turnQueue = new Queue("turn", { connection: { url: redisUrl, maxRetriesPerRequest: null } });
+  const webhookQueue = new Queue("webhook", { connection: { url: redisUrl, maxRetriesPerRequest: null } });
+  const evalQueue = new Queue("eval", { connection: { url: redisUrl, maxRetriesPerRequest: null } });
+  const keyring = {
+    current: { version: config.masterKeyVersion, key: config.masterKey.reveal() },
+    previous: config.previousMasterKeys.reveal(),
+  };
+  const objectStore = s3ObjectStore({
+    endpoint: config.s3Endpoint,
+    ...(config.s3PublicEndpoint ? { publicEndpoint: config.s3PublicEndpoint } : {}),
+    region: config.s3Region,
+    bucket: config.s3Bucket,
+    accessKeyId: config.s3AccessKeyId,
+    secretAccessKey: config.s3SecretAccessKey.reveal(),
+  });
+  const syncQueue = new Queue("kb-sync", { connection: { url: redisUrl, maxRetriesPerRequest: null } });
+  const llm = createLlm({
+    onError: (provider) => countMetric("wakeel_llm_errors_total", { provider }),
+    credentials: workspaceCredentials(db, keyring),
+    onUsage: recordUsage(db),
+    rerankFetch: rerankThroughEgress({ egressUrl: config.egressUrl, egressToken: config.egressToken.reveal() }),
+  });
+  const app = buildApp({
+    evals: {
+      enqueue: async (input) => {
+        await evalQueue.add("run", input, {
+          jobId: input.runId,
+          attempts: 5,
+          backoff: { type: "exponential", delay: 5_000 },
+          removeOnComplete: true,
+          removeOnFail: true,
+        });
+      },
+    },
+    knowledge: {
+      llm,
+      enqueueSync: async (job) => {
+        await syncQueue.add("sync", job, {
+          jobId: job.sourceId,
+          attempts: 3,
+          backoff: { type: "exponential", delay: 30_000 },
+          removeOnComplete: true,
+          removeOnFail: true,
+        });
+      },
+    },
+    role: config.role,
+    logger,
+    studio: { auth, studioOrigin: config.studioOrigin, db, keyring, objectStore },
+    bridge: {
+      db,
+      signals: new Signals(subscriber),
+      enqueueTurn: async (conversationId) => {
+        await turnQueue.add(
+          "turn",
+          { conversationId },
+          { jobId: conversationId, removeOnComplete: true, removeOnFail: true },
+        );
+      },
+      enqueueWebhook: async (conversationId) => {
+        await webhookQueue.add(
+          "webhook",
+          { conversationId },
+          { jobId: conversationId, removeOnComplete: true, removeOnFail: true },
+        );
+      },
+      sender: egressSender({ egressUrl: config.egressUrl, egressToken: config.egressToken.reveal() }),
+      keyring,
+    },
+    readiness: {
+      database: async () => void (await db.verify()),
+      redis: async () => {
+        if ((await redis.ping()) !== "PONG") throw new Error("unexpected PING reply");
+      },
+    },
+  });
+
+  const shutdown = async (signal: string) => {
+    logger.info({ signal }, "shutting down");
+    await app.close();
+    await Promise.allSettled([
+      db.close(),
+      redis.quit(),
+      subscriber.quit(),
+      turnQueue.close(),
+      webhookQueue.close(),
+      syncQueue.close(),
+      evalQueue.close(),
+    ]);
+    process.exit(0);
+  };
+  process.once("SIGTERM", () => void shutdown("SIGTERM"));
+  process.once("SIGINT", () => void shutdown("SIGINT"));
+
+  await app.listen({ host: config.host, port: config.port });
+}

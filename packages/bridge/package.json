@@ -1,0 +1,22 @@
+{
+  "name": "@wakeel/bridge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./signing": "./src/signing.ts",
+    "./snippets": "./src/snippets.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@wakeel/contracts": "workspace:*",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "testcontainers": "12.2.1"
+  }
+}

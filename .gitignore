@@ -13,3 +13,9 @@ playwright-report/
 test-results/
 .claude/.cc-writes/
 .claude/settings.local.json
+.pnpm-store/
+
+# Playwright review output
+apps/studio/test-results/
+apps/parser/.venv/
+apps/parser/**/__pycache__/

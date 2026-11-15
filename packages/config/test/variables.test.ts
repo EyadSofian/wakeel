@@ -1,0 +1,200 @@
+import { describe, expect, test } from "vitest";
+import {
+  apiEnv,
+  ConfigError,
+  commonEnv,
+  databaseEnv,
+  egressClientEnv,
+  egressEnv,
+  loadConfig,
+  MASTER_KEY_BYTES,
+  masterKeyEnv,
+  QUEUE_NAMES,
+  redisEnv,
+  workerEnv,
+} from "../src/index";
+
+const key32 = Buffer.alloc(32, 7).toString("base64");
+
+const fails = (fn: () => unknown, variable: string) => {
+  expect(fn).toThrow(ConfigError);
+  try {
+    fn();
+  } catch (e) {
+    expect((e as ConfigError).problems.map((p) => p.variable)).toContain(variable);
+  }
+};
+
+describe("common", () => {
+  test("defaults", () => {
+    expect(loadConfig(commonEnv, { env: {} })).toEqual({ nodeEnv: "development", logLevel: "info" });
+  });
+  test("rejects an unknown NODE_ENV", () => {
+    fails(() => loadConfig(commonEnv, { env: { NODE_ENV: "prod" } }), "NODE_ENV");
+  });
+});
+
+describe("database and redis", () => {
+  test.each(["postgres://u:p@db:5432/wakeel", "postgresql://u:p@db/wakeel?sslmode=require"])("accepts %s", (url) => {
+    expect(loadConfig(databaseEnv, { env: { DATABASE_URL: url } }).databaseUrl.reveal()).toBe(url);
+  });
+  test("rejects a non-Postgres URL", () => {
+    fails(() => loadConfig(databaseEnv, { env: { DATABASE_URL: "mysql://u:p@db/wakeel" } }), "DATABASE_URL");
+  });
+  test.each(["redis://localhost:6379", "rediss://:pw@cache:6380/0"])("accepts %s", (url) => {
+    expect(loadConfig(redisEnv, { env: { REDIS_URL: url } }).redisUrl.reveal()).toBe(url);
+  });
+  test("rejects a non-Redis URL", () => {
+    fails(() => loadConfig(redisEnv, { env: { REDIS_URL: "http://localhost:6379" } }), "REDIS_URL");
+  });
+});
+
+describe("MASTER_KEY", () => {
+  test("decodes 32 bytes of base64", () => {
+    const key = loadConfig(masterKeyEnv, { env: { MASTER_KEY: key32 } }).masterKey.reveal();
+    expect(key).toBeInstanceOf(Uint8Array);
+    expect(key.length).toBe(MASTER_KEY_BYTES);
+    expect(Buffer.from(key).toString("base64")).toBe(key32);
+  });
+  test.each([
+    ["16 bytes", Buffer.alloc(16, 1).toString("base64")],
+    ["33 bytes", Buffer.alloc(33, 1).toString("base64")],
+    ["not base64", "this is not base64 at all, not even close!!"],
+    ["hex", Buffer.alloc(32, 1).toString("hex")],
+    ["base64url alphabet", Buffer.alloc(32, 251).toString("base64url")],
+  ])("rejects %s", (_name, value) => {
+    fails(() => loadConfig(masterKeyEnv, { env: { MASTER_KEY: value } }), "MASTER_KEY");
+  });
+  test("version defaults to 1 and there are no previous keys", () => {
+    const c = loadConfig(masterKeyEnv, { env: { MASTER_KEY: key32 } });
+    expect(c.masterKeyVersion).toBe(1);
+    expect(c.previousMasterKeys.reveal()).toEqual([]);
+  });
+  test("previous keys parse as version:base64 pairs", () => {
+    const old = Buffer.alloc(32, 7).toString("base64");
+    const c = loadConfig(masterKeyEnv, {
+      env: { MASTER_KEY: key32, MASTER_KEY_VERSION: "3", MASTER_KEYS_PREVIOUS: `2:${old}, 1:${key32}` },
+    });
+    expect(c.masterKeyVersion).toBe(3);
+    expect(c.previousMasterKeys.reveal().map((k) => [k.version, Buffer.from(k.key).toString("base64")])).toEqual([
+      [2, old],
+      [1, key32],
+    ]);
+  });
+  test.each(["2", `x:${Buffer.alloc(32).toString("base64")}`, `2:${Buffer.alloc(16).toString("base64")}`])(
+    "rejects previous keys %j without echoing them",
+    (value) => {
+      try {
+        loadConfig(masterKeyEnv, { env: { MASTER_KEY: key32, MASTER_KEYS_PREVIOUS: value } });
+        throw new Error("expected a ConfigError");
+      } catch (e) {
+        expect((e as Error).message).toContain("MASTER_KEYS_PREVIOUS is not valid");
+        if (value.length > 2) expect((e as Error).message).not.toContain(value.split(":")[1]);
+      }
+    },
+  );
+  test("the error explains the format without showing the value", () => {
+    try {
+      loadConfig(masterKeyEnv, { env: { MASTER_KEY: "c2hvcnQ=" } });
+    } catch (e) {
+      expect((e as Error).message).toContain("MASTER_KEY is not valid. 32 random bytes encoded as base64");
+      expect((e as Error).message).not.toContain("c2hvcnQ=");
+    }
+  });
+});
+
+describe("api", () => {
+  test("defaults to every route on port 3000", () => {
+    expect(loadConfig(apiEnv, { env: {} })).toEqual({ role: "all", port: 3000, host: "127.0.0.1" });
+  });
+  test.each(["studio", "bridge", "all"])("accepts ROLE=%s", (role) => {
+    expect(loadConfig(apiEnv, { env: { ROLE: role } }).role).toBe(role);
+  });
+  test.each([
+    ["ROLE", "admin"],
+    ["PORT", "0"],
+    ["PORT", "70000"],
+    ["PORT", "3000.5"],
+  ])("rejects %s=%s", (name, v) => {
+    fails(() => loadConfig(apiEnv, { env: { [name]: v } }), name);
+  });
+});
+
+describe("worker", () => {
+  test("consumes every queue by default", () => {
+    expect(loadConfig(workerEnv, { env: {} }).queues).toEqual([...QUEUE_NAMES]);
+  });
+  test("parses a comma-separated list, trimming spaces and repeats", () => {
+    expect(loadConfig(workerEnv, { env: { QUEUES: " turn, webhook ,turn" } }).queues).toEqual(["turn", "webhook"]);
+  });
+  test("rejects an unknown queue and names it", () => {
+    try {
+      loadConfig(workerEnv, { env: { QUEUES: "turn,emails" } });
+      expect.unreachable();
+    } catch (e) {
+      expect((e as Error).message).toMatch(/QUEUES is not valid: .*emails/);
+    }
+  });
+  test("rejects an empty list", () => {
+    fails(() => loadConfig(workerEnv, { env: { QUEUES: " , " } }), "QUEUES");
+  });
+});
+
+describe("egress", () => {
+  const token = "t".repeat(32);
+  const key = "k".repeat(32);
+  test("listens on 127.0.0.1:4400 with 600 requests a minute and a burst of 60 by default", () => {
+    const c = loadConfig(egressEnv, { env: { EGRESS_TOKEN: token, EGRESS_CAPABILITY_KEY: key } });
+    expect(c.egressHost).toBe("127.0.0.1");
+    expect(c.egressPort).toBe(4400);
+    expect(c.egressRatePerMinute).toBe(600);
+    expect(c.egressRateBurst).toBe(60);
+    expect(c.egressToken.reveal()).toBe(token);
+    expect(String(c.egressToken)).toBe("[redacted]");
+  });
+  test("needs a token of at least 32 characters and never echoes it", () => {
+    fails(() => loadConfig(egressEnv, { env: { EGRESS_CAPABILITY_KEY: key } }), "EGRESS_TOKEN");
+    try {
+      loadConfig(egressEnv, { env: { EGRESS_TOKEN: "short-canary", EGRESS_CAPABILITY_KEY: key } });
+    } catch (e) {
+      expect((e as Error).message).not.toContain("short-canary");
+    }
+    fails(
+      () => loadConfig(egressEnv, { env: { EGRESS_TOKEN: "short-canary", EGRESS_CAPABILITY_KEY: key } }),
+      "EGRESS_TOKEN",
+    );
+  });
+  test("needs a capability key of at least 32 characters and never echoes it (ADR-023)", () => {
+    fails(() => loadConfig(egressEnv, { env: { EGRESS_TOKEN: token } }), "EGRESS_CAPABILITY_KEY");
+    try {
+      loadConfig(egressEnv, { env: { EGRESS_TOKEN: token, EGRESS_CAPABILITY_KEY: "short-key-canary" } });
+    } catch (e) {
+      expect((e as Error).message).not.toContain("short-key-canary");
+    }
+    const c = loadConfig(egressEnv, { env: { EGRESS_TOKEN: token, EGRESS_CAPABILITY_KEY: key } });
+    expect(String(c.egressCapabilityKey)).toBe("[redacted]");
+  });
+  test("rejects a rate of zero", () => {
+    fails(
+      () =>
+        loadConfig(egressEnv, {
+          env: { EGRESS_TOKEN: token, EGRESS_CAPABILITY_KEY: key, EGRESS_RATE_PER_MINUTE: "0" },
+        }),
+      "EGRESS_RATE_PER_MINUTE",
+    );
+  });
+  test("callers share the token and default to the local service", () => {
+    const c = loadConfig(egressClientEnv, { env: { EGRESS_TOKEN: token } });
+    expect(c.egressUrl).toBe("http://127.0.0.1:4400");
+    fails(() => loadConfig(egressClientEnv, { env: { EGRESS_TOKEN: token, EGRESS_URL: "ftp://x" } }), "EGRESS_URL");
+  });
+});
+
+test("groups compose into one service spec", () => {
+  const config = loadConfig(
+    { ...commonEnv, ...databaseEnv, ...redisEnv, ...apiEnv },
+    { env: { DATABASE_URL: "postgres://u:p@db/w", REDIS_URL: "redis://cache:6379", ROLE: "bridge" } },
+  );
+  expect(config.role).toBe("bridge");
+  expect(config.nodeEnv).toBe("development");
+});

@@ -1,0 +1,10 @@
+{
+  "model": "claude-haiku-5-5",
+  "status": "blocked",
+  "attemptedAt": "2026-11-15T09:55:01.106545+00:00",
+  "code": "model_unavailable",
+  "providerStatus": 400,
+  "providerReason": "insufficient_credits",
+  "completedCases": 0,
+  "autonomy": "untested"
+}

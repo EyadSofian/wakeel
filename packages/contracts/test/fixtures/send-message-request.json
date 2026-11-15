@@ -1,0 +1,13 @@
+{
+  "userId": "contact:88",
+  "user": {
+    "name": "منى عبد الله",
+    "email": "mona@example.com",
+    "phone": "+201001234567",
+    "locale": "ar-EG",
+    "attributes": { "plan": "gold", "orders": 3 }
+  },
+  "message": { "type": "text", "text": "عايزة أعرف الأوردر رقم ٤٥١٢٣ هيوصل امتى؟ thanks" },
+  "externalMessageId": "chatwoot-msg-99812",
+  "metadata": { "inbox": "whatsapp" }
+}

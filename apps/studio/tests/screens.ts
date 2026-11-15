@@ -1,0 +1,383 @@
+/**
+ * Every screen the review loop shoots (design system §8.1). Add a screen here when it exists; each
+ * state is set up by `prepare` in shots.spec.ts. Every content surface includes the RTL fixtures.
+ */
+export type ScreenState =
+  | "default"
+  | "focus"
+  | "empty"
+  | "loading"
+  | "error"
+  | "rtl"
+  // Canvas (task 2.4, design system §8.1): a 300-node flow, a multi-selection, validation issues.
+  | "dense-300"
+  | "selection"
+  | "issues"
+  // Task 2.5: the add-node and card menus, the shortcut sheet, the keyboard cursor in a node.
+  | "node-menu"
+  | "card-menu"
+  | "shortcuts"
+  | "cursor"
+  // Task 2.6: the inspector's card forms.
+  | "card-say"
+  | "card-ask"
+  | "card-condition"
+  | "card-invalid"
+  | "card-rtl"
+  // Task 2.7: the Variables screen's dialogs and the VariablePicker in the inspector.
+  | "usages"
+  | "edit"
+  | "rerank-key"
+  | "delete-blocked"
+  | "picker"
+  // Task 4.6: the emulator beside the canvas.
+  | "bubbles"
+  | "variables"
+  | "user-form"
+  | "run-from"
+  // Task 4.7: the trace tab with a step selected, and the run overlay on the canvas.
+  | "trace"
+  // Task 6.9: an Autonomous Node's turn with its model call open in PayloadViewer, and a replay
+  // paused part way through a three-step turn.
+  | "trace-payload"
+  | "trace-playback"
+  // Task 5.5: the Connections test tab after a test event and a message.
+  | "tested"
+  // Task 6.8: the Autonomous Node's inspector, a new code tool's sub-view and an exit's.
+  | "agent"
+  | "agent-rtl"
+  | "agent-tool"
+  | "agent-exit"
+  // Task 2.8: the command palette, the Issues panel and the Workflows panel with its menu and dialog.
+  | "palette"
+  | "palette-search"
+  | "issues-panel"
+  | "issues-panel-rtl"
+  | "issues-panel-empty"
+  | "workflows"
+  | "workflow-menu"
+  | "workflow-delete"
+  | "workflows-rtl"
+  | "save-offline"
+  // Task 2.9: the Run code form and the code drawer.
+  | "card-code"
+  | "node-actions"
+  | "card-run-workflow"
+  | "card-ai-condition"
+  | "card-generate"
+  | "card-generate-rtl"
+  | "card-extract"
+  | "card-handoff"
+  | "card-handoff-rtl"
+  | "code-drawer"
+  | "code-drawer-rtl"
+  | "code-drawer-loading"
+  | "code-drawer-error"
+  | "code-drawer-empty"
+  // Task 7.5: publish, versions, compare, rollback and restore, and Secrets and settings.
+  | "publish"
+  | "publish-blocked"
+  | "rollback"
+  | "restore"
+  | "secrets"
+  | "secrets-rtl"
+  | "secrets-empty"
+  // Task 7.6: the Import bot dialog on the workspace home.
+  | "import";
+
+export interface Screen {
+  id: string;
+  route: string;
+  states: ScreenState[];
+  sizes: [width: number, height: number][];
+  /** Screens that load data get it from the mock API layer (tests/mock-api.ts). */
+  mock?: boolean;
+  /** Scripted interactions for `studio:motion`. */
+  interactions: { id: string; trigger: string; target: string; durationMs: number }[];
+}
+
+export const SCREENS: Screen[] = [
+  {
+    id: "gallery",
+    route: "/__gallery",
+    states: ["default", "focus"],
+    sizes: [
+      [1440, 900],
+      [1280, 720],
+    ],
+    interactions: [
+      // spring.gentle: visualDuration 240 ms.
+      {
+        id: "popover-enter",
+        trigger: '[data-testid="motion-toggle"]',
+        target: '[data-section="motion"]',
+        durationMs: 240,
+      },
+    ],
+  },
+  // Router-level states (design system §3.3): an unknown address and an unexpected error.
+  {
+    id: "not-found",
+    route: "/__does-not-exist",
+    states: ["default", "focus"],
+    sizes: [
+      [1440, 900],
+      [1280, 720],
+    ],
+    interactions: [],
+  },
+  {
+    id: "error",
+    route: "/__gallery/error",
+    states: ["default", "focus"],
+    sizes: [
+      [1440, 900],
+      [1280, 720],
+    ],
+    interactions: [],
+  },
+];
+
+const DESKTOP: [number, number][] = [
+  [1440, 900],
+  [1280, 720],
+];
+
+// Phase 1 screens (task 1.7). Each has its empty, loading, error and RTL states (CLAUDE.md §9).
+const WS = "ws_01m7a256m0a13warwhczsjhx9g";
+SCREENS.push(
+  {
+    id: "sign-in",
+    route: "/sign-in",
+    states: ["default", "focus", "error"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "home",
+    route: `/w/${WS}`,
+    states: ["default", "focus", "empty", "loading", "error", "rtl", "import"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "settings-general",
+    route: `/w/${WS}/settings/general`,
+    states: ["default", "focus", "loading", "error", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "settings-members",
+    route: `/w/${WS}/settings/members`,
+    states: ["default", "focus", "empty", "loading", "error", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "settings-api-keys",
+    route: `/w/${WS}/settings/api-keys`,
+    states: ["default", "focus", "empty", "loading", "error", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+);
+
+// Phase 2: the bot canvas (task 2.4). "default" is the typical bot; "empty" is a lone Start node.
+SCREENS.push({
+  id: "canvas",
+  route: `/w/${WS}/b/bot_01m7a256m0a13warwhczsjhx9b`,
+  states: [
+    "default",
+    "empty",
+    "dense-300",
+    "selection",
+    "issues",
+    "loading",
+    "error",
+    "rtl",
+    "node-menu",
+    "card-menu",
+    "shortcuts",
+    "cursor",
+    "card-say",
+    "card-ask",
+    "card-condition",
+    "card-invalid",
+    "card-rtl",
+    "picker",
+    "agent",
+    "agent-rtl",
+    "agent-tool",
+    "agent-exit",
+    "palette",
+    "palette-search",
+    "issues-panel",
+    "issues-panel-rtl",
+    "issues-panel-empty",
+    "workflows",
+    "workflow-menu",
+    "workflow-delete",
+    "workflows-rtl",
+    "save-offline",
+    "card-code",
+    "code-drawer",
+    "code-drawer-rtl",
+    "code-drawer-loading",
+    "code-drawer-error",
+    "code-drawer-empty",
+    "node-actions",
+    "card-run-workflow",
+    "card-ai-condition",
+    "card-generate",
+    "card-generate-rtl",
+    "card-extract",
+    "card-handoff",
+    "card-handoff-rtl",
+    "publish",
+    "publish-blocked",
+  ],
+  sizes: DESKTOP,
+  mock: true,
+  interactions: [],
+});
+
+// Task 2.7: the Variables screen (design system §5.7).
+SCREENS.push({
+  id: "variables",
+  route: `/w/${WS}/b/bot_01m7a256m0a13warwhczsjhx9b/variables`,
+  states: [
+    "default",
+    "focus",
+    "empty",
+    "loading",
+    "error",
+    "rtl",
+    "usages",
+    "edit",
+    "delete-blocked",
+    "secrets",
+    "secrets-rtl",
+    "secrets-empty",
+  ],
+  sizes: DESKTOP,
+  mock: true,
+  interactions: [],
+});
+
+// Task 4.6: the emulator (design system §5.3), open beside the canvas. "loading" is a turn still
+// running; "error" an error event in the transcript; "rtl" the RTL fixtures as messages.
+SCREENS.push({
+  id: "emulator",
+  route: `/w/${WS}/b/bot_01m7a256m0a13warwhczsjhx9b`,
+  states: [
+    "default",
+    "focus",
+    "empty",
+    "loading",
+    "error",
+    "rtl",
+    "bubbles",
+    "variables",
+    "user-form",
+    "run-from",
+    "trace",
+    "trace-payload",
+    "trace-playback",
+  ],
+  sizes: DESKTOP,
+  mock: true,
+  interactions: [],
+});
+
+// Connections (task 5.5, design system §5.11): the list, one connection's three tabs, and a
+// connection turned off after repeated failures.
+const CONNECTIONS = `/w/${WS}/b/bot_01m7a256m0a13warwhczsjhx9b/connections`;
+SCREENS.push(
+  {
+    id: "connections",
+    route: CONNECTIONS,
+    states: ["default", "focus", "empty", "loading", "error", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "connection",
+    route: `${CONNECTIONS}/conn_01m7a256m0a13warwhczsjhx01`,
+    states: ["default", "focus", "empty", "loading", "error", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "connection-disabled",
+    route: `${CONNECTIONS}/conn_01m7a256m0a13warwhczsjhx03`,
+    states: ["default", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "connection-deliveries",
+    route: `${CONNECTIONS}/conn_01m7a256m0a13warwhczsjhx01/deliveries`,
+    states: ["default", "empty", "loading", "error", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "connection-test",
+    route: `${CONNECTIONS}/conn_01m7a256m0a13warwhczsjhx01/test`,
+    states: ["default", "tested", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+);
+
+// Versions (task 7.5, design system §5.8): the list with its two confirmations, and Compare.
+const VERSIONS = `/w/${WS}/b/bot_01m7a256m0a13warwhczsjhx9b/versions`;
+SCREENS.push(
+  {
+    id: "versions",
+    route: VERSIONS,
+    states: ["default", "focus", "empty", "loading", "error", "rtl", "rollback", "restore"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+  {
+    id: "version-compare",
+    route: `${VERSIONS}/ver_01m7a256m0a13warwhczsj0003`,
+    states: ["default", "loading", "error", "rtl"],
+    sizes: DESKTOP,
+    mock: true,
+    interactions: [],
+  },
+);
+
+// Settings → Models (task 6.2): keys and defaults, and the key dialog open (`edit`).
+SCREENS.push({
+  id: "settings-models",
+  route: `/w/${WS}/settings/models`,
+  states: ["default", "focus", "empty", "loading", "error", "rtl", "edit", "rerank-key"],
+  sizes: DESKTOP,
+  mock: true,
+  interactions: [],
+});
+
+export const THEMES = ["light", "dark"] as const;
+
+/** Screens selected by REVIEW_SCREEN (set by `--screen <id>`), or all. */
+export function selectedScreens(env: string | undefined = process.env["REVIEW_SCREEN"]): Screen[] {
+  if (!env) return SCREENS;
+  const found = SCREENS.filter((s) => s.id === env);
+  if (found.length === 0) throw new Error(`Unknown screen "${env}". Known: ${SCREENS.map((s) => s.id).join(", ")}`);
+  return found;
+}

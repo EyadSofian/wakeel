@@ -1,0 +1,180 @@
+import type { Secret } from "@wakeel/config";
+import { WorkspaceId } from "@wakeel/contracts";
+import { sql } from "drizzle-orm";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import type { PgTransactionConfig } from "drizzle-orm/pg-core";
+import pg from "pg";
+
+/** The transaction handed to `withWorkspace` callbacks: a Drizzle transaction scoped to one workspace. */
+export type Tx = Parameters<Parameters<NodePgDatabase["transaction"]>[0]>[0];
+
+export interface DatabaseOptions {
+  /** app_rw connection string (`DATABASE_URL`). */
+  url: string | Secret<string>;
+  maxConnections?: number;
+  applicationName?: string;
+  /** Errors on idle pooled connections (for example a server restart). Defaults to stderr. */
+  onRlsDenied?: () => void;
+  onIdleError?: (error: Error) => void;
+}
+
+export interface Database {
+  /**
+   * The only way to run a tenant query (ADR-004). Opens a transaction, sets `app.workspace_id`
+   * for that transaction only, runs `fn`, and commits; any error rolls back. RLS limits every
+   * statement in `fn` to `workspaceId`'s rows.
+   */
+  withWorkspace<T>(workspaceId: string, fn: (tx: Tx) => Promise<T>, config?: PgTransactionConfig): Promise<T>;
+  /**
+   * Checks the connected role cannot bypass row-level security. Services call this at boot and
+   * refuse to start if it throws.
+   */
+  verify(): Promise<{ role: string }>;
+  /**
+   * Pre-tenant lookups (ADR-004, ADR-015): `security definer` functions that return only ids. Use
+   * the ids to open `withWorkspace` and read the row there, under RLS.
+   */
+  lookup: Lookups;
+  /**
+   * Drizzle on the app_rw pool with no workspace set, for the platform tables only (users,
+   * sessions, accounts, verifications), which better-auth reads and writes (ADR-015). Tenant tables
+   * are invisible and unwritable through it: RLS fails closed without a workspace.
+   */
+  platform: NodePgDatabase;
+  close(): Promise<void>;
+}
+
+export interface Lookups {
+  /** Workspaces the user belongs to, by id. */
+  userWorkspaceIds(userId: string): Promise<string[]>;
+  /** The key with this 8-character prefix, revoked or not. */
+  apiKeyByPrefix(prefix: string): Promise<{ keyId: string; workspaceId: string } | undefined>;
+  /** The invitation with this token hash, open or not. */
+  invitationByTokenHash(tokenHash: string): Promise<{ invitationId: string; workspaceId: string } | undefined>;
+  /** The workspace of a conversation, for a `turn` job that carries only the conversation id. */
+  conversationWorkspace(conversationId: string): Promise<string | undefined>;
+  /** Conversations with unprocessed inbound events and no live lease (the janitor wakes them). */
+  conversationsToWake(limit: number): Promise<{ conversationId: string; workspaceId: string }[]>;
+  /** Waiting conversations past their inactivity deadline with no timeout pending. */
+  conversationsExpired(limit: number): Promise<{ conversationId: string; workspaceId: string }[]>;
+  /** Conversations with a due, unleased pending webhook delivery on an active connection (ADR-028 §4). */
+  webhookStreamsDue(now: Date, limit: number): Promise<{ conversationId: string; workspaceId: string }[]>;
+  /** Knowledge base sources whose re-sync schedule is due (task 8.5, ADR-042). */
+  kbSourcesDue(now: Date, limit: number): Promise<{ sourceId: string; workspaceId: string }[]>;
+}
+
+/** Opens a pool for the app_rw role. The pool itself is never exposed. */
+export function createDatabase(options: DatabaseOptions): Database {
+  const url = typeof options.url === "string" ? options.url : options.url.reveal();
+  const pool = new pg.Pool({
+    connectionString: url,
+    max: options.maxConnections ?? 10,
+    application_name: options.applicationName ?? "wakeel",
+  });
+  const onIdleError =
+    options.onIdleError ?? ((e: Error) => process.stderr.write(`Idle database connection failed: ${e.message}\n`));
+  pool.on("error", onIdleError);
+  const db = drizzle({ client: pool });
+
+  return {
+    async withWorkspace(workspaceId, fn, config) {
+      if (!WorkspaceId.safeParse(workspaceId).success) {
+        throw new TypeError("withWorkspace needs a valid workspace id (ws_ followed by 26 characters).");
+      }
+      return db
+        .transaction(async (tx) => {
+          // `true` makes the setting local to this transaction, so a pooled connection never carries it over.
+          await tx.execute(sql`select set_config('app.workspace_id', ${workspaceId}, true)`);
+          return fn(tx);
+        }, config)
+        .catch((error: unknown) => {
+          let source = error;
+          while (source instanceof Error && source.cause) source = source.cause;
+          if (
+            source instanceof Error &&
+            "code" in source &&
+            source.code === "42501" &&
+            source.message.includes("row-level security")
+          )
+            options.onRlsDenied?.();
+          throw error;
+        });
+    },
+
+    async verify() {
+      const result = await pool.query(
+        "select current_user as role, rolsuper, rolbypassrls from pg_roles where rolname = current_user",
+      );
+      const row = result.rows[0] as { role: string; rolsuper: boolean; rolbypassrls: boolean };
+      if (row.rolsuper || row.rolbypassrls) {
+        throw new Error(
+          `The database role ${row.role} can bypass row-level security. Connect as app_rw (DATABASE_URL), never as a superuser.`,
+        );
+      }
+      return { role: row.role };
+    },
+
+    platform: db,
+
+    lookup: {
+      async userWorkspaceIds(userId) {
+        const { rows } = await pool.query<{ id: string }>("select id from lookup.user_workspace_ids($1) as id", [
+          userId,
+        ]);
+        return rows.map((r) => r.id);
+      },
+      async apiKeyByPrefix(prefix) {
+        const { rows } = await pool.query<{ keyId: string; workspaceId: string }>(
+          'select key_id as "keyId", workspace_id as "workspaceId" from lookup.api_key_by_prefix($1)',
+          [prefix],
+        );
+        return rows[0];
+      },
+      async invitationByTokenHash(tokenHash) {
+        const { rows } = await pool.query<{ invitationId: string; workspaceId: string }>(
+          'select invitation_id as "invitationId", workspace_id as "workspaceId" from lookup.invitation_by_token_hash($1)',
+          [tokenHash],
+        );
+        return rows[0];
+      },
+      async conversationWorkspace(conversationId) {
+        const { rows } = await pool.query<{ id: string | null }>("select lookup.conversation_workspace($1) as id", [
+          conversationId,
+        ]);
+        return rows[0]?.id ?? undefined;
+      },
+      async conversationsToWake(limit) {
+        const { rows } = await pool.query<{ conversationId: string; workspaceId: string }>(
+          'select conversation_id as "conversationId", workspace_id as "workspaceId" from lookup.conversations_to_wake($1)',
+          [limit],
+        );
+        return rows;
+      },
+      async conversationsExpired(limit) {
+        const { rows } = await pool.query<{ conversationId: string; workspaceId: string }>(
+          'select conversation_id as "conversationId", workspace_id as "workspaceId" from lookup.conversations_expired($1)',
+          [limit],
+        );
+        return rows;
+      },
+      async webhookStreamsDue(now, limit) {
+        const { rows } = await pool.query<{ conversationId: string; workspaceId: string }>(
+          'select conversation_id as "conversationId", workspace_id as "workspaceId" from lookup.webhook_streams_due($1, $2)',
+          [now, limit],
+        );
+        return rows;
+      },
+      async kbSourcesDue(now, limit) {
+        const { rows } = await pool.query<{ sourceId: string; workspaceId: string }>(
+          'select source_id as "sourceId", workspace_id as "workspaceId" from lookup.kb_sources_due($1, $2)',
+          [now, limit],
+        );
+        return rows;
+      },
+    },
+
+    async close() {
+      await pool.end();
+    },
+  };
+}

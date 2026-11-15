@@ -1,0 +1,266 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { expect, type Locator, type Page, test } from "@playwright/test";
+import type { EmulatorScenario } from "./emulator-fixtures";
+import { mockApi, WS } from "./mock-api";
+
+/**
+ * `pnpm studio:motion --screen emulator` (task 4.6, design system §5.3 motion table): the user's
+ * bubble entering, the typing indicator, and choice buttons fading in after the bot's text, at
+ * normal and reduced motion, on the mock API.
+ *
+ * These entrances last 80–300 ms, shorter than a round trip from the test, so the page's animation
+ * playback is slowed through the DevTools protocol before each one; the measured timing comes from
+ * the effects themselves and is unaffected. Frames are then sought to 0, 25, 50, 75 and 100%.
+ * Output: apps/studio/.motion/emulator/<interaction>-<mode>-<pct>.png and -timing.json.
+ */
+const DIR = fileURLToPath(new URL("../.motion/emulator", import.meta.url));
+const ROUTE = `/w/${WS}/b/bot_01m7a256m0a13warwhczsjhx9b`;
+const MODES = [
+  { id: "normal", reducedMotion: "no-preference" },
+  { id: "reduced", reducedMotion: "reduce" },
+] as const;
+const PERCENTS = [0, 25, 50, 75, 100];
+
+test.skip(
+  !!process.env["REVIEW_SCREEN"] && process.env["REVIEW_SCREEN"] !== "emulator",
+  "Only for --screen emulator or a full run",
+);
+test.use({ viewport: { width: 1440, height: 900 } });
+
+async function open(page: Page, reducedMotion: "reduce" | "no-preference", scenario: EmulatorScenario) {
+  await page.emulateMedia({ reducedMotion });
+  await mockApi(page, "default", "typical", scenario);
+  await page.goto(ROUTE);
+  await expect(page.locator(".react-flow__node").first()).toBeVisible();
+  await page.getByRole("button", { name: "Test", exact: true }).click();
+  await page.evaluate(() => document.fonts.ready);
+  return page.getByRole("complementary", { name: "Emulator" });
+}
+
+/** Slows Web Animations (opacity fades) so a frame can be sought before they finish. */
+async function slowAnimations(page: Page, rate: number) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Animation.enable");
+  await cdp.send("Animation.setPlaybackRate", { playbackRate: rate });
+}
+
+/** Pauses every finite animation under `target`, records its timing, and shoots seek frames. */
+async function frames(target: Locator, prefix: string) {
+  const handle = await target.elementHandle();
+  if (!handle) throw new Error("no target");
+  const timing = await handle.evaluate((el) => {
+    const animations = el.getAnimations({ subtree: true });
+    for (const a of animations) a.pause();
+    return animations.map((a) => {
+      const effect = a.effect as KeyframeEffect;
+      const t = effect.getTiming();
+      const props = [
+        ...new Set(
+          effect
+            .getKeyframes()
+            .flatMap((k) => Object.keys(k))
+            .filter((k) => !["offset", "computedOffset", "easing", "composite"].includes(k)),
+        ),
+      ];
+      return {
+        props,
+        delayMs: Math.round(Number(t.delay ?? 0)),
+        durationMs: Math.round(Number(t.duration)),
+        iterations: t.iterations === Number.POSITIVE_INFINITY ? "infinite" : t.iterations,
+      };
+    });
+  });
+  writeFileSync(`${prefix}-timing.json`, `${JSON.stringify({ animations: timing }, null, 2)}\n`);
+  const finite = timing.filter((t) => t.iterations !== "infinite");
+  const total = Math.max(0, ...finite.map((t) => t.delayMs + t.durationMs));
+  for (const pct of PERCENTS) {
+    const at = (total * pct) / 100;
+    await handle.evaluate((el, at) => {
+      for (const a of el.getAnimations({ subtree: true })) {
+        const end = Number(a.effect?.getComputedTiming().endTime ?? 0);
+        a.currentTime = Number.isFinite(end) ? Math.min(at, end) : at;
+      }
+    }, at);
+    await target.screenshot({ path: `${prefix}-${String(pct).padStart(3, "0")}.png` });
+  }
+  return timing;
+}
+
+for (const mode of MODES) {
+  test(`emulator send ${mode.id}`, async ({ page }) => {
+    mkdirSync(DIR, { recursive: true });
+    const panel = await open(page, mode.reducedMotion, "running");
+    const box = panel.getByRole("textbox", { name: "Message the bot" });
+    await box.fill("عايز أعرف حالة طلبي");
+    // Motion runs the bubble's rise (an independent `y` transform) on the main thread, not as a Web
+    // Animation, so it is sampled every frame: offset from its final place and opacity, for 400 ms.
+    await page.evaluate(() => {
+      const w = window as unknown as { __samples: { t: number; dy: number; opacity: number }[] };
+      w.__samples = [];
+      // Before the first message the panel shows its empty state; the log appears with the bubble.
+      const root = document.querySelector('[aria-label="Emulator"]');
+      if (!root) return;
+      const t0 = performance.now();
+      const observer = new MutationObserver(() => {
+        const item = root.querySelector('[role="log"] > div') as HTMLElement | null;
+        if (!item) return;
+        observer.disconnect();
+        const sample = () => {
+          const t = performance.now() - t0;
+          const m = new DOMMatrixReadOnly(getComputedStyle(item).transform);
+          w.__samples.push({
+            t: Math.round(t),
+            dy: Math.round(m.m42 * 10) / 10,
+            opacity: Number(getComputedStyle(item).opacity),
+          });
+          if (t < 400) requestAnimationFrame(sample);
+        };
+        sample();
+      });
+      observer.observe(root, { childList: true, subtree: true });
+    });
+    await box.press("Enter");
+    // The composer clears at once (§5.3), before any animation has moved.
+    await expect(box).toHaveValue("");
+    await page.waitForTimeout(500);
+    const samples = await page.evaluate(
+      () => (window as unknown as { __samples: { t: number; dy: number; opacity: number }[] }).__samples,
+    );
+    writeFileSync(`${DIR}/send-${mode.id}-samples.json`, `${JSON.stringify(samples, null, 2)}\n`);
+    expect(samples.length).toBeGreaterThan(3);
+    const first = samples[0];
+    const last = samples.at(-1);
+    if (mode.id === "normal") {
+      // Rises 8 px and fades in (spring.snappy); ends in place, fully opaque.
+      expect(first?.dy).toBeGreaterThan(0);
+      expect(first?.dy).toBeLessThanOrEqual(8);
+    } else {
+      // Reduced motion: no travel at all, only the 80 ms fade.
+      expect(samples.every((x) => x.dy === 0)).toBe(true);
+    }
+    expect(first?.opacity).toBeLessThan(1);
+    expect(last).toMatchObject({ dy: 0, opacity: 1 });
+    await panel.getByRole("log").screenshot({ path: `${DIR}/send-${mode.id}-100.png` });
+  });
+
+  test(`emulator choices ${mode.id}`, async ({ page }) => {
+    mkdirSync(DIR, { recursive: true });
+    const panel = await open(page, mode.reducedMotion, "conversation");
+    const box = panel.getByRole("textbox", { name: "Message the bot" });
+    await box.fill("عايز أعرف حالة طلبي");
+    await slowAnimations(page, 0.02);
+    await box.press("Enter");
+    const choices = panel.getByRole("group", { name: "Choices" });
+    await expect(choices).toBeAttached();
+    const timing = await frames(choices, `${DIR}/choices-${mode.id}`);
+    expect(timing.some((t) => t.props.includes("opacity"))).toBe(true);
+  });
+
+  test(`emulator trace rows ${mode.id}`, async ({ page }) => {
+    mkdirSync(DIR, { recursive: true });
+    const panel = await open(page, mode.reducedMotion, "conversation");
+    await panel.getByRole("tab", { name: "Trace" }).click();
+    // Sample the first step row as it enters (§5.3 "Trace, live": fade + 4 px, 120 ms).
+    await page.evaluate(() => {
+      const w = window as unknown as { __rows: { t: number; dy: number; opacity: number }[] };
+      w.__rows = [];
+      const root = document.querySelector('[aria-label="Trace and variables"]');
+      if (!root) return;
+      const t0 = performance.now();
+      const observer = new MutationObserver(() => {
+        const row = root.querySelector('[aria-label="Steps"] > li') as HTMLElement | null;
+        if (!row) return;
+        observer.disconnect();
+        const sample = () => {
+          const t = performance.now() - t0;
+          const m = new DOMMatrixReadOnly(getComputedStyle(row).transform);
+          w.__rows.push({
+            t: Math.round(t),
+            dy: Math.round(m.m42 * 10) / 10,
+            opacity: Number(getComputedStyle(row).opacity),
+          });
+          if (t < 400) requestAnimationFrame(sample);
+        };
+        sample();
+      });
+      observer.observe(root, { childList: true, subtree: true });
+    });
+    const box = panel.getByRole("textbox", { name: "Message the bot" });
+    await box.fill("عايز أعرف حالة طلبي");
+    await box.press("Enter");
+    await expect(panel.getByRole("list", { name: "Steps" })).toBeVisible();
+    await page.waitForTimeout(500);
+    const rows = await page.evaluate(
+      () => (window as unknown as { __rows: { t: number; dy: number; opacity: number }[] }).__rows,
+    );
+    writeFileSync(`${DIR}/trace-${mode.id}-samples.json`, `${JSON.stringify(rows, null, 2)}\n`);
+    expect(rows.length).toBeGreaterThan(3);
+    if (mode.id === "normal") {
+      expect(rows[0]?.dy).toBeLessThan(0);
+      expect(rows[0]?.dy).toBeGreaterThanOrEqual(-4);
+    } else {
+      expect(rows.every((r) => r.dy === 0)).toBe(true);
+    }
+    expect(rows[0]?.opacity).toBeLessThan(1);
+    expect(rows.at(-1)).toMatchObject({ dy: 0, opacity: 1 });
+    await panel.getByRole("list", { name: "Steps" }).screenshot({ path: `${DIR}/trace-${mode.id}-100.png` });
+  });
+}
+
+for (const mode of MODES) {
+  // Task 6.9 (§5.3 "Trace playback"): a recorded three-step turn replays over 4 s; the current card
+  // takes its tint over 200 ms (80 ms reduced). Frames at 0, 25, 50, 75 and 100% of the replay, and
+  // the tint transition's timing from the card itself.
+  test(`emulator trace playback ${mode.id}`, async ({ page }) => {
+    mkdirSync(DIR, { recursive: true });
+    const panel = await open(page, mode.reducedMotion, "conversation");
+    const box = panel.getByRole("textbox", { name: "Message the bot" });
+    for (const [i, text] of ["عايز أعرف حالة طلبي", "5678"].entries()) {
+      await box.fill(text);
+      await box.press("Enter");
+      await expect(panel.locator("p", { hasText: / s$|Waiting for the user/ })).toHaveCount(i + 1);
+    }
+    await panel.getByTitle("Open this turn's trace").last().click();
+    await page.evaluate(() => {
+      const w = window as unknown as { __tint: { durationMs: number; props: string[] }[] };
+      w.__tint = [];
+      new MutationObserver(() => {
+        const card = document.querySelector("[data-active]");
+        if (!card) return;
+        for (const a of card.getAnimations()) {
+          const t = (a.effect as KeyframeEffect).getTiming();
+          const prop = (a as CSSTransition).transitionProperty;
+          if (prop && !w.__tint.some((x) => x.props.includes(prop)))
+            w.__tint.push({ durationMs: Math.round(Number(t.duration)), props: [prop] });
+        }
+      }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["data-active"] });
+    });
+    const started = Date.now();
+    await panel.getByRole("button", { name: "Play this turn" }).click();
+    const frames: { pct: number; active: string | null }[] = [];
+    for (const pct of PERCENTS) {
+      const due = started + (4000 * pct) / 100 - (pct === 100 ? 150 : 0);
+      await page.waitForTimeout(Math.max(0, due - Date.now()));
+      const active = await page.evaluate(
+        () => document.querySelector("[data-active]")?.closest("[data-card]")?.getAttribute("data-card") ?? null,
+      );
+      frames.push({ pct, active });
+      await page.screenshot({ path: `${DIR}/playback-${mode.id}-${String(pct).padStart(3, "0")}.png` });
+    }
+    await expect(panel.getByRole("button", { name: "Play this turn" })).toBeVisible({ timeout: 4_000 });
+    const tint = await page.evaluate(() => (window as unknown as { __tint: unknown[] }).__tint);
+    writeFileSync(`${DIR}/playback-${mode.id}-timing.json`, `${JSON.stringify({ frames, tint }, null, 2)}\n`);
+    // The replay moves forward through the cards and never back.
+    // The say card is due at about 0.9 s (20, 190 and 700 ms scaled to 4 s) and is held to the end,
+    // so the 25% samples show the order's tail; the full order is checked in playback.spec.ts.
+    const order = ["card_0000000002", "card_0000000003", "card_0000000004"];
+    const seen = frames.map((f) => (f.active ? order.indexOf(f.active) : -1));
+    expect(seen.every((v, i) => i === 0 || v >= (seen[i - 1] ?? -1))).toBe(true);
+    expect(frames.at(-1)?.active).toBe("card_0000000004");
+    const tintMs = (tint as { durationMs: number; props: string[] }[]).find((t) =>
+      t.props.includes("background-color"),
+    );
+    if (tintMs) expect(tintMs.durationMs).toBe(mode.id === "normal" ? 200 : 80);
+  });
+}

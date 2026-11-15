@@ -53,7 +53,7 @@ Read before starting any task: `CLAUDE.md`, the sections of `03-architecture.md`
 
 | ID | Task | Files | Acceptance |
 |---|---|---|---|
-| 1.1 🔒 | Schema: `users, sessions, workspaces, memberships, invitations, api_keys, workspace_secrets, audit_log` with RLS and `security definer` lookup functions | `packages/db/migrations/0002_platform.sql`, repositories | Integration: two-tenant tests for every table; lookup functions return ids only |
+| 1.1 🔒 | Schema: `users, sessions, workspaces, memberships, invitations, api_keys, workspace_secrets, audit_log` with RLS and `security definer` lookup functions | `packages/db/migrations/0003_platform.sql`, repositories | Integration: two-tenant tests for every table; lookup functions return ids only |
 | 1.2 🔒 | Sessions and password auth via better-auth; cookie settings; CSRF on mutations; rate limit on sign-in | `packages/auth/**`, `apps/api/src/routes/auth/*` | Integration: sign up, sign in, sign out; cookie flags asserted; 6th failed sign-in in a minute is `rate_limited`; mutation without CSRF header is rejected |
 | 1.3 🔒 | RBAC: permission matrix (`owner, admin, builder, viewer`) as data; `requirePermission` guard; workspace switcher API | `packages/auth/src/rbac.ts`, guards | Unit: matrix table test for every permission × role; Integration: viewer cannot mutate a bot |
 | 1.4 🔒 | API keys: create (shown once), list, revoke; hash at rest; prefix lookup; scopes; last-used | `packages/auth/src/keys.ts`, routes | Integration: key works; revoked key is `unauthenticated`; only the hash is in the database; a key from workspace A cannot read workspace B |
@@ -72,7 +72,7 @@ Read before starting any task: `CLAUDE.md`, the sections of `03-architecture.md`
 
 | ID | Task | Files | Acceptance |
 |---|---|---|---|
-| 2.1 | Schema and API: `bots`, `bot_draft_docs`; CRUD; document `GET/PUT` with `ETag` / `If-Match`; new bot seeds a Main workflow with Start and one Autonomous node | `packages/db/migrations/0003_bots.sql`, `apps/api/src/routes/bots/*` | Integration: stale `If-Match` returns `revision_conflict` with the server copy; two-tenant tests |
+| 2.1 | Schema and API: `bots`, `bot_draft_docs`; CRUD; document `GET/PUT` with `ETag` / `If-Match`; new bot seeds a Main workflow with Start and one Autonomous node | `packages/db/migrations/0004_bots.sql`, `apps/api/src/routes/bots/*` | Integration: stale `If-Match` returns `revision_conflict` with the server copy; two-tenant tests |
 | 2.2 | `validateDefinition` (all rules in architecture §3.1) on top of `checkWorkflowStructure`; runs in Node and in a web worker | `packages/contracts/src/validate/**` | Unit: one passing and one failing fixture per rule; messages and fixes come from a table |
 | 2.3 | Canvas store: document model, commands, undo/redo, selection, dirty tracking, debounced saver with conflict handling | `apps/studio/src/canvas/store/**` | Unit: every command has do/undo tests; 100 random command sequences keep the document schema-valid (property test) |
 | 2.4 | Canvas rendering: NodeShell for each node type, CardRow summaries, OutputDot, TransitionPath, toolbar, minimap, compact nodes below 50% zoom | `apps/studio/src/canvas/view/**`, `packages/ui/src/canvas/**` | E2E: add nodes, connect, reconnect, delete, undo; perf test with the 300-node fixture meets the budget in design system §5.1; screenshot review (typical, dense-300, selection, issues, rtl) |
@@ -108,7 +108,7 @@ Read before starting any task: `CLAUDE.md`, the sections of `03-architecture.md`
 
 | ID | Task | Files | Acceptance |
 |---|---|---|---|
-| 4.1 | Schema: `bridge_connections, end_users, conversations, inbound_events, turns, messages, outbox_events` | `packages/db/migrations/0004_runtime.sql` | Integration: two-tenant tests; unique constraints on external ids and idempotency keys |
+| 4.1 | Schema: `bridge_connections, end_users, conversations, inbound_events, turns, messages, outbox_events` | `packages/db/migrations/0005_runtime.sql` | Integration: two-tenant tests; unique constraints on external ids and idempotency keys |
 | 4.2 | Engine core (pure): state machine, frames, step loop, outcomes, ports and transitions, limits, error resolution order | `packages/engine/src/**` | Unit: table-driven tests for every row of the event table in architecture §4.4 and every outcome; loop and depth limits; ≥ 90% line coverage |
 | 4.3 | Card executors: say, capture (all kinds except extract; validation; retries; `skipIfFilled`; option outputs), branch, set_variable, code, log, end, set_timeout, call_workflow + Exit node outputs | `packages/engine/src/cards/*` | Unit: per-card tests including failure paths; workflow inputs and outputs round-trip; capture of Arabic-Indic digits as a number works |
 | 4.4 | Turn worker: lease with fencing, inbox drain, per-step transaction, deterministic message ids, turn-done signal, janitor (lease recovery, inactivity timeouts), coalescing window | `apps/worker/src/turn/**` | Integration: kill the worker mid-turn → another resumes at the uncommitted step with no duplicate message; two messages sent 5 ms apart are processed in order; lost Redis job is recovered by the janitor |

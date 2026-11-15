@@ -1,0 +1,32 @@
+# Serves the built Studio and forwards /v1 to the api on the same origin, so the session cookie is
+# first-party and the Origin header is the Studio's (task 1.2). API_UPSTREAM is host:port on the
+# private network, for example api.railway.internal:3000.
+{
+	admin off
+	auto_https off
+}
+
+:{$PORT:8080} {
+	encode zstd gzip
+
+	handle /v1/* {
+		reverse_proxy {$API_UPSTREAM} {
+			# Turn waits stream; do not buffer them.
+			flush_interval -1
+		}
+	}
+
+	handle {
+		root * /srv
+		header /assets/* Cache-Control "public, max-age=31536000, immutable"
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		-Server
+	}
+}

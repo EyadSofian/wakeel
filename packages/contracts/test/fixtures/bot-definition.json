@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 1,
+  "manifest": {
+    "name": "مساعد طلبات متجر النور",
+    "description": "Answers order questions in Arabic and English and hands over to a person when asked.",
+    "defaultLocale": "ar",
+    "locales": ["ar", "en"],
+    "settings": {
+      "models": { "default": "anthropic:claude-sonnet-5-5", "utility": "anthropic:claude-haiku-5-5" },
+      "inactivityTimeoutMinutes": 60,
+      "coalesceWindowMs": 1500
+    },
+    "variables": [
+      {
+        "id": "var_fQVXMTn0Vr",
+        "name": "lang",
+        "scope": "conversation",
+        "type": "enum",
+        "enumValues": ["ar", "en"],
+        "default": "ar"
+      },
+      { "id": "var_SHEQsDRBjy", "name": "orderId", "scope": "conversation", "type": "string" },
+      { "id": "var_70S80b1amf", "name": "orderStatus", "scope": "conversation", "type": "string" }
+    ],
+    "configVars": [{ "key": "ORDERS_API_TOKEN", "description": "Token for the store's order API." }],
+    "mainWorkflowId": "wf_e3EcDF6eqB"
+  },
+  "workflows": [
+    {
+      "id": "wf_e3EcDF6eqB",
+      "name": "Main",
+      "kind": "main",
+      "nodes": [
+        { "id": "node_lRoBm4x7yq", "type": "start", "name": "Start" },
+        {
+          "id": "node_qFcKpkyCk2",
+          "type": "standard",
+          "name": "الترحيب",
+          "cards": [
+            {
+              "id": "card_TgMea9mbMU",
+              "type": "say",
+              "message": { "type": "text", "text": "أهلاً بك في متجر النور. كيف أقدر أساعدك؟" }
+            },
+            {
+              "id": "card_RFPilKy6x7",
+              "type": "capture",
+              "kind": "choice",
+              "into": "var_fQVXMTn0Vr",
+              "routeByOption": true,
+              "prompt": {
+                "type": "choice",
+                "text": "اختر اللغة / Choose a language",
+                "options": [{ "label": "العربية", "value": "ar" }, { "label": "English", "value": "en" }]
+              }
+            },
+            {
+              "id": "card_f7dYpq2Mfs",
+              "type": "branch",
+              "branches": [{ "id": "br_RukGOIaj82", "label": "Has order number", "when": "/\\d{5,}/.test(event.text)" }]
+            },
+            {
+              "id": "card_085Pcrsntf",
+              "type": "call_workflow",
+              "workflowId": "wf_UdZwzTnxBs",
+              "inputs": { "orderId": "conversation.orderId" },
+              "outputs": { "status": "var_70S80b1amf" }
+            }
+          ]
+        },
+        {
+          "id": "node_E9LhcsG1bp",
+          "type": "autonomous",
+          "name": "Order assistant",
+          "instructions": "Help the customer with their order. Reply in {{conversation.lang}}. Use lookupOrder before stating any order status.",
+          "tools": [
+            {
+              "id": "tool_2A5MKYgaBB",
+              "type": "code",
+              "name": "lookupOrder",
+              "description": "Get the status of an order by its number. Use when the customer gives an order number.",
+              "input": {
+                "type": "object",
+                "properties": { "orderId": { "type": "string", "minLength": 5, "description": "Digits only" } },
+                "required": ["orderId"]
+              },
+              "source": "const res = await fetch(`https://orders.example.com/${input.orderId}`, { headers: { authorization: env.ORDERS_API_TOKEN } });\nreturn await res.json();",
+              "sideEffects": false
+            },
+            {
+              "id": "tool_5pzSIZPz5l",
+              "type": "kb_search",
+              "name": "searchPolicies",
+              "description": "Search shipping and return policies.",
+              "kbIds": ["kb_01m7a256m0j9x7ej3f8jwajhad"]
+            }
+          ],
+          "variableAccess": [
+            { "variableId": "var_SHEQsDRBjy", "mode": "read" },
+            { "variableId": "var_70S80b1amf", "mode": "write" }
+          ],
+          "exits": [
+            {
+              "id": "exit_2XR33TZRbi",
+              "name": "resolved",
+              "description": "The customer's question is answered.",
+              "schema": { "type": "object", "properties": { "summary": { "type": "string" } }, "required": ["summary"] }
+            },
+            {
+              "id": "exit_jqvvCmDnRQ",
+              "name": "needsHuman",
+              "description": "The customer asks for a person or is upset."
+            }
+          ],
+          "allowHandoff": true
+        },
+        { "id": "node_muKVh4n3tu", "type": "end", "name": "End" }
+      ],
+      "edges": [
+        {
+          "id": "edge_esNoUpOGAF",
+          "from": { "nodeId": "node_lRoBm4x7yq", "port": "next" },
+          "to": { "nodeId": "node_qFcKpkyCk2" }
+        },
+        {
+          "id": "edge_dMA6UcjvxA",
+          "from": { "nodeId": "node_qFcKpkyCk2", "port": "next" },
+          "to": { "nodeId": "node_E9LhcsG1bp" }
+        },
+        {
+          "id": "edge_OtV8EnVEKi",
+          "from": { "nodeId": "node_E9LhcsG1bp", "port": "exit:exit_2XR33TZRbi" },
+          "to": { "nodeId": "node_muKVh4n3tu" }
+        },
+        {
+          "id": "edge_UDPeP3LQ7U",
+          "from": { "nodeId": "node_E9LhcsG1bp", "port": "exit:exit_jqvvCmDnRQ" },
+          "to": { "nodeId": "node_muKVh4n3tu" }
+        },
+        {
+          "id": "edge_Nol8hCJ5hY",
+          "from": { "nodeId": "node_qFcKpkyCk2", "port": "card:card_RFPilKy6x7:failed" },
+          "to": { "nodeId": "node_muKVh4n3tu" }
+        }
+      ],
+      "layout": {
+        "node_lRoBm4x7yq": { "x": 0, "y": 0 },
+        "node_qFcKpkyCk2": { "x": 240, "y": 0 },
+        "node_E9LhcsG1bp": { "x": 560, "y": 0 },
+        "node_muKVh4n3tu": { "x": 880, "y": 0 }
+      }
+    },
+    {
+      "id": "wf_UdZwzTnxBs",
+      "name": "Look up order",
+      "kind": "sub",
+      "inputs": [{ "name": "orderId", "type": "string" }],
+      "outputs": [{ "name": "status", "type": "string" }],
+      "variables": [{ "id": "var_Ae0r9HReQO", "name": "passages", "scope": "workflow", "type": "object" }],
+      "nodes": [
+        { "id": "node_38sjDzF0a6", "type": "entry", "name": "Entry" },
+        {
+          "id": "node_Vj4Dc5OSke",
+          "type": "standard",
+          "name": "Search",
+          "cards": [
+            {
+              "id": "card_bZ5ZjxoUaw",
+              "type": "kb_search",
+              "kbIds": ["kb_01m7a256m0j9x7ej3f8jwajhad"],
+              "query": "{{workflow.orderId}}",
+              "into": "var_Ae0r9HReQO"
+            }
+          ]
+        },
+        {
+          "id": "node_1miAZOPhad",
+          "type": "exit",
+          "name": "Return",
+          "outputs": { "status": "workflow.passages.passages.length > 0 ? 'found' : 'unknown'" }
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_vSikoslgU9",
+          "from": { "nodeId": "node_38sjDzF0a6", "port": "next" },
+          "to": { "nodeId": "node_Vj4Dc5OSke" }
+        },
+        {
+          "id": "edge_alBCHd3CDt",
+          "from": { "nodeId": "node_Vj4Dc5OSke", "port": "next" },
+          "to": { "nodeId": "node_1miAZOPhad" }
+        }
+      ]
+    }
+  ]
+}

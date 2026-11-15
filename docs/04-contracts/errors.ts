@@ -9,9 +9,30 @@ export const ERRORS = {
   // Request and auth
   validation_failed: { status: 400, title: "Some fields are not valid", fix: "Correct the highlighted fields and try again." },
   unauthenticated: { status: 401, title: "You are not signed in", fix: "Sign in, or send a valid API key." },
+  invalid_credentials: {
+    status: 401,
+    title: "The email or password is not correct",
+    fix: "Check both and try again.",
+  },
+  email_taken: {
+    status: 409,
+    title: "An account with this email already exists",
+    fix: "Sign in instead, or use a different email.",
+  },
+  last_owner: {
+    status: 409,
+    title: "A workspace needs at least one owner",
+    fix: "Make another member an owner first.",
+  },
+  csrf_failed: {
+    status: 403,
+    title: "This request did not come from the Studio",
+    fix: "Reload the page and try again.",
+  },
   forbidden: { status: 403, title: "Your role does not allow this", fix: "Ask a workspace admin for access." },
   not_found: { status: 404, title: "We could not find that", fix: "Check the id, or it may have been deleted." },
   revision_conflict: { status: 409, title: "This was changed elsewhere", fix: "Reload to get the latest copy, then reapply your change." },
+  bot_not_published: { status: 409, title: "This bot has not been published yet", fix: "Publish the bot in the Studio, or use a connection with target draft." },
   idempotency_mismatch: { status: 409, title: "This idempotency key was used with different content", fix: "Use a new key for a new request." },
   rate_limited: { status: 429, title: "Too many requests", fix: "Wait {retryAfter} seconds and try again." },
   quota_exceeded: { status: 429, title: "The workspace reached its {quota} limit", fix: "Raise the cap in usage settings or wait for the next period." },
@@ -55,12 +76,40 @@ export const ERRORS = {
   model_unavailable: { status: 503, title: "{model} did not respond", fix: "Try again; if it continues, switch models or check the provider status." },
   model_auth_failed: { status: 502, title: "The key for {provider} was rejected", fix: "Update the key in workspace settings." },
   model_context_exceeded: { status: 500, title: "The conversation no longer fits in {model}'s context", fix: "Lower the transcript budget or shorten the instructions." },
+  model_key_missing: { status: 409, title: "No key is set for {provider}", fix: "Add a {provider} key in Settings → Models, or choose a model from a provider that has one." },
+  // ADR-040: the OCR tier sends page images; the configured model must read images.
+  model_lacks_vision: {
+    status: 422,
+    title: '"{model}" cannot read images',
+    fix: "Choose a model that supports images to read scanned and Arabic PDF pages.",
+  },
   model_not_configured: { status: 422, title: "No model is set for this step", fix: "Choose a default model in bot settings." },
-
+  ai_extraction_invalid: { status: 500, title: "The model's answer did not match the extraction schema: {message}", fix: "Describe the fields more clearly in the instructions, or make fields the text may not give optional." },
   // Knowledge and tables
+  upload_incomplete: { status: 409, title: "The file has not finished uploading", fix: "Upload the file again, then try once it has finished." },
   kb_not_ready: { status: 409, title: "\"{kb}\" is still being indexed", fix: "Wait for indexing to finish." },
   document_parse_failed: { status: 422, title: "We could not read \"{document}\"", fix: "If it is a scan, upload a clearer copy; otherwise try exporting it again as PDF." },
   source_fetch_failed: { status: 502, title: "We could not fetch {url}: {message}", fix: "Check that the page is public." },
+  replay_input_unavailable: {
+    status: 422,
+    title: "This turn has no supported recorded input",
+    fix: "Choose a turn triggered by a message or a custom event.",
+  },
+  replay_side_effect_blocked: {
+    status: 403,
+    title: "Replay stopped before running code with possible side effects",
+    fix: "Review the code and explicitly confirm side effects before replaying.",
+  },
+  table_write_disabled: {
+    status: 403,
+    title: "This run cannot change table rows",
+    fix: "Use Studio to edit the table or run the published bot.",
+  },
+  table_replay_conflict: {
+    status: 409,
+    title: "The table operation changed after the turn resumed",
+    fix: "Check the existing table rows before starting another turn.",
+  },
   table_row_invalid: { status: 422, title: "Row does not match the table: {message}", fix: "Fix the highlighted column." },
   table_limit_reached: { status: 409, title: "\"{table}\" reached {limit} rows", fix: "Delete rows you no longer need, or raise the limit." },
   unique_violation: { status: 409, title: "A row with this {column} already exists", fix: "Use a different value, or update the existing row." },
@@ -68,8 +117,15 @@ export const ERRORS = {
   // Bridge
   conversation_ended: { status: 409, title: "This conversation has ended", fix: "Send a new message to start again." },
   not_handed_off: { status: 409, title: "This conversation is not handed off", fix: "Nothing to release." },
+  tool_call_not_pending: { status: 409, title: "This conversation is not waiting for that tool call", fix: "Send the toolCallId from the pending call, or check the conversation's status first." },
+  delivery_not_replayable: { status: 409, title: "Only a dead or failed event can be sent again", fix: "Wait for the current attempt to finish, then replay it if it failed." },
   webhook_url_blocked: { status: 422, title: "That webhook address cannot be used", fix: "Use a public https address." },
   connection_disabled: { status: 409, title: "This connection is turned off after repeated delivery failures", fix: "Fix the receiving endpoint, then turn the connection back on." },
+  // Webhook delivery attempts (ADR-028).
+  webhook_rejected: { status: 502, title: "The webhook endpoint did not accept the event", fix: "Make the endpoint answer with a 2xx status within 10 seconds. The response status is shown with the attempt." },
+  webhook_redirected: { status: 502, title: "The webhook endpoint answered with a redirect", fix: "Webhooks do not follow redirects. Set the connection's webhook URL to the final address." },
+  webhook_secret_missing: { status: 409, title: "This connection has no signing secret", fix: "Generate a signing secret for the connection, then replay the event." },
+  webhook_stale: { status: 410, title: "A typing event was dropped because it was too old to send", fix: "Nothing to do. Typing events are best-effort." },
 
   internal_error: { status: 500, title: "Something went wrong on our side", fix: "Try again. If it continues, contact support with request id {requestId}." },
 } as const satisfies Record<string, { status: number; title: string; fix: string }>;
@@ -89,6 +145,8 @@ export const Problem = z.object({
   errors: z
     .array(z.object({ path: z.string(), code: z.string(), message: z.string() }))
     .optional(),
+  /** `revision_conflict` only: the server's copy, so the client can merge or reload (architecture §3). */
+  current: z.object({ rev: z.number().int(), doc: z.unknown() }).optional(),
 });
 export type Problem = z.infer<typeof Problem>;
 

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Format and lint only what is being committed; the full gate is `pnpm check` (CI).
+exec pnpm exec biome check --staged --no-errors-on-unmatched --files-ignore-unknown=true

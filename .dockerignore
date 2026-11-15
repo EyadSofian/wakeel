@@ -1,0 +1,33 @@
+# Build contexts are the repository root (apps/sandbox/Dockerfile). Keep out anything an image must
+# not hold (secrets, git history) and anything it does not need.
+**/node_modules
+.pnpm-store
+.git
+.githooks
+.github
+**/.claude
+.turbo
+**/.turbo
+**/coverage
+**/dist
+**/*.tsbuildinfo
+**/.DS_Store
+
+# Secrets and local settings. Only the example file may enter a build.
+**/.env
+**/.env.*
+!.env.example
+
+# Not needed at runtime.
+docs
+examples
+infra
+tools
+**/test
+**/tests
+**/*.test.ts
+**/vitest.config.ts
+apps/studio/.shots
+apps/studio/.motion
+**/test-results
+**/playwright-report

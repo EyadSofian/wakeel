@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CardId, IsoDateTime, Json, NodeId, ToolId, VariableId, WorkflowId } from "./common";
+import { CardId, Identifier, IsoDateTime, Json, NodeId, ToolId, VariableId, WorkflowId } from "./common";
 import { BotMessagePayload } from "./message";
 
 /** One active workflow invocation. */
@@ -8,8 +8,13 @@ export const Frame = z.object({
   nodeId: NodeId,
   /** Index of the next card to run in a standard node. */
   cardIndex: z.number().int().nonnegative().default(0),
-  /** Workflow-scoped variable values, keyed by variable id. Inputs are stored here too. */
+  /** Workflow-scoped variable values, keyed by variable id. */
   vars: z.record(VariableId, Json).default({}),
+  /**
+   * Values of the workflow's declared inputs, keyed by input name. Inputs have names, not variable
+   * ids, and are read as `workflow.<name>` like variables (validation keeps the names apart).
+   */
+  inputs: z.record(Identifier, Json).default({}),
   /** Present on every frame except the bottom one: where to deliver outputs on return. */
   call: z
     .object({
@@ -86,6 +91,11 @@ export const ConversationState = z.object({
   summary: z.object({ text: z.string(), throughSeq: z.number().int().nonnegative() }).optional(),
   /** Minutes; overrides the bot default when set by a card. */
   inactivityTimeoutMinutes: z.number().int().nonnegative().optional(),
+  /**
+   * Set when the session begins (ADR-027). Absent on a new conversation and after `ended`, which
+   * is when the `conversation_started` trigger runs.
+   */
+  started: z.literal(true).optional(),
 });
 export type ConversationState = z.infer<typeof ConversationState>;
 
