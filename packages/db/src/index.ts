@@ -2,6 +2,7 @@ export * from "./client";
 export * from "./crypto";
 export * from "./migrate";
 export * from "./object-store";
+export * from "./repos/conversation-history";
 export * from "./repos/index";
 export * from "./rls";
 export * from "./roles";
