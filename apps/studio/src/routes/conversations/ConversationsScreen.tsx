@@ -8,7 +8,7 @@ import {
   Trace,
 } from "@wakeel/contracts";
 import { Badge, Button, EmptyState, Field, Input, MessageBubble, Select, Sheet, Skeleton } from "@wakeel/ui";
-import { useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { useConnections } from "../../api/connections";
 import { AppShell } from "../../shell/AppShell";
@@ -18,6 +18,7 @@ import { formatDuration, stepRows } from "../../trace/model";
 import { PayloadViewer, payloadTabs } from "../../trace/PayloadViewer";
 import { Breadcrumb } from "../bot/BotCanvas";
 import { useLoadState } from "../bot/BotLayout";
+import { AddConversationCase } from "../evals/AddConversationCase";
 
 type Item = (typeof ConversationHistoryPage._output)["data"][number];
 const statusName = (status: string) => status.charAt(0).toUpperCase() + status.slice(1).replaceAll("_", " ");
@@ -231,7 +232,13 @@ function Transcript({ path, workspaceId }: { path: string; workspaceId: string }
       aria-label="Transcript"
       className="flex min-w-0 flex-col gap-5 rounded-lg border border-hairline bg-surface p-6"
     >
-      <TranscriptHeader conversation={conversation} />
+      <TranscriptHeader conversation={conversation}>
+        <AddConversationCase
+          path={path.slice(0, path.lastIndexOf("/conversations")) + "/evals"}
+          messages={messages}
+          hasEarlier={transcript.hasNextPage === true}
+        />
+      </TranscriptHeader>
       {transcript.hasNextPage && (
         <Button onClick={() => void transcript.fetchNextPage()} disabled={transcript.isFetchingNextPage}>
           Load earlier messages
@@ -287,7 +294,7 @@ function Transcript({ path, workspaceId }: { path: string; workspaceId: string }
   );
 }
 
-function TranscriptHeader({ conversation }: { conversation: Item }) {
+function TranscriptHeader({ conversation, children }: { conversation: Item; children: ReactNode }) {
   return (
     <header className="flex flex-wrap items-start justify-between gap-5 border-b border-hairline pb-5">
       <div className="min-w-0">
@@ -299,14 +306,20 @@ function TranscriptHeader({ conversation }: { conversation: Item }) {
         </p>
       </div>
       <Badge>{statusName(conversation.status)}</Badge>
-      <Button disabled title="Available when evaluation suites are enabled">
-        Add eval case
-      </Button>
+      {children}
     </header>
   );
 }
 
-function TraceDetail({ workspaceId, turn, replayBase }: { workspaceId: string; turn: string; replayBase: string }) {
+export function TraceDetail({
+  workspaceId,
+  turn,
+  replayBase,
+}: {
+  workspaceId: string;
+  turn: string;
+  replayBase?: string;
+}) {
   const trace = useQuery({
     queryKey: ["history-trace", workspaceId, turn],
     queryFn: async () => Trace.parse(await api("GET", `/v1/workspaces/${workspaceId}/turns/${turn}/trace`)),
@@ -328,7 +341,7 @@ function TraceDetail({ workspaceId, turn, replayBase }: { workspaceId: string; t
   const current = spans.find((span) => span.id === selected);
   return (
     <div className="flex flex-col gap-4 p-6">
-      <ReplayPanel base={replayBase} turn={turn} />
+      {replayBase && <ReplayPanel base={replayBase} turn={turn} />}
       <ol aria-label="Steps" className="flex flex-col gap-2">
         {stepRows(spans).map(({ span }) => (
           <li key={span.id}>
