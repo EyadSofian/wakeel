@@ -1,6 +1,6 @@
 # ADR-039 — Knowledge base storage and file uploads: ids, the upload flow, limits
 
-Status: proposed (implemented as proposed in task 8.1; review with that PR) · Date: 2026-11-15
+Status: accepted (Eyad approved in writing on 2026-11-15) · Date: 2026-11-15
 
 ## Context
 

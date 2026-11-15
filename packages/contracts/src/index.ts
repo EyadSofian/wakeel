@@ -17,6 +17,7 @@ export * from "./node";
 export * from "./platform";
 export * from "./portable";
 export * from "./references";
+export * from "./retrieval";
 export * from "./runtime";
 export * from "./seed";
 export * from "./table";

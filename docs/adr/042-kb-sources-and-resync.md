@@ -1,6 +1,6 @@
 # ADR-042 — Knowledge base sources: config shapes, crawl rules, removal, and scheduled re-sync
 
-Status: proposed (implemented in task 8.5; review with that PR) · Date: 2026-11-15
+Status: accepted (Eyad approved in writing on 2026-11-15) · Date: 2026-11-15
 
 ## Context
 

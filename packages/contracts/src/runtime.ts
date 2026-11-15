@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { CardId, Identifier, IsoDateTime, Json, NodeId, ToolId, VariableId, WorkflowId } from "./common";
 import { BotMessagePayload } from "./message";
+import { SearchCitations } from "./retrieval";
 
 /** One active workflow invocation. */
 export const Frame = z.object({
@@ -87,6 +88,7 @@ export const ConversationState = z.object({
   conversationVars: z.record(VariableId, Json).default({}),
   wait: WaitSpec.optional(),
   autonomy: z.record(z.string(), AutonomyMemory).default({}),
+  retrievalCitations: SearchCitations.optional(),
   /** Rolling summary of transcript older than the token budget. */
   summary: z.object({ text: z.string(), throughSeq: z.number().int().nonnegative() }).optional(),
   /** Minutes; overrides the bot default when set by a card. */

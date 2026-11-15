@@ -173,7 +173,6 @@ describe("code tools", () => {
 
 describe("tools that are not built yet, or not on the node", () => {
   test.each([
-    ["searchHelp", "knowledge base search is not available yet"],
     ["orders", "tables are not available yet"],
     ["deleteEverything", "this node has no such tool"],
   ])("%s fails with a message the model can read", async (tool, message) => {
@@ -280,5 +279,31 @@ describe("citations (architecture §6.5)", () => {
 
   test("text without tokens is unchanged", () => {
     expect(mapCitations("Hello  there", sources)).toEqual({ text: "Hello  there", citations: [] });
+  });
+});
+
+describe("explicit knowledge tools", () => {
+  test("uses only the node's declared KBs and returns Arabic passages", async () => {
+    const { d } = deps();
+    const seen: unknown[] = [];
+    d.kbSearch = async (request) => {
+      seen.push(request);
+      return [{ text: "الطلب اتشحن", cite: "[[c1]]" }];
+    };
+    expect(await callTool(node, { tool: "searchHelp", input: "وين وصل ORD-12؟" }, d)).toEqual([
+      { text: "الطلب اتشحن", cite: "[[c1]]" },
+    ]);
+    expect(seen[0]).toMatchObject({ query: "وين وصل ORD-12؟", kbIds: ["kb_01m7a256m0a13warwhczsjhx9b"] });
+    await expect(callTool(node, { tool: "searchHelp", input: { kbIds: ["foreign"] } }, d)).rejects.toMatchObject({
+      code: "tool_input_invalid",
+    });
+    await expect(callTool(node, { tool: "searchHelp", input: "سؤال", operation: "delete" }, d)).rejects.toMatchObject({
+      code: "tool_input_invalid",
+    });
+  });
+  test("missing search configuration remains a visible model error", async () => {
+    await expect(callTool(node, { tool: "searchHelp", input: "أرجّع إزاي؟" }, deps().d)).rejects.toMatchObject({
+      code: "model_not_configured",
+    });
   });
 });

@@ -7,6 +7,8 @@ export const PROVIDER_LABELS = {
   openai: "OpenAI",
   google: "Google",
   "openai-compatible": "OpenAI-compatible server",
+  cohere: "Cohere",
+  tei: "Rerank server",
 } as const;
 
 /**
@@ -18,6 +20,7 @@ export function ModelPicker({
   value,
   onValueChange,
   allowNone,
+  kind = "chat",
   ...rest
 }: Omit<SelectHTMLAttributes<HTMLSelectElement>, "value" | "onChange"> & {
   models: readonly ModelSummary[];
@@ -25,8 +28,9 @@ export function ModelPicker({
   onValueChange: (id: string | null) => void;
   /** Label of the "none" choice, when one is allowed. */
   allowNone?: string;
+  kind?: ModelSummary["kind"];
 }) {
-  const chat = models.filter((m) => m.kind === "chat");
+  const chat = models.filter((m) => m.kind === kind);
   const providers = [...new Set(chat.map((m) => m.provider))];
   return (
     <Select

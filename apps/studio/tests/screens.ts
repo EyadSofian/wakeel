@@ -27,6 +27,7 @@ export type ScreenState =
   // Task 2.7: the Variables screen's dialogs and the VariablePicker in the inspector.
   | "usages"
   | "edit"
+  | "rerank-key"
   | "delete-blocked"
   | "picker"
   // Task 4.6: the emulator beside the canvas.
@@ -365,7 +366,7 @@ SCREENS.push(
 SCREENS.push({
   id: "settings-models",
   route: `/w/${WS}/settings/models`,
-  states: ["default", "focus", "empty", "loading", "error", "rtl", "edit"],
+  states: ["default", "focus", "empty", "loading", "error", "rtl", "edit", "rerank-key"],
   sizes: DESKTOP,
   mock: true,
   interactions: [],

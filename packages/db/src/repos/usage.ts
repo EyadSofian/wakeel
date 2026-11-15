@@ -5,9 +5,9 @@ import { currentWorkspace } from "./scope";
 
 /** One metered call (task 6.1, architecture §13). Emulator and eval rows keep their mode and are never billed. */
 export interface NewUsageEvent {
-  kind: "llm_tokens" | "embedding_tokens";
+  kind: "llm_tokens" | "embedding_tokens" | "rerank_units";
   quantity: number;
-  unit: "tokens";
+  unit: "tokens" | "units";
   model: string;
   costMicroUsd: number;
   mode: "live" | "emulator" | "eval";

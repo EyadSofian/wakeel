@@ -3,6 +3,7 @@ import type { BotManifest } from "./bot-definition";
 import { Passage } from "./card";
 import { EventScope } from "./event";
 import { BotMessagePayload } from "./message";
+import { SearchRequest } from "./retrieval";
 import type { Column, TableSchema } from "./table";
 import type { IoField, Variable } from "./variable";
 import type { Workflow } from "./workflow";
@@ -128,6 +129,7 @@ declare namespace Guest {
 
   /** A passage found by \`kb.search\`. Put \`cite\` in a reply to cite it. */
   type Passage = ${schemaToTs(schemaOf(Passage, "output"), "  ", true)};
+  type SearchRequest = ${schemaToTs(schemaOf(SearchRequest, "input"), "  ", true)};
 
   /** Operators a column condition can use. */
   interface Operators<V> {
@@ -224,9 +226,10 @@ declare const axios: {
   patch(url: string, data?: Guest.Json, config?: Guest.AxiosConfig): Promise<Guest.AxiosResponse>;
 };
 
-/** Knowledge bases of this workspace. */
+/** Knowledge bases explicitly selected from this bot. */
 declare const kb: {
-  search(query: string, options?: { kbIds?: string[]; topK?: number }): Promise<Guest.Passage[]>;
+  search(request: Guest.SearchRequest): Promise<Guest.Passage[]>;
+  search(query: string, options: Omit<Guest.SearchRequest, "query">): Promise<Guest.Passage[]>;
 };
 
 /** Models, through the bot's model settings. */

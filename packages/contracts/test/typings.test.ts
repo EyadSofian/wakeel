@@ -196,7 +196,7 @@ const rows = await tables.orders.find({ where: { status: { in: ["placed", "shipp
 const first = rows[0]?.placedAt.slice(0, 10);
 const order = await tables.orders.get({ and: [{ number: { eq: workflow.orderNumber } }, { not: { total: { isNull: true } } }] });
 await tables.orders.update({ number: { eq: "1" } }, { status: "delivered" });
-const passages = await kb.search(event.text, { topK: 3 });
+const passages = await kb.search(event.text, { kbIds: ["kb_fixture"], topK: 3 });
 const answer = await ai.generate({ instructions: "Answer briefly.", input: passages.map((p) => p.text).join("\\n") });
 await say(answer);
 await say({ type: "choice", text: "تتبع طلب آخر؟", options: [{ label: "نعم", value: "yes" }] });

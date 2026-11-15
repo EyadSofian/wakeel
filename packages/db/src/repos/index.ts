@@ -9,6 +9,7 @@ export * from "./kb";
 export * from "./memberships";
 export * from "./runtime";
 export * from "./scope";
+export * from "./search";
 export * from "./secret-values";
 export * from "./secrets";
 export * from "./traces";

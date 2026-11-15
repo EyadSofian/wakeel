@@ -226,7 +226,7 @@ export const ERRORS = {
   model_not_configured: {
     status: 422,
     title: "No model is set for this step",
-    fix: "Choose a default model in bot settings.",
+    fix: "Choose a model for this step in the bot or workspace model settings.",
   },
   ai_extraction_invalid: {
     status: 500,
@@ -335,3 +335,11 @@ export type Problem = z.infer<typeof Problem>;
 /** Fill `{placeholders}` in a title or fix sentence. Unknown placeholders are left as-is. */
 export const fill = (text: string, params: Record<string, string | number> = {}) =>
   text.replace(/\{(\w+)\}/g, (m, k: string) => (k in params ? String(params[k]) : m));
+
+/** Field-level validation copy, kept beside the problem catalogue. */
+export const FIELD_ERRORS = {
+  mixedEmbeddingModels: "Choose knowledge bases that use the same embedding model, or search them separately.",
+  providerAddressRequired: "Enter the HTTPS address of this provider's server.",
+  unknownModel: "{model} is not available. Choose a model from the list.",
+  wrongModelKind: "{model} cannot be used here. Choose a {kind} model.",
+} as const;

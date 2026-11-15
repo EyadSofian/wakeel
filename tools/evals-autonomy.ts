@@ -15,6 +15,8 @@ const credentialNames = {
   anthropic: "ANTHROPIC_API_KEY",
   google: "GOOGLE_GENERATIVE_AI_API_KEY",
   "openai-compatible": "OPENAI_COMPATIBLE_API_KEY",
+  cohere: "COHERE_API_KEY",
+  tei: "TEI_API_KEY",
 } as const;
 
 async function main() {

@@ -5,6 +5,7 @@ import { type SyncDeps, syncSource } from "./sources";
 
 export { egressGet, mimeOf } from "./egress";
 export { cleanMarkdown, type IngestDeps, type IngestJob, ingestDocument, runStage } from "./ingest";
+export { rerankThroughEgress, turnKnowledge } from "./search";
 export { enqueueDueSyncs, type SyncDeps, type SyncResult, syncSource } from "./sources";
 
 /** `kb-ingest` (architecture §11): one stage per job, 5 attempts with exponential backoff. */

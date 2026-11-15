@@ -40,6 +40,8 @@ describe("model keys", () => {
       ["openai", false],
       ["google", false],
       ["openai-compatible", false],
+      ["cohere", false],
+      ["tei", false],
     ]);
     const stored = (await superuserQuery(
       stack.pg.urls,
@@ -71,12 +73,12 @@ describe("model keys", () => {
     });
   });
 
-  test("an OpenAI-compatible key needs its server's https address", async () => {
+  test.each(["openai-compatible", "tei"])("a %s key needs its server's https address", async (provider) => {
     const owner = await signUp(stack.app);
     const ws = await workspace(owner);
-    const missing = await owner.send("PUT", `${ws}/model-keys/openai-compatible`, { apiKey: KEY });
+    const missing = await owner.send("PUT", `${ws}/model-keys/${provider}`, { apiKey: KEY });
     expect(missing.json()).toMatchObject({ code: "validation_failed", errors: [{ path: "baseUrl" }] });
-    const ok = await owner.send("PUT", `${ws}/model-keys/openai-compatible`, {
+    const ok = await owner.send("PUT", `${ws}/model-keys/${provider}`, {
       apiKey: KEY,
       baseUrl: "https://llm.example.com/v1",
     });
@@ -116,4 +118,32 @@ describe("model defaults", () => {
     });
     expect(cleared.json()).toEqual({ defaultModel: "claude-opus-5-5", utilityModel: null });
   });
+});
+
+test("reranker selection rejects chat models and survives older default-setting clients", async () => {
+  const owner = await signUp(stack.app);
+  const ws = await workspace(owner);
+  const set = await owner.send("PUT", `${ws}/model-defaults`, {
+    defaultModel: null,
+    utilityModel: null,
+    rerankModel: "bge-reranker-v2-m3",
+  });
+  expect(set.statusCode, set.body).toBe(200);
+  const older = await owner.send("PUT", `${ws}/model-defaults`, { defaultModel: "gpt-4.1", utilityModel: null });
+  expect(older.json().rerankModel).toBe("bge-reranker-v2-m3");
+  const bad = await owner.send("PUT", `${ws}/model-defaults`, {
+    defaultModel: null,
+    utilityModel: null,
+    rerankModel: "gpt-4.1",
+  });
+  expect(bad.json()).toMatchObject({
+    code: "validation_failed",
+    errors: [{ path: "rerankModel", code: "wrong_kind" }],
+  });
+  const cleared = await owner.send("PUT", `${ws}/model-defaults`, {
+    defaultModel: null,
+    utilityModel: null,
+    rerankModel: null,
+  });
+  expect(cleared.json().rerankModel).toBeUndefined();
 });

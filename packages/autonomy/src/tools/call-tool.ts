@@ -4,6 +4,7 @@ import {
   type BotDefinition,
   type IoField,
   type Json,
+  type SearchRequest,
   validateJson,
 } from "@wakeel/contracts";
 import { ToolSuspended, toolCallIdFor } from "./suspension";
@@ -12,7 +13,7 @@ import { ToolSuspended, toolCallIdFor } from "./suspension";
  * One tool call from the model's run block (architecture §6.5, ADR-032 §2, ADR-035). The tool must
  * be on the node and its input must match its signature before anything runs. A code tool runs as
  * its own sandbox exec and only returns a value; a workflow tool ends the run block at the call
- * site by throwing `ToolSuspended`; knowledge base and table tools are not built yet (Phases 8, 9).
+ * site by throwing `ToolSuspended`; knowledge tools use the shared retrieval port; table tools arrive in Phase 9.
  */
 
 /** The parts of a Code exec a tool needs: the engine's `CodePort`, structurally (CLAUDE.md §4). */
@@ -32,6 +33,7 @@ export type ToolCodeOutcome =
   | { ok: false; message: string };
 
 export interface ToolDeps {
+  kbSearch?(request: SearchRequest): Promise<Json>;
   definition: BotDefinition;
   code: ToolCodeRunner;
   /** The node's scopes, read by code tools (they cannot write them). */
@@ -91,8 +93,15 @@ export async function callTool(
         toolCallId: toolCallIdFor(deps.idempotencyKey, tool.name),
       });
     }
-    case "kb_search":
-      throw new AppError("tool_failed", { tool: tool.name, message: "knowledge base search is not available yet" });
+    case "kb_search": {
+      if (!deps.kbSearch) throw new AppError("model_not_configured");
+      if (call.operation || typeof call.input !== "string" || !call.input.trim())
+        throw new AppError("tool_input_invalid", {
+          tool: tool.name,
+          message: "pass a non-empty query string without an operation",
+        });
+      return deps.kbSearch({ query: call.input, kbIds: tool.kbIds, topK: tool.topK });
+    }
     case "table":
       throw new AppError("tool_failed", { tool: tool.name, message: "tables are not available yet" });
   }

@@ -1,5 +1,6 @@
 import { AppError } from "@wakeel/contracts";
 import { APICallError, embedMany, type LanguageModelUsage, streamText } from "ai";
+import { z } from "zod";
 import { aiSdkModels, type Credential, type ModelFactory } from "./adapters";
 import { costMicroUsd, type ModelEntry, type Registry, registry as shippedRegistry, type TokenUsage } from "./registry";
 
@@ -76,7 +77,8 @@ export interface ReadImageRequest {
 }
 
 export interface UsageEvent {
-  kind: "llm_tokens" | "embedding_tokens";
+  kind: "llm_tokens" | "embedding_tokens" | "rerank_units";
+  rerankUnits?: number;
   workspaceId: string;
   mode: UsageMode;
   botId?: string;
@@ -111,12 +113,31 @@ export interface LlmDeps {
   random?(): number;
   /** Retries per model after the first attempt (default 2). */
   retries?: number;
+  /** Tenant-defined endpoints must use egress. The default transport accepts only fixed providers. */
+  rerankFetch?(request: RerankHttpRequest): Promise<{ status: number; body: unknown }>;
+}
+
+export interface RerankHttpRequest {
+  url: string;
+  headers: Record<string, string>;
+  body: Record<string, unknown>;
+  context: CallContext;
+  tenantUrl: boolean;
+}
+
+export interface RerankRequest {
+  model: string;
+  query: string;
+  documents: string[];
+  purpose: string;
+  context: CallContext;
 }
 
 export interface LlmClient {
   stream(request: StreamRequest): StreamHandle;
   embed(request: EmbedRequest): Promise<{ embeddings: number[][]; model: string; usage: TokenUsage }>;
   readImage(request: ReadImageRequest): Promise<StreamResult>;
+  rerank(request: RerankRequest): Promise<{ index: number; score: number }[]>;
 }
 
 const BASE_BACKOFF_MS = 500;
@@ -186,6 +207,79 @@ export function createLlm(deps: LlmDeps): LlmClient {
   }
 
   return {
+    async rerank(request) {
+      const model = registry.get(request.model);
+      if (model.kind !== "rerank" || !["tei", "cohere"].includes(model.provider))
+        throw new AppError("model_not_configured");
+      if (!request.query.trim() || !request.documents.length || request.documents.length > 30)
+        throw new AppError("validation_failed");
+      const cred = await credential(request.context.workspaceId, model.provider);
+      const tei = model.provider === "tei";
+      if (tei && !cred.baseURL) throw new AppError("model_not_configured");
+      const http: RerankHttpRequest = {
+        url: tei
+          ? new URL("rerank", `${cred.baseURL?.replace(/\/$/, "")}/`).toString()
+          : "https://api.cohere.com/v2/rerank",
+        headers: { "content-type": "application/json", authorization: `Bearer ${cred.apiKey}` },
+        body: tei
+          ? { query: request.query, texts: request.documents, raw_scores: true }
+          : {
+              model: model.providerModel,
+              query: request.query,
+              documents: request.documents,
+              top_n: request.documents.length,
+            },
+        context: request.context,
+        tenantUrl: tei,
+      };
+      let response: { status: number; body: unknown };
+      try {
+        if (deps.rerankFetch) response = await deps.rerankFetch(http);
+        else {
+          if (http.tenantUrl) throw new AppError("fetch_blocked");
+          const res = await fetch(http.url, {
+            method: "POST",
+            headers: http.headers,
+            body: JSON.stringify(http.body),
+            signal: AbortSignal.timeout(15_000),
+          });
+          response = { status: res.status, body: await res.json() };
+        }
+      } catch (error) {
+        if (error instanceof AppError) throw error;
+        throw new AppError("model_unavailable", { model: model.id });
+      }
+      if (response.status === 401 || response.status === 403)
+        throw new AppError("model_auth_failed", { provider: model.provider });
+      if (response.status !== 200) throw new AppError("model_unavailable", { model: model.id });
+      const schema = z.array(z.object({ index: z.number().int().nonnegative(), score: z.number().finite() }));
+      const cohere = z.object({
+        results: z.array(z.object({ index: z.number().int().nonnegative(), relevance_score: z.number().finite() })),
+      });
+      const parsed = tei ? schema.safeParse(response.body) : cohere.safeParse(response.body);
+      if (!parsed.success) throw new AppError("model_unavailable", { model: model.id });
+      const rows = Array.isArray(parsed.data)
+        ? parsed.data
+        : parsed.data.results.map((r) => ({ index: r.index, score: r.relevance_score }));
+      if (
+        rows.length !== request.documents.length ||
+        new Set(rows.map((r) => r.index)).size !== rows.length ||
+        rows.some((r) => r.index >= request.documents.length)
+      )
+        throw new AppError("model_unavailable", { model: model.id });
+      await deps.onUsage({
+        kind: "rerank_units",
+        rerankUnits: request.documents.length,
+        ...request.context,
+        model: model.id,
+        provider: model.provider,
+        keySource: cred.source,
+        purpose: request.purpose,
+        usage: { inputTokens: 0, cachedInputTokens: 0, cacheWriteTokens: 0, outputTokens: 0 },
+        costMicroUsd: 0,
+      });
+      return rows;
+    },
     stream(request) {
       // Text is handed to the caller as it arrives. Retries and fallbacks happen only before the first
       // chunk; after that a failure ends the stream, since the caller has already shown part of it.

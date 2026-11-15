@@ -1,4 +1,11 @@
-import { AppError, type Json, newRequestId } from "@wakeel/contracts";
+import {
+  AppError,
+  type Json,
+  newRequestId,
+  type Passage,
+  type SearchCitations,
+  SearchRequest,
+} from "@wakeel/contracts";
 import type { SandboxClient } from "./client";
 import type { ScopePatches } from "./protocol";
 
@@ -9,6 +16,7 @@ import type { ScopePatches } from "./protocol";
  */
 
 export interface CodeRequest {
+  retrievalCitations?: SearchCitations;
   source: string;
   scopes: Readonly<Record<string, Json | undefined>>;
   timeoutMs: number;
@@ -27,6 +35,7 @@ type Patch = { set?: Record<string, Json>; unset?: string[] };
 export type CodeOutcome =
   | {
       ok: true;
+      retrievalCitations?: SearchCitations;
       value: Json | null;
       patches: Partial<Record<"workflow" | "conversation" | "user" | "turn", Patch>>;
       said: unknown[];
@@ -34,6 +43,7 @@ export type CodeOutcome =
     }
   | {
       ok: false;
+      retrievalCitations?: SearchCitations;
       code: "code_error" | "code_syntax_error" | "code_timeout" | "code_memory_exceeded" | "internal_error";
       message: string;
       line?: number;
@@ -47,6 +57,10 @@ export interface CodePort {
 }
 
 export interface CodePortOptions {
+  kbSearch?(
+    request: SearchRequest,
+    citations?: SearchCitations,
+  ): Promise<{ passages: Passage[]; citations: SearchCitations }>;
   /**
    * Mints the egress capability token for one run (ADR-023 §4), given its exec id. Without it the
    * guest's `fetch` is refused by egress.
@@ -55,14 +69,14 @@ export interface CodePortOptions {
 }
 
 /**
- * `say` calls are collected in order and answered at once. The other platform calls (`tables.*`,
- * `kb.search`, `ai.*`) arrive with their phases; until then the guest gets an `internal_error`
- * that says so.
+ * `say` calls are collected in order. Knowledge calls use the shared bot-scoped search adapter;
+ * the remaining platform calls (`tables.*`, `ai.*`) are rejected until their adapters exist.
  */
 export function createCodePort(client: SandboxClient, options: CodePortOptions = {}): CodePort {
   return {
     run: async (request) => {
       const said: unknown[] = [];
+      let retrievalCitations = request.retrievalCitations;
       const logs: CodeLog[] = [];
       const execId = newRequestId();
       const token = await options.capabilityToken?.(execId);
@@ -83,6 +97,22 @@ export function createCodePort(client: SandboxClient, options: CodePortOptions =
               said.push((call.input as { message?: unknown } | null)?.message);
               return null;
             }
+            if (call.name === "kb.search") {
+              if (!options.kbSearch) throw new AppError("model_not_configured");
+              const raw =
+                call.input &&
+                typeof call.input === "object" &&
+                "query" in call.input &&
+                call.input.query &&
+                typeof call.input.query === "object"
+                  ? call.input.query
+                  : call.input;
+              const parsed = SearchRequest.safeParse(raw);
+              if (!parsed.success) throw new AppError("validation_failed");
+              const result = await options.kbSearch(parsed.data, retrievalCitations);
+              retrievalCitations = result.citations;
+              return result.passages;
+            }
             throw new AppError("internal_error", {}, { detail: `${call.name} is not available to code yet` });
           },
           onLog: (frame) => logs.push({ level: frame.level, args: frame.args }),
@@ -91,6 +121,7 @@ export function createCodePort(client: SandboxClient, options: CodePortOptions =
       if (outcome.t === "error") {
         return {
           ok: false,
+          ...(retrievalCitations ? { retrievalCitations } : {}),
           code: outcome.code,
           message: outcome.message,
           ...(outcome.line !== undefined ? { line: outcome.line } : {}),
@@ -101,6 +132,7 @@ export function createCodePort(client: SandboxClient, options: CodePortOptions =
       }
       return {
         ok: true,
+        ...(retrievalCitations ? { retrievalCitations } : {}),
         value: (outcome.value ?? null) as Json,
         patches: outcome.scopePatches as Partial<Record<keyof ScopePatches, Patch>>,
         said,

@@ -1,5 +1,7 @@
 import {
   AppError,
+  FIELD_ERRORS,
+  fill,
   MODEL_PROVIDERS,
   ModelDefaultsRequest,
   type ModelKeyStatus,
@@ -90,14 +92,12 @@ export async function modelRoutes(app: FastifyInstance, deps: ModelDeps): Promis
     const ctx = await requireMember(deps.studio, request, reply, "secret.write");
     const provider = ModelProvider.parse((request.params as { provider: string }).provider);
     const body = PutModelKeyRequest.parse(request.body);
-    if (provider === "openai-compatible" && !body.baseUrl)
+    if ((provider === "openai-compatible" || provider === "tei") && !body.baseUrl)
       throw new AppError(
         "validation_failed",
         {},
         {
-          errors: [
-            { path: "baseUrl", code: "required", message: "An OpenAI-compatible server needs its https address" },
-          ],
+          errors: [{ path: "baseUrl", code: "required", message: FIELD_ERRORS.providerAddressRequired }],
         },
       );
     const status = await deps.studio.db.withWorkspace(ctx.workspaceId, async (tx) => {
@@ -106,7 +106,7 @@ export async function modelRoutes(app: FastifyInstance, deps: ModelDeps): Promis
         name: modelKeySecret(provider),
         value: body.apiKey,
       });
-      if (provider === "openai-compatible" && body.baseUrl)
+      if ((provider === "openai-compatible" || provider === "tei") && body.baseUrl)
         await storeSecretValue(tx, deps.keyring, {
           workspaceId: ctx.workspaceId,
           name: modelBaseUrlSecret(provider),
@@ -128,7 +128,8 @@ export async function modelRoutes(app: FastifyInstance, deps: ModelDeps): Promis
     const provider = ModelProvider.parse((request.params as { provider: string }).provider);
     await deps.studio.db.withWorkspace(ctx.workspaceId, async (tx) => {
       await deleteSecret(tx, modelKeySecret(provider));
-      if (provider === "openai-compatible") await deleteSecret(tx, modelBaseUrlSecret(provider)).catch(() => undefined);
+      if (provider === "openai-compatible" || provider === "tei")
+        await deleteSecret(tx, modelBaseUrlSecret(provider)).catch(() => undefined);
       await audit(tx, auditActor(ctx, request), {
         action: "secret.deleted",
         target: { type: "secret", id: modelKeySecret(provider) },
@@ -141,12 +142,23 @@ export async function modelRoutes(app: FastifyInstance, deps: ModelDeps): Promis
   app.put(`${base}/model-defaults`, async (request, reply) => {
     const ctx = await requireMember(deps.studio, request, reply, "workspace.update");
     const body = ModelDefaultsRequest.parse(request.body);
-    const errors = (["defaultModel", "utilityModel"] as const).flatMap((field) => {
+    const errors = (["defaultModel", "utilityModel", "rerankModel"] as const).flatMap((field) => {
       const id = body[field];
-      if (id === null) return [];
+      if (id === null || id === undefined) return [];
       const model = registry.models().find((m) => m.id === id);
-      if (!model) return [{ path: field, code: "unknown_model", message: `${id} is not an available model` }];
-      if (model.kind !== "chat") return [{ path: field, code: "not_chat", message: `${id} is not a chat model` }];
+      if (!model)
+        return [{ path: field, code: "unknown_model", message: fill(FIELD_ERRORS.unknownModel, { model: id }) }];
+      if (model.kind !== (field === "rerankModel" ? "rerank" : "chat"))
+        return [
+          {
+            path: field,
+            code: "wrong_kind",
+            message: fill(FIELD_ERRORS.wrongModelKind, {
+              model: id,
+              kind: field === "rerankModel" ? "rerank" : "chat",
+            }),
+          },
+        ];
       return [];
     });
     if (errors.length > 0) throw new AppError("validation_failed", {}, { errors });
@@ -154,10 +166,12 @@ export async function modelRoutes(app: FastifyInstance, deps: ModelDeps): Promis
       const before = await getWorkspace(tx);
       const next = {
         ...before.settings,
+        ...(body.rerankModel === undefined ? {} : { rerankModel: body.rerankModel ?? undefined }),
         ...(body.defaultModel === null ? { defaultModel: undefined } : { defaultModel: body.defaultModel }),
         ...(body.utilityModel === null ? { utilityModel: undefined } : { utilityModel: body.utilityModel }),
       };
-      for (const k of ["defaultModel", "utilityModel"] as const) if (next[k] === undefined) delete next[k];
+      for (const k of ["defaultModel", "utilityModel", "rerankModel"] as const)
+        if (next[k] === undefined) delete next[k];
       const after = await updateWorkspace(tx, { settings: next });
       await audit(tx, auditActor(ctx, request), {
         action: "workspace.updated",
@@ -166,6 +180,10 @@ export async function modelRoutes(app: FastifyInstance, deps: ModelDeps): Promis
       });
       return after.settings;
     });
-    return { defaultModel: settings.defaultModel ?? null, utilityModel: settings.utilityModel ?? null };
+    return {
+      defaultModel: settings.defaultModel ?? null,
+      utilityModel: settings.utilityModel ?? null,
+      ...(settings.rerankModel ? { rerankModel: settings.rerankModel } : {}),
+    };
   });
 }

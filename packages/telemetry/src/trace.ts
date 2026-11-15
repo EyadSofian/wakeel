@@ -6,6 +6,7 @@ import {
   idFromDigest,
   type Json,
   type Payload,
+  type RetrievalRecord,
   type Span,
   type Variable,
 } from "@wakeel/contracts";
@@ -25,6 +26,7 @@ import {
 
 /** What the builder needs from a step commit; the engine's `StepCommit` fits it as is. */
 export interface TraceStep {
+  retrieval?: readonly RetrievalRecord[];
   stepSeq: number;
   state: ConversationState;
   failures: readonly {
@@ -230,6 +232,25 @@ export class TraceBuilder {
       }
     }
 
+    for (const trace of step.retrieval ?? []) {
+      const started = new Date(trace.startedAt);
+      out.push({
+        ...this.#base(this.#seq++, "Search knowledge", started, new Date(started.getTime() + trace.durationMs)),
+        parentId: parent,
+        kind: "kb.search",
+        status: trace.error ? "error" : "ok",
+        attrs: {
+          query: trace.query,
+          queryNormalised: trace.queryNormalised,
+          kbIds: trace.kbIds,
+          dense: inlinePayload(trace.dense),
+          lexical: inlinePayload(trace.lexical),
+          fused: inlinePayload(trace.fused),
+          reranked: inlinePayload(trace.reranked),
+          returned: trace.returned,
+        },
+      });
+    }
     for (const f of step.failures) {
       out.push({
         ...this.#base(this.#seq++, f.code, at),

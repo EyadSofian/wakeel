@@ -299,6 +299,7 @@ export async function writeConversation(
 }
 
 export interface NewBotMessage {
+  citations?: import("@wakeel/contracts").Citation[];
   id: string;
   type: string;
   payload: Record<string, Json>;
@@ -325,6 +326,7 @@ export async function insertBotMessages(
         type: m.type,
         payload: m.payload,
         turnId: m.turnId,
+        citations: m.citations ?? [],
       })
       .returning({ id: messages.id, seq: messages.seq, createdAt: messages.createdAt });
     if (!row) throw new Error("insert returned no row");

@@ -1,6 +1,6 @@
 # ADR-041 — Ingestion stages: where stage output lives, what "normalise" does, which model reads pages
 
-Status: proposed (implemented in task 8.4; review with that PR) · Date: 2026-11-15
+Status: accepted (Eyad approved in writing on 2026-11-15) · Date: 2026-11-15
 
 ## Context
 

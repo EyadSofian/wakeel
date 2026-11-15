@@ -36,6 +36,7 @@ export const WorkspaceSettings = z.strictObject({
   /** Task 6.2: the model a step uses when it names none, and the cheap one for summaries and checks. */
   defaultModel: z.string().min(1).max(100).optional(),
   utilityModel: z.string().min(1).max(100).optional(),
+  rerankModel: z.string().min(1).max(100).optional(),
 });
 export type WorkspaceSettings = z.infer<typeof WorkspaceSettings>;
 

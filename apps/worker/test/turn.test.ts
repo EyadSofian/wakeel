@@ -1,12 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { Writable } from "node:stream";
 import { RedisContainer, type StartedRedisContainer } from "@testcontainers/redis";
-import { emptyState, newElementId, newId } from "@wakeel/contracts";
+import { emptyState, newElementId, newId, Workflow } from "@wakeel/contracts";
 import {
   acquireConversationLease,
   appendInboundEvent,
   createBot,
   createDatabase,
+  createKnowledgeBase,
+  createSource,
   createWorkflowDoc,
   createWorkspace,
   type Database,
@@ -15,15 +17,21 @@ import {
   listDraftDocs,
   publishDraft,
   putConfigValue,
+  replaceChunks,
   saveDraftDoc,
   sql,
+  updateDocument,
+  updateWorkspace,
+  upsertDocument,
 } from "@wakeel/db";
 import { type StartedTestDatabase, startTestDatabase, superuserQuery } from "@wakeel/db/testing";
-import type { CodeOutcome, CodePort, CodeRequest, SandboxPort } from "@wakeel/engine";
+import type { CodeOutcome, CodePort, CodeRequest, KnowledgePort, SandboxPort } from "@wakeel/engine";
+import type { LlmClient } from "@wakeel/llm";
 import { createLogger } from "@wakeel/telemetry";
 import { FakeLlm } from "@wakeel/testing";
 import { Queue } from "bullmq";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { turnKnowledge } from "../src/kb/search";
 import {
   aiPort,
   autonomyPort,
@@ -153,7 +161,14 @@ async function seed(
       doc: { ...m, settings: { ...m.settings, ...settings } },
     });
   });
-  const ids = { ws, botId: bot.id, connectionId: newId("conn"), endUserId: newId("eu"), conversationId: newId("conv") };
+  const ids = {
+    userId,
+    ws,
+    botId: bot.id,
+    connectionId: newId("conn"),
+    endUserId: newId("eu"),
+    conversationId: newId("conv"),
+  };
   await db.withWorkspace(ws, async (tx) => {
     await tx.execute(sql`insert into bridge_connections (id, workspace_id, bot_id, name, target)
       values (${ids.connectionId}, ${ws}, ${ids.botId}, 'Emulator', 'draft')`);
@@ -1247,5 +1262,215 @@ describe("config variables (task 7.3, ADR-037)", () => {
     expect(raw.length).toBeGreaterThan(0);
     expect(JSON.stringify(raw)).not.toContain(CANARY);
     expect(JSON.stringify(raw)).toContain("[redacted]");
+  });
+});
+
+describe("knowledge search in committed turns", () => {
+  async function knowledgeFixture(kind: "card" | "tool" = "card") {
+    const kbId = newId("kb");
+    const answerInto = newElementId("var");
+    const c = await seed([card({ type: "kb_search", kbIds: [kbId], answer: { into: answerInto, send: true } })], {
+      models: { default: "openai:fixture", utility: "openai:fixture" },
+    });
+    await db.withWorkspace(c.ws, async (tx) => {
+      const manifest = await getDraftDoc(tx, c.botId, "manifest", "manifest");
+      await saveDraftDoc(tx, {
+        botId: c.botId,
+        kind: "manifest",
+        docId: "manifest",
+        userId: c.userId,
+        expectedRev: manifest.rev,
+        doc: {
+          ...(manifest.doc as object),
+          variables: [{ id: answerInto, name: "answer", scope: "conversation", type: "object" }],
+        },
+      });
+      const kb = await createKnowledgeBase(tx, {
+        botId: c.botId,
+        name: "السياسة",
+        embeddingModel: "openai:embedding-fixture",
+      });
+      // Replace the declared fixture KB before it is run, using the real store command boundary.
+      const docs = await listDraftDocs(tx, c.botId);
+      const main = docs.find((d) => d.kind === "workflow");
+      if (!main) throw new Error("missing fixture main");
+      const workflow = Workflow.parse(JSON.parse(JSON.stringify(main.doc).replaceAll(kbId, kb.id)));
+      const node = workflow.nodes[1];
+      if (kind === "tool" && node)
+        workflow.nodes[1] = {
+          id: node.id,
+          type: "autonomous",
+          name: "Assistant",
+          instructions: "Search the declared policy tool, then answer with citations.",
+          model: "openai:gpt-4.1-mini",
+          tools: [
+            {
+              id: newElementId("tool"),
+              type: "kb_search",
+              name: "searchHelp",
+              description: "Finds the store policy.",
+              kbIds: [kb.id],
+              topK: 1,
+            },
+          ],
+        } as typeof node;
+      await saveDraftDoc(tx, {
+        botId: c.botId,
+        kind: "workflow",
+        docId: main.docId,
+        userId: c.userId,
+        expectedRev: main.rev,
+        doc: workflow,
+      });
+      const source = await createSource(tx, { kbId: kb.id, kind: "text", config: {} });
+      const document = await upsertDocument(tx, {
+        kbId: kb.id,
+        sourceId: source.id,
+        uri: "https://example.test/policy",
+        title: "الاسترجاع",
+      });
+      await updateDocument(tx, document.id, { status: "ready", lang: "ar" });
+      await replaceChunks(tx, {
+        kbId: kb.id,
+        documentId: document.id,
+        indexVersion: 1,
+        rows: [
+          {
+            ordinal: 0,
+            text: "يمكن الاسترجاع خلال ١٤ يومًا",
+            textNorm: "استرجاع 14 يوم",
+            lexTokens: "استرجاع 14 يوم",
+            headingPath: ["سياسة"],
+            embedding: Array.from({ length: 1024 }, (_, i) => (i === 0 ? 1 : 0)),
+            tokenCount: 7,
+            meta: {},
+          },
+        ],
+      });
+      await updateWorkspace(tx, { settings: { rerankModel: "tei:rerank-fixture" } });
+    });
+    return c;
+  }
+  const usage = { inputTokens: 1, outputTokens: 0, cachedInputTokens: 0, cacheWriteTokens: 0 };
+  const calls: unknown[] = [];
+  const llm: Pick<LlmClient, "embed" | "rerank"> = {
+    embed: async (r) => {
+      calls.push(r);
+      return { embeddings: [Array.from({ length: 1024 }, (_, i) => (i === 0 ? 1 : 0))], model: r.model, usage };
+    },
+    rerank: async (r) => {
+      calls.push(r);
+      return r.documents.map((_, index) => ({ index, score: 0.9 }));
+    },
+  };
+  test("persists Arabic answer citations and every retrieval stage with emulator context", async () => {
+    calls.length = 0;
+    const c = await knowledgeFixture();
+    let knowledge: KnowledgePort | undefined;
+    const { d } = deps({
+      knowledge: (turn, record) => {
+        knowledge = turnKnowledge({ db, llm, now: () => 1000 }, turn, record);
+        return knowledge;
+      },
+      enginePorts: () => ({
+        sandbox: noSandbox,
+        code: { run: async () => ok() },
+        ai: { complete: async () => ({ text: "يمكن إرجاع الطلب خلال ١٤ يومًا [[c1]]", model: "fixture" }) },
+      }),
+    });
+    await send(c, "إزاي أرجّع الأوردر ORD-12؟");
+    await drainConversation(d, c.conversationId);
+    expect(await botTexts(c)).toEqual(["يمكن إرجاع الطلب خلال ١٤ يومًا"]);
+    const [message] = await query<{ citations: unknown[] }>(
+      "select citations from messages where conversation_id=$1 and direction='out'",
+      [c.conversationId],
+    );
+    expect(message?.citations).toMatchObject([
+      { index: 1, title: "الاسترجاع", snippet: "يمكن الاسترجاع خلال ١٤ يومًا" },
+    ]);
+    const spans = await spansOf(c);
+    const search = spans.find((s) => s.kind === "kb.search");
+    expect(search?.status).toBe("ok");
+    expect(search?.attrs).toMatchObject({
+      dense: { inline: true, value: [{ chunkId: expect.any(String), score: 1 }] },
+      lexical: { inline: true },
+      fused: { inline: true },
+      reranked: { inline: true, value: [{ chunkId: expect.any(String), score: 0.9 }] },
+      returned: 1,
+    });
+    expect(calls).toHaveLength(2);
+    for (const request of calls)
+      expect(request).toMatchObject({ context: { workspaceId: c.ws, botId: c.botId, mode: "emulator" } });
+    if (!knowledge || !search) throw new Error("missing search fixture");
+    const resolved = await db.withWorkspace(c.ws, (tx) =>
+      tx.execute(sql`select id from knowledge_bases where bot_id=${c.botId}`),
+    );
+    const kbIds = resolved.rows.map((r) => String(r["id"]));
+    const [a, b] = await Promise.all([
+      knowledge.search({ query: "الاسترجاع", kbIds, topK: 1 }),
+      knowledge.search({ query: "refund", kbIds, topK: 1 }),
+    ]);
+    expect(a.passages[0]?.cite).toBe("[[c2]]");
+    expect(b.passages[0]?.cite).toBe("[[c3]]");
+    expect(Object.keys(b.citations.sources)).toEqual(["c1", "c2", "c3"]);
+  });
+  test("an explicitly declared knowledge tool carries citations across autonomy iterations", async () => {
+    const c = await knowledgeFixture("tool");
+    const model = new FakeLlm()
+      .scriptText(':::run\nreturn await tools.searchHelp("إزاي أرجع الأوردر؟")\n:::end')
+      .scriptText(":::say text\nالاسترجاع خلال ١٤ يومًا [[c1]]\n:::exit listen\n:::end");
+    const fullLlm: LlmClient = {
+      ...llm,
+      stream: (r) => {
+        const handle = model.stream(r);
+        return {
+          textStream: handle.textStream,
+          result: handle.result.then((out) => ({
+            ...out,
+            model: r.model,
+            costMicroUsd: 0,
+            usage: { ...out.usage, cacheWriteTokens: 0 },
+          })),
+        };
+      },
+      readImage: async () => {
+        throw new Error("not an OCR test");
+      },
+    };
+    const { d } = deps({
+      knowledge: (turn, record) => turnKnowledge({ db, llm: fullLlm }, turn, record),
+      autonomy: (turn, code, knowledge) =>
+        autonomyPort(
+          {
+            db,
+            llm: fullLlm,
+            knowledge,
+            logger,
+            runPort: {
+              run: async (r) => {
+                const value = await r.onTool({ tool: "searchHelp", input: "إزاي أرجع الأوردر؟" });
+                return { ok: true, value, patches: {}, logs: [] };
+              },
+            },
+          },
+          turn,
+          code,
+        ),
+    });
+    await send(c, "إزاي أرجع الأوردر ORD-12؟");
+    await drainConversation(d, c.conversationId);
+    expect(await botTexts(c)).toEqual(["الاسترجاع خلال ١٤ يومًا"]);
+    const [message] = await query<{ citations: unknown[] }>(
+      "select citations from messages where conversation_id=$1 and direction='out'",
+      [c.conversationId],
+    );
+    expect(message?.citations).toMatchObject([{ title: "الاسترجاع", index: 1 }]);
+    const spans = await spansOf(c);
+    expect(spans.filter((s) => s.kind === "kb.search")).toHaveLength(1);
+    expect(spans.find((s) => s.kind === "tool.call")?.attrs).toMatchObject({
+      name: "searchHelp",
+      toolType: "kb_search",
+    });
+    model.expectDone();
   });
 });

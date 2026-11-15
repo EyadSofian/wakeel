@@ -7,6 +7,7 @@ import { callWorkflow } from "./call-workflow";
 import { capture } from "./capture";
 import { code } from "./code";
 import { handoff } from "./handoff";
+import { kbSearch } from "./kb-search";
 import { say } from "./say";
 import { setVariable } from "./set-variable";
 import { end, log, setTimeoutCard } from "./simple";
@@ -32,4 +33,5 @@ export const CARD_EXECUTORS: CardExecutors = {
   ai_generate: aiGenerate,
   ai_extract: aiExtract,
   ai_branch: aiBranch,
+  kb_search: kbSearch,
 };
