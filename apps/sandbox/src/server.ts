@@ -127,6 +127,10 @@ async function exec(options: ServerOptions, req: IncomingMessage, res: ServerRes
 
   const started = performance.now();
   res.once("close", () => observeMetric("wakeel_sandbox_exec_seconds", {}, (performance.now() - started) / 1000));
+  // A warm runner can emit before the admission tick. Hold those frames until NDJSON headers
+  // are committed; writing one early implicitly sends headers and resets the caller's stream.
+  const earlyFrames: unknown[] = [];
+  let admitted = false;
   const running = options.pool.exec(
     {
       execId: request.execId,
@@ -143,7 +147,10 @@ async function exec(options: ServerOptions, req: IncomingMessage, res: ServerRes
     },
     {
       signal: controller.signal,
-      onFrame: (out) => writeFrame(res, out),
+      onFrame: (out) => {
+        if (admitted) writeFrame(res, out);
+        else earlyFrames.push(out);
+      },
     },
   );
 
@@ -158,6 +165,8 @@ async function exec(options: ServerOptions, req: IncomingMessage, res: ServerRes
 
   res.writeHead(200, { "content-type": NDJSON_CONTENT_TYPE, "cache-control": "no-store" });
   res.flushHeaders();
+  admitted = true;
+  for (const out of earlyFrames) writeFrame(res, out);
   void forwardHostFrames(options.pool, request.execId, lines, log);
 
   try {
