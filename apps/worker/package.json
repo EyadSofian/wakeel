@@ -17,6 +17,7 @@
     "@wakeel/db": "workspace:*",
     "@wakeel/engine": "workspace:*",
     "@wakeel/llm": "workspace:*",
+    "@wakeel/retrieval": "workspace:*",
     "@wakeel/sandbox-client": "workspace:*",
     "@wakeel/telemetry": "workspace:*",
     "bullmq": "6.7.6",

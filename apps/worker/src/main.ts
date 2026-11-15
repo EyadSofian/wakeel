@@ -4,16 +4,20 @@ import {
   commonEnv,
   databaseEnv,
   egressClientEnv,
+  KB_LIMITS,
   loadConfigOrExit,
   masterKeyEnv,
+  objectStoreEnv,
+  parserClientEnv,
   redisEnv,
   sandboxClientEnv,
   WORKER_LIMITS,
   workerEnv,
 } from "@wakeel/config";
 import { mintCapabilityToken } from "@wakeel/contracts";
-import { createDatabase } from "@wakeel/db";
+import { createDatabase, s3ObjectStore } from "@wakeel/db";
 import { createLlm } from "@wakeel/llm";
+import { httpParser, visionOcr } from "@wakeel/retrieval";
 import {
   createAutonomyRunPort,
   createCodePort,
@@ -23,6 +27,7 @@ import {
 import { createLogger } from "@wakeel/telemetry";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
+import { ingestEnqueuer, ingestProcessor } from "./kb/index";
 import {
   aiPort,
   autonomyPort,
@@ -46,6 +51,9 @@ const config = loadConfigOrExit({
   ...sandboxClientEnv,
   ...egressClientEnv,
   ...masterKeyEnv,
+  // Knowledge base ingestion (task 8.4): the object store and the parser service.
+  ...objectStoreEnv,
+  ...parserClientEnv,
 });
 if (config) {
   const logger = createLogger({ service: "worker", level: config.logLevel });
@@ -62,6 +70,7 @@ if (config) {
   const turnQueue = new Queue("turn", { connection });
   const maintenanceQueue = new Queue("maintenance", { connection });
   const webhookQueue = new Queue("webhook", { connection });
+  const ingestQueue = new Queue("kb-ingest", { connection });
   const webhooks = webhookEnqueuer(webhookQueue);
   const publisher = new Redis(redisUrl);
   const sandbox = createSandboxClient({ url: config.sandboxUrl });
@@ -77,6 +86,19 @@ if (config) {
     onUsage: (e) => usage(e).catch((err: unknown) => logger.error({ err, model: e.model }, "usage event not written")),
   });
   const runPort = createAutonomyRunPort(sandbox);
+  const objectStore = s3ObjectStore({
+    endpoint: config.s3Endpoint,
+    ...(config.s3PublicEndpoint ? { publicEndpoint: config.s3PublicEndpoint } : {}),
+    region: config.s3Region,
+    bucket: config.s3Bucket,
+    accessKeyId: config.s3AccessKeyId,
+    secretAccessKey: config.s3SecretAccessKey.reveal(),
+  });
+  const parser = httpParser({
+    url: config.parserUrl,
+    token: config.parserToken.reveal(),
+    timeoutMs: KB_LIMITS.parserTimeoutMs,
+  });
 
   const turnDeps: TurnDeps = {
     db,
@@ -111,6 +133,32 @@ if (config) {
         logger,
         enqueueTurn: turnEnqueuer(turnQueue),
         enqueueWebhook: webhooks.now,
+      }),
+      "kb-ingest": ingestProcessor({
+        db,
+        objectStore,
+        parser,
+        // ADR-041 §4: the OCR tier uses the knowledge base's vision model; none set means no OCR.
+        ocr: async ({ workspaceId, botId, settings }) => {
+          const model = settings.ocrModel;
+          if (!model) return undefined;
+          return visionOcr(async (input) =>
+            llm.readImage({ ...input, model, purpose: "kb_ocr", context: { workspaceId, mode: "live", botId } }),
+          );
+        },
+        embed:
+          ({ workspaceId, botId, model }) =>
+          async (values) =>
+            (
+              await llm.embed({
+                model,
+                values,
+                purpose: "kb_embed",
+                context: { workspaceId, mode: "live", botId },
+              })
+            ).embeddings,
+        enqueue: ingestEnqueuer(ingestQueue),
+        logger,
       }),
       webhook: webhookProcessor({
         db,
@@ -156,6 +204,7 @@ if (config) {
       turnQueue.close(),
       maintenanceQueue.close(),
       webhookQueue.close(),
+      ingestQueue.close(),
       publisher.quit(),
       db.close(),
     ]);

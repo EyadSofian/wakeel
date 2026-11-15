@@ -61,3 +61,8 @@ export async function markFileReady(tx: Tx, fileId: string): Promise<FileRecord>
   if (!row) throw new AppError("not_found");
   return row;
 }
+
+/** Recorded by the ingestion worker when it first reads the file (ADR-039 §2). */
+export async function setFileSha256(tx: Tx, fileId: string, sha256: string): Promise<void> {
+  await tx.update(files).set({ sha256, updatedAt: sql`now()` }).where(eq(files.id, fileId));
+}
