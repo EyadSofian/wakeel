@@ -387,6 +387,19 @@ importers:
         specifier: workspace:*
         version: link:../testing
 
+  packages/evals:
+    dependencies:
+      '@wakeel/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@wakeel/retrieval':
+        specifier: workspace:*
+        version: link:../retrieval
+    devDependencies:
+      '@wakeel/testing':
+        specifier: workspace:*
+        version: link:../testing
+
   packages/llm:
     dependencies:
       '@ai-sdk/anthropic':
