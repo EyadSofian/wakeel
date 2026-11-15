@@ -1,6 +1,6 @@
 # ADR-051 — Usage event identity and storage measurements
 
-Status: proposed · Date: 2026-11-15 · Task: 11.1
+Status: accepted (Eyad approved in writing on 2026-11-15) · Date: 2026-11-15 · Task: 11.1
 
 ## Context
 
