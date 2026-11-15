@@ -261,6 +261,11 @@ export const ERRORS = {
     title: "The evaluated turn did not complete",
     fix: "Inspect the linked turn and correct the bot before running the suite again.",
   },
+  eval_publish_blocked: {
+    status: 409,
+    title: "This draft has unsuccessful evaluations",
+    fix: "Review the results and rerun the failing suites before publishing.",
+  },
   eval_assertion_unavailable: {
     status: 422,
     title: "The assertion could not be evaluated",

@@ -109,3 +109,8 @@ export const EvalRunDetail = EvalRun.extend({
   results: z.array(z.object({ caseId: EvalCaseId, result: EvalResult })),
 });
 export const EvalTurnReceipt = z.object({ conversationId: ConversationId, turnId: TurnId });
+export const EvalPublishStatus = z.object({
+  passed: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  errors: z.number().int().nonnegative(),
+});

@@ -3,6 +3,7 @@ export * from "./audit";
 export * from "./bots";
 export * from "./bridge";
 export * from "./config-vars";
+export * from "./eval-publish";
 export * from "./evals";
 export * from "./files";
 export * from "./invitations";
