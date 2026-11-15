@@ -18,9 +18,10 @@ scores. Reports include every ranked result, fixture hash, model ids/revisions, 
 Fixture edits invalidate the fingerprint and require a fresh baseline. Keep a failing real baseline
 rather than changing relevance labels or removing questions to manufacture a pass.
 
-The CI workflow expects the repository secrets `OPENAI_API_KEY` and `TEI_API_KEY` and the
-repository variables `TEI_BASE_URL` and `TEI_MODEL_REVISION`. Configure them using credentials
-dedicated to eval traffic. Scheduled runs and runs on main fail visibly if configuration is missing.
+The CI workflow needs a dedicated repository `OPENAI_API_KEY` secret. It starts the pinned
+cross-encoder image on the runner's loopback interface with an ephemeral bearer key and cleans
+up the container on exit. CI needs neither a public Railway endpoint nor a stored TEI key.
+Scheduled runs and runs on main report a missing embedding credential explicitly.
 
 The optional Railway fixture service uses `infra/railway/reranker.Dockerfile` with the
 CPU-compatible ONNX export and revision recorded in THIRD_PARTY_NOTICES. Set the TEI bearer key

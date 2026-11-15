@@ -34,10 +34,19 @@ jobs:
       - name: Compare real dense and hybrid rankings
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          TEI_API_KEY: ${{ secrets.TEI_API_KEY }}
-          TEI_BASE_URL: ${{ vars.TEI_BASE_URL }}
-          TEI_MODEL_REVISION: ${{ vars.TEI_MODEL_REVISION }}
-        run: pnpm evals:retrieval --output "$RUNNER_TEMP/retrieval-eval/baseline.json"
+          TEI_MODEL_REVISION: 5ae1fc0cfa7c2097ba2303c8a0db443d0597b3a7
+          TEI_BASE_URL: http://127.0.0.1:18080
+        run: |
+          test -n "$OPENAI_API_KEY" || { echo 'Set the OpenAI evaluation secret to run retrieval evals.' >&2; exit 1; }
+          docker build -f infra/railway/reranker.Dockerfile -t wakeel-retrieval-eval infra/railway
+          export TEI_API_KEY="$(openssl rand -hex 32)"
+          echo "::add-mask::$TEI_API_KEY"
+          trap 'docker rm -f wakeel-retrieval-eval >/dev/null 2>&1 || true' EXIT
+          API_KEY="$TEI_API_KEY" docker run -d --name wakeel-retrieval-eval -p 127.0.0.1:18080:8080 \
+            -e API_KEY -e MODEL_ID=newtechstudio/bge-reranker-v2-m3-onnx \
+            -e REVISION="$TEI_MODEL_REVISION" wakeel-retrieval-eval >/dev/null
+          curl --retry 90 --retry-all-errors --retry-delay 5 --max-time 5 --fail --silent "$TEI_BASE_URL/health" >/dev/null
+          pnpm evals:retrieval --output "$RUNNER_TEMP/retrieval-eval/baseline.json"
       - name: Preserve the measured baseline
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
