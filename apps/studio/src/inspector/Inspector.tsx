@@ -21,6 +21,7 @@ import { type AgentView, AutonomousSections } from "./autonomous/AutonomousSecti
 import { AiConditionForm, ExtractDataForm, GenerateTextForm } from "./cards/AiCardForms";
 import { AskForm, CodeForm, ConditionForm, EndForm, LogForm, SayForm, SetVariableForm } from "./cards/CardForms";
 import { HandoffForm, RunWorkflowForm } from "./cards/FlowCardForms";
+import { KnowledgeForm } from "./cards/KnowledgeForm";
 import { IssuesContext, Section, StringField, useCommitCard, useDraft } from "./fields";
 
 /**
@@ -411,6 +412,7 @@ const EDITABLE_CARDS: readonly Card["type"][] = [
   "ai_branch",
   "ai_generate",
   "ai_extract",
+  "kb_search",
   "handoff",
   "call_workflow",
 ];
@@ -470,6 +472,7 @@ function CardView({
         {card.type === "ai_branch" ? <AiConditionForm card={card} {...props} /> : null}
         {card.type === "ai_generate" ? <GenerateTextForm card={card} {...props} /> : null}
         {card.type === "ai_extract" ? <ExtractDataForm card={card} {...props} /> : null}
+        {card.type === "kb_search" ? <KnowledgeForm card={card} {...props} /> : null}
         {card.type === "handoff" ? <HandoffForm card={card} {...props} /> : null}
         {card.type === "call_workflow" ? <RunWorkflowForm card={card} {...props} /> : null}
         {EDITABLE_CARDS.includes(card.type) ? null : (

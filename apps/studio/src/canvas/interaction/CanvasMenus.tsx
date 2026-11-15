@@ -1,6 +1,7 @@
 import { NON_TARGETABLE_NODE_TYPES, type NodeType } from "@wakeel/contracts";
 import { Kbd } from "@wakeel/ui";
 import { useCallback, useMemo } from "react";
+import { useBotKnowledge } from "../../inspector/KnowledgeFields";
 import { useAddNode } from "../add-node";
 import { useCanvas, useCanvasStore } from "../context";
 import { NODE_ENTRIES } from "../library/NodeLibrary";
@@ -105,9 +106,10 @@ function CardMenu({
   const workflows = useCanvas((s) => s.workflows);
   const all = useMemo(() => Object.values(workflows).map((w) => w.doc), [workflows]);
 
+  const kbId = useBotKnowledge().data?.pages[0]?.data[0]?.id;
   const made = useMemo(
-    () => new Map(wf ? CARD_ENTRIES.map((e) => [e.type, createMenuCard(e.type, wf, all)] as const) : []),
-    [wf, all],
+    () => new Map(wf ? CARD_ENTRIES.map((e) => [e.type, createMenuCard(e.type, wf, all, kbId)] as const) : []),
+    [wf, all, kbId],
   );
   const items = useMemo<PickerItem[]>(
     () =>

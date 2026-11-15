@@ -15,22 +15,12 @@ import {
   type AutonomousNode,
   type BotDefinition,
   type Json,
-  type ModelProvider,
-  modelBaseUrlSecret,
-  modelKeySecret,
   type SearchCitations,
   type Tool,
 } from "@wakeel/contracts";
-import {
-  type Database,
-  getWorkspace,
-  insertUsageEvent,
-  type Keyring,
-  readSecretValue,
-  recentTranscript,
-} from "@wakeel/db";
+import { type Database, getWorkspace, recentTranscript } from "@wakeel/db";
 import type { AiPort, AutonomyPort, CodePort, KnowledgePort } from "@wakeel/engine";
-import { type LlmClient, registry, type UsageEvent } from "@wakeel/llm";
+import { type LlmClient, registry } from "@wakeel/llm";
 import type { AutonomyRunPort, BuilderTool } from "@wakeel/sandbox-client";
 import type { Logger } from "@wakeel/telemetry";
 import { modelId } from "./handoff-summary";
@@ -84,48 +74,7 @@ export function resolveModel(
   return colon >= 0 ? ref.slice(colon + 1) : ref;
 }
 
-/** BYOK (architecture §7): a workspace's provider key from `workspace_secrets`. */
-export function workspaceCredentials(db: Database, keyring: Keyring) {
-  return {
-    async workspaceKey(workspaceId: string, provider: ModelProvider) {
-      return db.withWorkspace(workspaceId, async (tx) => {
-        const key = await readSecretValue(tx, keyring, workspaceId, modelKeySecret(provider));
-        if (!key) return undefined;
-        const baseUrl =
-          provider === "openai-compatible" || provider === "tei"
-            ? await readSecretValue(tx, keyring, workspaceId, modelBaseUrlSecret(provider))
-            : undefined;
-        return { apiKey: key.reveal(), ...(baseUrl ? { baseURL: baseUrl.reveal() } : {}) };
-      });
-    },
-    // No plan offers platform keys yet (Phase 13): every workspace brings its own.
-    platformKey: async () => undefined,
-    platformKeysAllowed: async () => false,
-  };
-}
-
-/** Writes one `usage_events` row per model call (task 6.1). */
-export function recordUsage(db: Database) {
-  return async (e: UsageEvent) => {
-    await db.withWorkspace(e.workspaceId, (tx) =>
-      insertUsageEvent(tx, {
-        kind: e.kind,
-        quantity:
-          e.kind === "rerank_units"
-            ? (e.rerankUnits ?? 0)
-            : e.usage.inputTokens + e.usage.cachedInputTokens + e.usage.cacheWriteTokens + e.usage.outputTokens,
-        unit: e.kind === "rerank_units" ? "units" : "tokens",
-        model: e.model,
-        costMicroUsd: e.costMicroUsd,
-        mode: e.mode,
-        ...(e.botId ? { botId: e.botId } : {}),
-        ...(e.conversationId ? { conversationId: e.conversationId } : {}),
-        ...(e.turnId ? { turnId: e.turnId } : {}),
-        detail: { ...e.usage, provider: e.provider, keySource: e.keySource, purpose: e.purpose },
-      }),
-    );
-  };
-}
+export { recordUsage, workspaceCredentials } from "@wakeel/retrieval/service";
 
 /** The engine's `AutonomyPort` for one turn. */
 export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePort): AutonomyPort {

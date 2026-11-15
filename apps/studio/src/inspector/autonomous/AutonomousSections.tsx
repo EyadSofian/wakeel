@@ -4,6 +4,7 @@ import { ArrowLeft, BookOpen, Braces, LogOut, Plus, Table2, Trash2, Workflow } f
 import { type KeyboardEvent, type ReactNode, useId, useMemo } from "react";
 import { useCanvas } from "../../canvas/context";
 import { FieldShell, SchemaField, Section, StringField, useDraft, useVariables } from "../fields";
+import { KnowledgeFields, useBotKnowledge } from "../KnowledgeFields";
 import { ModelField } from "./ModelSection";
 
 /**
@@ -166,6 +167,7 @@ function freeName(base: string, taken: ReadonlySet<string>): string {
 /* ------------------------------------------------------------------ */
 
 function ToolsSection({ node, edit, open }: { node: Auto; edit: Edit; open: (id: string) => void }) {
+  const kbId = useBotKnowledge().data?.pages[0]?.data[0]?.id;
   const add = () => {
     const tool: Tool = {
       id: newElementId("tool"),
@@ -203,9 +205,31 @@ function ToolsSection({ node, edit, open }: { node: Auto; edit: Edit; open: (id:
           ))}
         </ul>
       )}
-      <p className="text-small text-tertiary">
-        Knowledge, table and workflow tools arrive with knowledge bases, tables and sub-workflow calls.
-      </p>
+      {kbId && node.tools.length < 40 ? (
+        <div>
+          <Button
+            onClick={() => {
+              const id = newElementId("tool");
+              const tool: Tool = {
+                id,
+                type: "kb_search",
+                name: freeName("searchKnowledge", new Set(node.tools.map((t) => t.name))),
+                description: "Search the selected knowledge bases for an answer.",
+                kbIds: [kbId],
+                topK: 5,
+              };
+              edit((n) => ({ ...n, tools: [...n.tools, tool] }));
+              open(id);
+            }}
+          >
+            Add knowledge tool
+          </Button>
+        </div>
+      ) : (
+        <p className="text-small text-tertiary">
+          Knowledge, table and workflow tools arrive with knowledge bases, tables and sub-workflow calls.
+        </p>
+      )}
     </Section>
   );
 }
@@ -267,6 +291,8 @@ function ToolView({ node, tool, edit, onDeleted }: { node: Auto; tool: Tool; edi
             onCommit={(timeoutMs) => set({ ...tool, timeoutMs })}
           />
         </>
+      ) : tool.type === "kb_search" ? (
+        <KnowledgeFields kbIds={tool.kbIds} topK={tool.topK} onChange={(patch) => set({ ...tool, ...patch })} />
       ) : (
         <p className="text-small text-secondary">This kind of tool cannot run yet; calls to it tell the model so.</p>
       )}

@@ -10,6 +10,7 @@ import { Redis } from "ioredis";
 import { expect } from "vitest";
 import { type App, buildApp } from "../src/app";
 import { Signals } from "../src/routes/bridge/signals";
+import type { KnowledgeDeps } from "../src/routes/knowledge";
 import type { StudioDeps } from "../src/studio";
 import { standInWorker } from "./stand-in-worker";
 
@@ -37,7 +38,12 @@ export interface Stack {
 }
 
 export async function startStack(
-  options: { now?: () => Date; extraRoutes?: (app: App, deps: StudioDeps) => void; bridge?: boolean } = {},
+  options: {
+    now?: () => Date;
+    extraRoutes?: (app: App, deps: StudioDeps) => void;
+    bridge?: boolean;
+    knowledge?: KnowledgeDeps;
+  } = {},
 ): Promise<Stack> {
   const [pg, redisContainer]: [StartedTestDatabase, StartedRedisContainer] = await Promise.all([
     startTestDatabase(),
@@ -74,6 +80,7 @@ export async function startStack(
     role: "all",
     logger: createLogger({ service: "api", level: (process.env["TEST_LOG"] as "error" | undefined) ?? "silent" }),
     studio: deps,
+    ...(options.knowledge ? { knowledge: options.knowledge } : {}),
     ...(subscriber && work
       ? {
           bridge: {
