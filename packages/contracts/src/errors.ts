@@ -251,6 +251,21 @@ export const ERRORS = {
     title: "This turn has no supported recorded input",
     fix: "Choose a turn triggered by a message or a custom event.",
   },
+  eval_side_effect_blocked: {
+    status: 409,
+    title: "Code with external access is blocked in an evaluation",
+    fix: "Use a test workflow that does not execute a Code card or code tool.",
+  },
+  eval_turn_failed: {
+    status: 422,
+    title: "The evaluated turn did not complete",
+    fix: "Inspect the linked turn and correct the bot before running the suite again.",
+  },
+  eval_assertion_unavailable: {
+    status: 422,
+    title: "The assertion could not be evaluated",
+    fix: "Check the assertion, trace evidence, and utility model settings.",
+  },
   replay_side_effect_blocked: {
     status: 403,
     title: "Replay stopped before running code with possible side effects",

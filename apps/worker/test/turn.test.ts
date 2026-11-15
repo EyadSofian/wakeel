@@ -1,12 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { Writable } from "node:stream";
 import { RedisContainer, type StartedRedisContainer } from "@testcontainers/redis";
-import { emptyState, newElementId, newId, Workflow } from "@wakeel/contracts";
+import { EvalCase, emptyState, newElementId, newId, Workflow } from "@wakeel/contracts";
 import {
   acquireConversationLease,
   appendInboundEvent,
   createBot,
   createDatabase,
+  createEvalRun,
+  createEvalSuite,
   createKnowledgeBase,
   createSource,
   createTable,
@@ -14,6 +16,7 @@ import {
   createWorkspace,
   type Database,
   getDraftDoc,
+  getEvalRun,
   insertTableRows,
   type Keyring,
   listDraftDocs,
@@ -22,6 +25,7 @@ import {
   putConfigValue,
   replaceChunks,
   saveDraftDoc,
+  saveEvalCase,
   sql,
   startTurn,
   tracePayloadKey,
@@ -36,6 +40,7 @@ import { createLogger, sampleStorageUsage } from "@wakeel/telemetry";
 import { FakeLlm } from "@wakeel/testing";
 import { Queue } from "bullmq";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { evalProcessor } from "../src/eval/run";
 import { turnKnowledge } from "../src/kb/search";
 import {
   aiPort,
@@ -1654,4 +1659,54 @@ test("storage sampling records current table occupancy once per hour and zero af
       .map((row) => row["quantity"])
       .sort(),
   ).toEqual([0, 1]);
+});
+
+test("runs an Arabic case against the saved draft through eval-mode Bridge, without billing or webhooks", async () => {
+  const c = await seed([card({ type: "say", message: { type: "text", text: "الفاتورة ORD-12" } })]);
+  const other = await seed([]);
+  const { run, caseId } = await db.withWorkspace(c.ws, async (tx) => {
+    const suite = await createEvalSuite(tx, c.botId, "الطلبات");
+    const fixture = await saveEvalCase(
+      tx,
+      c.botId,
+      suite.id,
+      EvalCase.parse({
+        name: "فاتورة",
+        turns: [
+          { user: "أرسل invoice", assert: [{ type: "contains", text: "الفاتوره ord-12" }] },
+          { user: "مرة ثانية" },
+        ],
+      }),
+    );
+    return { run: await createEvalRun(tx, c.botId, suite.id, { kind: "draft" }), caseId: fixture.id };
+  });
+  let webhookCount = 0;
+  const processor = evalProcessor(
+    deps({
+      enqueueWebhook: async () => {
+        webhookCount++;
+      },
+    }).d,
+    new FakeLlm() as unknown as LlmClient,
+    {
+      exec: async () => {
+        throw new Error("this case does not use regex");
+      },
+    },
+  );
+  await processor({ data: { workspaceId: c.ws, runId: run.id } } as Parameters<typeof processor>[0], logger);
+  const result = await db.withWorkspace(c.ws, (tx) => getEvalRun(tx, c.botId, run.id));
+  expect(result.status).toBe("passed");
+  expect(result.results).toMatchObject([
+    { caseId, result: { status: "passed", turns: [{ assertions: [{ passed: true }] }, {}] } },
+  ]);
+  const counts = await db.withWorkspace(c.ws, (tx) =>
+    tx.execute(sql`select mode, count(*)::int as n from usage_events
+    where kind='conversation' and bot_id=${c.botId} group by mode`),
+  );
+  expect(counts.rows).toEqual([{ mode: "eval", n: 1 }]);
+  expect(webhookCount).toBe(0);
+  await expect(db.withWorkspace(other.ws, (tx) => getEvalRun(tx, c.botId, run.id))).rejects.toMatchObject({
+    code: "not_found",
+  });
 });

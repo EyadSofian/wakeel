@@ -95,7 +95,10 @@ export async function ensureEmulatorConnection(
 }
 
 export async function getBridgeConnection(tx: Tx, connectionId: string): Promise<ConnectionRecord | undefined> {
-  const [row] = await tx.select().from(bridgeConnections).where(eq(bridgeConnections.id, connectionId));
+  const [row] = await tx
+    .select()
+    .from(bridgeConnections)
+    .where(and(eq(bridgeConnections.id, connectionId), eq(bridgeConnections.evalInternal, false)));
   return row ? toConnection(row) : undefined;
 }
 
@@ -542,6 +545,7 @@ export async function listBotConnections(
       and(
         eq(bridgeConnections.botId, botId),
         isNull(bridgeConnections.emulatorSessionId),
+        eq(bridgeConnections.evalInternal, false),
         connectionId ? eq(bridgeConnections.id, connectionId) : undefined,
       ),
     )
@@ -614,6 +618,7 @@ export async function updateBridgeConnection(
         eq(bridgeConnections.id, input.connectionId),
         eq(bridgeConnections.botId, input.botId),
         isNull(bridgeConnections.emulatorSessionId),
+        eq(bridgeConnections.evalInternal, false),
       ),
     )
     .returning({ id: bridgeConnections.id });

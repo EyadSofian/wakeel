@@ -1,5 +1,12 @@
 import type { Span } from "@wakeel/contracts";
-import { type BotDefinition, type Json, mapPayloadCitations, type RetrievalRecord, TurnId } from "@wakeel/contracts";
+import {
+  AppError,
+  type BotDefinition,
+  type Json,
+  mapPayloadCitations,
+  type RetrievalRecord,
+  TurnId,
+} from "@wakeel/contracts";
 import {
   acquireConversationLease,
   appendOutbox,
@@ -18,6 +25,7 @@ import {
   listRuntimeTableNames,
   listTurnSpans,
   loadConfigEnv,
+  loadEvalDefinition,
   loadVersionDefinition,
   type NewOutboxEvent,
   nextUnprocessedEvent,
@@ -257,7 +265,10 @@ class ConversationRun {
       // A resumed turn finishes on the version it started with; a new one first follows a publish.
       const migrated = turn ? undefined : await followPublishedVersion(tx, this.conversationId, this.epoch);
       const conversation = await getConversation(tx, this.conversationId);
-      const definition = await loadDefinition(tx, conversation.botId, conversation.versionId);
+      const definition =
+        conversation.mode === "eval"
+          ? await loadEvalDefinition(tx, conversation.botId, conversation.connectionId)
+          : await loadDefinition(tx, conversation.botId, conversation.versionId);
       // A published version runs with production values; the draft with draft values (ADR-037).
       const config = this.deps.keyring
         ? await loadConfigEnv(
@@ -265,7 +276,7 @@ class ConversationRun {
             this.deps.keyring,
             this.workspaceId,
             conversation.botId,
-            conversation.versionId ? "production" : "draft",
+            conversation.versionId && conversation.mode !== "eval" ? "production" : "draft",
           )
         : { values: {}, secrets: [] };
       return { event, conversation, definition, turn, migrated, config };
@@ -367,11 +378,19 @@ class ConversationRun {
         }
       },
     };
-    const autonomy = this.deps.autonomy?.(modelTurn, code, knowledge, tables);
+    const guardedCode: CodePort =
+      conversation.mode === "eval"
+        ? {
+            run: async () => {
+              throw new AppError("eval_side_effect_blocked");
+            },
+          }
+        : code;
+    const autonomy = this.deps.autonomy?.(modelTurn, guardedCode, knowledge, tables);
     const ai = this.deps.ai?.(modelTurn);
     const ports: EnginePorts = {
       ...sandbox,
-      code: replay ? replayCodePort(code, replay.allowSideEffects) : code,
+      code: replay ? replayCodePort(guardedCode, replay.allowSideEffects) : guardedCode,
       tables,
       ...(knowledge ? { knowledge } : {}),
       ...(autonomy ? { autonomy } : {}),

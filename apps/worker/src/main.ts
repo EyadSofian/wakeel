@@ -15,7 +15,7 @@ import {
   workerEnv,
 } from "@wakeel/config";
 import { AppError, mintCapabilityToken } from "@wakeel/contracts";
-import { createDatabase, s3ObjectStore } from "@wakeel/db";
+import { createDatabase, pendingEvalRuns, s3ObjectStore, workspaces } from "@wakeel/db";
 import { createLlm } from "@wakeel/llm";
 import { CRAWLER_USER_AGENT, httpParser, visionOcr } from "@wakeel/retrieval";
 import {
@@ -27,6 +27,7 @@ import {
 import { countMetric, createLogger, gaugeMetric, sampleStorageUsage, startMetricsServer } from "@wakeel/telemetry";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
+import { evalProcessor } from "./eval/run";
 import {
   egressGet,
   enqueueDueSyncs,
@@ -88,6 +89,7 @@ if (config) {
   const webhookQueue = new Queue("webhook", { connection });
   const ingestQueue = new Queue("kb-ingest", { connection });
   const syncQueue = new Queue("kb-sync", { connection });
+  const evalQueue = new Queue("eval", { connection });
   const enqueueIngest = ingestEnqueuer(ingestQueue);
   const enqueueSync = syncEnqueuer(syncQueue);
   const egressFor = (workspaceId: string) =>
@@ -164,6 +166,7 @@ if (config) {
     redisUrl,
     queues: config.queues,
     processors: {
+      eval: evalProcessor(turnDeps, llm, sandbox),
       turn: turnProcessor(turnDeps),
       maintenance: maintenanceProcessor(
         {
@@ -176,6 +179,23 @@ if (config) {
         {
           "storage-usage": () => sampleStorageUsage(db, new Date()),
           "usage-rollup": () => rollupUsage(db, new Date()),
+          "eval-recovery": async () => {
+            for (const workspace of await db.platform.select({ id: workspaces.id }).from(workspaces)) {
+              for (const runId of await db.withWorkspace(workspace.id, pendingEvalRuns)) {
+                await evalQueue.add(
+                  "run",
+                  { workspaceId: workspace.id, runId },
+                  {
+                    jobId: runId,
+                    attempts: 5,
+                    backoff: { type: "exponential", delay: 5_000 },
+                    removeOnComplete: true,
+                    removeOnFail: true,
+                  },
+                );
+              }
+            }
+          },
           "kb-resync": () => enqueueDueSyncs({ db, enqueueSync }, new Date()),
           "trace-retention": () =>
             maintainTraces(db, objectStore, new Date(), config.traceRetention, () =>
@@ -245,6 +265,12 @@ if (config) {
     // One schedule for the whole deployment: upserting by id is idempotent across replicas.
     if (config.queues.includes("maintenance"))
       await maintenanceQueue.upsertJobScheduler(
+        "eval-recovery",
+        { every: 60_000 },
+        { name: "eval-recovery", opts: { removeOnComplete: true, removeOnFail: 100 } },
+      );
+    if (config.queues.includes("maintenance"))
+      await maintenanceQueue.upsertJobScheduler(
         "janitor",
         { every: WORKER_LIMITS.janitorIntervalSeconds * 1000 },
         { name: "janitor", opts: { removeOnComplete: true, removeOnFail: 100 } },
@@ -285,7 +311,7 @@ if (config) {
   if (keepAlive) logger.warn({ idle: running.idle }, "no selected queue has a processor; staying up and idle");
 
   const stopMetrics = await startMetricsServer(config.metricsPort, async () => {
-    for (const queue of [turnQueue, maintenanceQueue, webhookQueue, ingestQueue, syncQueue]) {
+    for (const queue of [turnQueue, maintenanceQueue, webhookQueue, ingestQueue, syncQueue, evalQueue]) {
       const counts = await queue.getJobCounts("waiting", "active", "delayed", "failed");
       for (const [status, value] of Object.entries(counts))
         gaugeMetric("wakeel_queue_depth", { queue: queue.name, status }, value);
@@ -302,6 +328,7 @@ if (config) {
       webhookQueue.close(),
       ingestQueue.close(),
       syncQueue.close(),
+      evalQueue.close(),
       publisher.quit(),
       db.close(),
     ]);
