@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: Wakeel Studio tables
+  title: Wakeelk Studio tables
   version: '1.0'
 paths:
   /v1/workspaces/{workspaceId}/bots/{botId}/tables:

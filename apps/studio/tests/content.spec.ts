@@ -35,3 +35,35 @@ test("a long unbroken token stays inside its box", async ({ page }) => {
     .evaluate((el) => el.scrollWidth - el.clientWidth);
   expect(overflow).toBe(0);
 });
+
+test("the approved brand mark loads and the theme choice survives reload", async ({ page }) => {
+  await page.goto("/sign-in");
+  await expect(page).toHaveTitle("Wakeelk Studio");
+  const mark = page.locator('img[src="/brand/wakeelk-mark.png"]');
+  await expect(mark).toBeVisible();
+  expect(await mark.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(1000);
+  await page.getByRole("button", { name: "Switch to dark theme" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.getByRole("button", { name: "Switch to light theme" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+});
+
+test("system theme applies before a user pins a choice", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/sign-in");
+  await expect(page.getByRole("button", { name: "Switch to light theme" })).toBeVisible();
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.getByRole("button", { name: "Switch to dark theme" })).toBeVisible();
+});
+
+test("sign-in stays usable at a mobile width", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/sign-in");
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(0);
+});

@@ -61,31 +61,31 @@
   /* Type: font-sans, font-mono, text-body … (size, line height and weight together) */
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
-  --font-weight-normal: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --text-micro: 11px;
-  --text-micro--line-height: 16px;
-  --text-micro--font-weight: 500;
-  --text-small: 12px;
-  --text-small--line-height: 16px;
-  --text-body: 13px;
-  --text-body--line-height: 20px;
-  --text-content: 14px;
-  --text-content--line-height: 22px;
-  --text-title: 16px;
-  --text-title--line-height: 24px;
-  --text-title--font-weight: 600;
-  --text-heading: 20px;
-  --text-heading--line-height: 28px;
-  --text-heading--font-weight: 600;
-  --text-display: 24px;
-  --text-display--line-height: 32px;
-  --text-display--font-weight: 600;
-  --text-code-small: 12px;
-  --text-code-small--line-height: 18px;
-  --text-code-body: 13px;
-  --text-code-body--line-height: 20px;
+  --font-weight-normal: var(--type-weight-normal);
+  --font-weight-medium: var(--type-weight-medium);
+  --font-weight-semibold: var(--type-weight-semibold);
+  --text-micro: var(--font-size-micro);
+  --text-micro--line-height: var(--line-height-micro);
+  --text-micro--font-weight: var(--type-weight-medium);
+  --text-small: var(--font-size-small);
+  --text-small--line-height: var(--line-height-small);
+  --text-body: var(--font-size-body);
+  --text-body--line-height: var(--line-height-body);
+  --text-content: var(--font-size-content);
+  --text-content--line-height: var(--line-height-content);
+  --text-title: var(--font-size-title);
+  --text-title--line-height: var(--line-height-title);
+  --text-title--font-weight: var(--type-weight-semibold);
+  --text-heading: var(--font-size-heading);
+  --text-heading--line-height: var(--line-height-heading);
+  --text-heading--font-weight: var(--type-weight-semibold);
+  --text-display: var(--font-size-display);
+  --text-display--line-height: var(--line-height-display);
+  --text-display--font-weight: var(--type-weight-semibold);
+  --text-code-small: var(--font-size-small);
+  --text-code-small--line-height: var(--line-height-code-small);
+  --text-code-body: var(--font-size-body);
+  --text-code-body--line-height: var(--line-height-body);
 
   /* Space: p-4 is --space-4 (8 px), not Tailwind's 16 px. Only the grid exists. */
   --spacing-0: var(--space-0);
@@ -164,8 +164,8 @@
   html,
   :host {
     font-family: var(--font-sans);
-    font-size: 13px;
-    line-height: 20px;
+    font-size: var(--font-size-body);
+    line-height: var(--line-height-body);
     color: var(--text-primary);
     background-color: var(--bg-canvas);
   }

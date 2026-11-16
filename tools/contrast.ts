@@ -83,13 +83,45 @@ export function parseOklch(value: string): [number, number, number] {
 }
 
 /** WCAG relative luminance from linear sRGB. */
-export function luminance(value: string): number {
-  const [r, g, b] = oklchToLinearSrgb(...parseOklch(value));
+function colorChannels(value: string, tokens: TokenMap, depth = 0): [number, number, number] {
+  if (depth > 12) throw new Error(`Circular colour token: ${value}`);
+  const variable = /^var\((--[a-z0-9-]+)\)$/.exec(value.trim());
+  if (variable) {
+    const resolved = tokens[variable[1] ?? ""];
+    if (!resolved) throw new Error(`Unknown colour token: ${value}`);
+    return colorChannels(resolved, tokens, depth + 1);
+  }
+  const mix = /^color-mix\(in srgb, (.+) (\d+)%, (.+)\)$/.exec(value.trim());
+  if (mix) {
+    const weight = Number(mix[2]) / 100;
+    const first = colorChannels(mix[1] ?? "", tokens, depth + 1);
+    const second = colorChannels(mix[3] ?? "", tokens, depth + 1);
+    const gamma = (v: number) => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
+    const linear = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    return first.map((v, i) => linear(gamma(v) * weight + gamma(second[i] ?? 0) * (1 - weight))) as [
+      number,
+      number,
+      number,
+    ];
+  }
+  const hex = /^#([0-9a-f]{6})$/i.exec(value.trim());
+  if (hex) {
+    const digits = hex[1] ?? "";
+    return [0, 2, 4].map((i) => {
+      const v = Number.parseInt(digits.slice(i, i + 2), 16) / 255;
+      return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    }) as [number, number, number];
+  }
+  return oklchToLinearSrgb(...parseOklch(value));
+}
+
+export function luminance(value: string, tokens: TokenMap = {}): number {
+  const [r, g, b] = colorChannels(value, tokens);
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-export function contrast(a: string, b: string): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+export function contrast(a: string, b: string, tokens: TokenMap = {}): number {
+  const [hi, lo] = [luminance(a, tokens), luminance(b, tokens)].sort((x, y) => y - x) as [number, number];
   return (hi + 0.05) / (lo + 0.05);
 }
 
@@ -105,13 +137,13 @@ export interface PairResult {
 export function checkContrast(tokens: { light: TokenMap; dark: TokenMap }): PairResult[] {
   const results: PairResult[] = [];
   for (const theme of ["light", "dark"] as const) {
-    const t = tokens[theme];
+    const t = theme === "dark" ? { ...tokens.light, ...tokens.dark } : tokens.light;
     for (const { text, min } of REQUIREMENTS) {
       for (const background of BACKGROUNDS) {
         const fg = t[text];
         const bg = t[background];
         if (!fg || !bg) throw new Error(`tokens.css (${theme}): ${!fg ? text : background} is missing`);
-        const ratio = contrast(fg, bg);
+        const ratio = contrast(fg, bg, t);
         results.push({ theme, text, background, ratio, min, pass: ratio >= min });
       }
     }
@@ -119,7 +151,7 @@ export function checkContrast(tokens: { light: TokenMap; dark: TokenMap }): Pair
       const fg = t[text];
       const bg = t[background];
       if (!fg || !bg) throw new Error(`tokens.css (${theme}): ${!fg ? text : background} is missing`);
-      const ratio = contrast(fg, bg);
+      const ratio = contrast(fg, bg, t);
       results.push({ theme, text, background, ratio, min, pass: ratio >= min });
     }
   }

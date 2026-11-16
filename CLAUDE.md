@@ -1,6 +1,6 @@
 # CLAUDE.md — rules for the executor
 
-You are building `{{PLATFORM_NAME}}` (code name and package scope: `wakeel`), a multi-tenant platform for building and running conversational LLM agents. You build **only** from the documents in `/docs`. If the docs do not answer a question, you stop and ask; you do not invent architecture.
+You are building Wakeelk (internal code name and package scope: `wakeel`), a multi-tenant platform for building and running conversational LLM agents. You build **only** from the documents in `/docs`. If the docs do not answer a question, you stop and ask; you do not invent architecture.
 
 ## 1. Read first
 

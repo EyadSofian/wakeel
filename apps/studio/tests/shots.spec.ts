@@ -61,7 +61,7 @@ const canvasFor = (
             ? "code"
             : state === "dense-300" || state === "issues" || state === "empty"
               ? state
-              : state === "issues-panel"
+              : state === "issues-panel" || state === "publish-blocked"
                 ? "issues"
                 : state === "issues-panel-rtl"
                   ? "issues-rtl"

@@ -1,14 +1,21 @@
 /**
- * The only place the product's user-facing name is defined (architecture, opening section). Eyad
- * chose "Botbress" on 2026-11-13 (ADR-017). It is one letter from a competitor's trademark, so it may
- * still change before launch; keep every use reading from here. Headers and key prefixes still use
- * the code name until docs/00-open-questions.md #1 is closed.
+ * Public identity is centralized here. The technical code name and its public API contracts remain
+ * `wakeel` for compatibility; see ADR-054.
  *
  * Browser-safe: no Node imports.
  */
 export const BRAND = {
   /** Shown to users: sign-in page, page titles, emails. */
-  name: "Botbress",
+  name: "Wakeelk",
+  nameAr: "وكيلك",
+  domain: "wakeelk.org",
+  category: "AI Agent Platform",
+  /** The approved artwork is PNG; mark and favicon are cropped display variants. */
+  logo: {
+    primary: "/brand/wakeelk-logo.png",
+    mark: "/brand/wakeelk-mark.png",
+    favicon: "/brand/wakeelk-favicon.png",
+  },
   /** Package scope, CLI name and the prefix of public contract names (headers, key prefixes). */
   codeName: "wakeel",
   /** Public documentation; problem documents link to `${docsUrl}/errors/<code>` (ADR-012). */

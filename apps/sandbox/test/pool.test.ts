@@ -64,7 +64,7 @@ describe("runs code", () => {
   });
 
   test("Arabic and mixed-direction text survives the round trip", async () => {
-    const text = "مرحبا بك في Botbress، رقم الطلب ١٢٣";
+    const text = "مرحبا بك في Wakeelk، رقم الطلب ١٢٣";
     expect(resultOf(await run(`return ${JSON.stringify(text)};`))).toBe(text);
   });
 

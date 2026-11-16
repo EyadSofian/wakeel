@@ -66,7 +66,7 @@ export function ImportBotDialog({
         setSlug(slugFrom(suggested));
       }
     } catch {
-      setFileError("This file is not JSON. Choose the .wakeel.json file an export downloaded.");
+      setFileError("This file is not JSON. Choose a bot export file.");
     }
   };
   const submit = (e: FormEvent) => {
@@ -135,7 +135,7 @@ export function ImportBotDialog({
         {importBot.isError && !errors["name"] && !errors["slug"] && !errors["file"] ? (
           <ProblemBanner error={importBot.error} />
         ) : null}
-        <Field label="File" help="The .wakeel.json file from Export bot." error={fileError ?? errors["file"]}>
+        <Field label="File" help="Choose the JSON file from Export bot." error={fileError ?? errors["file"]}>
           {(p) => (
             <span className="flex items-center gap-4">
               {/* The native control stays for the label and screen readers; the visible button takes focus and opens it. */}

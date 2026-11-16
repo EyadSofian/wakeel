@@ -57,8 +57,11 @@ describe("egress limits", () => {
 });
 
 describe("brand", () => {
-  test("has a name and the code name used for packages", () => {
-    expect(BRAND.name.length).toBeGreaterThan(0);
+  test("has the approved public identity and compatible code name", () => {
+    expect(BRAND.name).toBe("Wakeelk");
+    expect(BRAND.nameAr).toBe("وكيلك");
+    expect(BRAND.domain).toBe("wakeelk.org");
+    expect(BRAND.logo.mark).toBe("/brand/wakeelk-mark.png");
     expect(BRAND.codeName).toBe("wakeel");
   });
 });
