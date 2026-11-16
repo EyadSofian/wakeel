@@ -1,0 +1,18 @@
+{
+  "name": "@wakeel/adapter-chatwoot",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Reference adapter between a Chatwoot agent bot and the Bridge API (Phase 14).",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env src/main.ts",
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@wakeel/contracts": "workspace:*",
+    "ioredis": "6.0.0",
+    "zod": "4.6.7"
+  }
+}
