@@ -85,9 +85,25 @@ function nodeBlock(node: AutonomousNode, definition: BotDefinition): string {
     toolsDts(node, definition),
     "```",
     `Message types you may send: ${node.messageTypes.join(", ")}.`,
+    ...node.messageTypes.map((t) => MESSAGE_FORMS[t]),
     exits.length > 0 ? `Exits:\n${exits.join("\n")}` : "Exits: none. Finish with a message.",
   ].join("\n");
 }
+
+/**
+ * The directive line for each message type, shown only for the types the node allows. Without the
+ * shapes, models wrote choice options as plain strings (adherence baseline, 2026-11-16).
+ */
+const MESSAGE_FORMS: Record<AutonomousNode["messageTypes"][number], string> = {
+  text: `- text: ${M}say text, then the text on the next lines.`,
+  choice: `- choice: ${M}say choice {"options":[{"label":"Track it","value":"track"},{"label":"Cancel","value":"cancel"}]}, then the question on the next lines. Each option is an object with a label (shown, at most 80 characters) and a value (returned when picked).`,
+  dropdown: `- dropdown: ${M}say dropdown {"options":[{"label":"Cairo","value":"cairo"}]}, then the question on the next lines. Options are objects, as for choice.`,
+  image: `- image: ${M}say image {"url":"https://…","alt":"…"}, then an optional caption on the next lines.`,
+  file: `- file: ${M}say file {"url":"https://…","name":"guide.pdf"} and no body.`,
+  location: `- location: ${M}say location {"latitude":30.04,"longitude":31.24,"title":"…"} and no body.`,
+  card: `- card: ${M}say card {"title":"…","subtitle":"…","actions":[{"type":"url","label":"Open","value":"https://…"}]} and no body. Action types: url, postback, say.`,
+  carousel: `- carousel: ${M}say carousel {"items":[{"title":"…","actions":[]}]} and no body; each item is a card.`,
+};
 
 /** Part 3: per conversation; no end-user text (ADR-031 §1). */
 function conversationBlock(input: PromptInput): string {

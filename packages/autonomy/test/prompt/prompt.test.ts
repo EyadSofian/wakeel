@@ -156,6 +156,16 @@ describe("buildPrompt", () => {
     expect(system).toContain("- handoff:");
   });
 
+  test("each allowed message type shows its directive line, so options are objects, not strings", () => {
+    // Adherence baseline 2026-11-16: 14 of 24 choice cases wrote `{"options":["Track","Cancel"]}`.
+    const system = buildPrompt(input(1)).system;
+    expect(system).toContain(
+      ':::say choice {"options":[{"label":"Track it","value":"track"},{"label":"Cancel","value":"cancel"}]}',
+    );
+    expect(system).toContain("Each option is an object with a label");
+    expect(system).not.toContain(":::say carousel");
+  });
+
   test("consecutive messages of one role are joined", () => {
     const built = buildPrompt(input(1, { summary: "s" }));
     for (let i = 1; i < built.messages.length; i++)
