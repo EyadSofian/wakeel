@@ -1,0 +1,17 @@
+{
+  "name": "@wakeel/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "wakeel": "./src/wakeel.mjs"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@wakeel/contracts": "workspace:*",
+    "tsx": "4.23.15"
+  }
+}
