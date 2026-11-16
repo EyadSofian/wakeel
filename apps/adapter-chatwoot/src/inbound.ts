@@ -81,6 +81,10 @@ function parseChoiceNumber(text: string): number | undefined {
 function userData(sender: z.infer<typeof Sender>, conversation: z.infer<typeof Conversation>, inboxId?: number) {
   const attributes: Record<string, unknown> = {
     ...(sender.custom_attributes ?? {}),
+    // Bot code reads only `user.attributes`, so the contact's own fields are repeated here.
+    contactName: sender.name ?? null,
+    contactEmail: sender.email ?? null,
+    contactPhone: sender.phone_number ?? null,
     chatwootContactId: sender.id ?? null,
     chatwootConversationId: conversation.id,
     inboxId: inboxId ?? conversation.inbox_id ?? null,

@@ -49,7 +49,7 @@ with `openssl rand -hex 16` and keep it out of logs.
 ## Behaviour
 
 - Incoming contact messages (text, images, files, locations) and picked `input_select` options go to
-  the platform with idempotency keys `cw-msg-<id>` / `cw-sel-<id>`. Messages are forwarded even while
+  the platform with idempotency keys `cw-msg-<id>` / `cw-sel-<id>`. `user.attributes` carries the contact's custom attributes plus `contactName`, `contactEmail`, `contactPhone`, `chatwootContactId`, `chatwootConversationId`, `inboxId` and `channel`. Messages are forwarded even while
   a human has the conversation, so the transcript stays complete; the platform keeps the bot silent.
 - Bot text, choices (as `input_select`, or a numbered list on channels without it, where a reply of
   `2` or `٢` picks the option), cards and links go back to the conversation.

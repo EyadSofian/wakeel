@@ -145,6 +145,9 @@ describe("Chatwoot → platform", () => {
         phone: "+201000000000",
         attributes: {
           activeCourse: "HVAC",
+          contactName: "مهندس أحمد",
+          contactEmail: "ahmed@example.test",
+          contactPhone: "+201000000000",
           chatwootContactId: 77,
           chatwootConversationId: 900,
           inboxId: 18,
