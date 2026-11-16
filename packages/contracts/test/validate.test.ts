@@ -452,6 +452,20 @@ describe("validateDefinition", () => {
     expect(validateDefinition(d, CTX).map((i) => i.code)).toContain("variable_unknown");
   });
 
+  test("user.attributes is a read-only built-in, not an unknown variable (architecture §4.5)", () => {
+    const d = base();
+    greetOf(d).cards.push({
+      id: newElementId("card"),
+      type: "code",
+      disabled: false,
+      source: 'const a = user.attributes;\nreturn a["plan"] ?? user.attributes.country;\n',
+      timeoutMs: 1000,
+    });
+    const say = cardOf<"say">(d, ids.say);
+    if (say.message.type === "text") say.message.text = "أهلاً {{user.attributes.contactName}}";
+    expect(validateDefinition(d, CTX)).toEqual([]);
+  });
+
   test("warnings do not hide errors and are reported with them", () => {
     const d = base();
     CASES.routing_port_unconnected(d);
