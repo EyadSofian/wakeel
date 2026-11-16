@@ -8,6 +8,23 @@
 /* Tailwind scans these for class names; the shared UI package lives outside this folder. */
 @source "../../../packages/ui/src";
 
+/* Keep authentication usable on narrow screens without shrinking the approved brand mark. */
+.wk-auth-form {
+  max-width: 100%;
+}
+
+@media (max-width: 900px) {
+  .wk-auth-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .wk-auth-content {
+    padding-inline: var(--space-6);
+  }
+  .wk-auth-preview {
+    display: none;
+  }
+}
+
 /*
  * The canvas (design system §5.1, §4 Canvas). xyflow's base stylesheet handles layout only; every
  * colour and size here comes from a token. Dots: 16 px grid at 20% of --text-tertiary.

@@ -47,7 +47,9 @@ describe("token utilities", () => {
   });
 
   test("text sizes carry their line height", () => {
-    expect(rule("text-body")).toMatch(/font-size: 13px; line-height: var\(--tw-leading, 20px\);/);
+    expect(rule("text-body")).toMatch(
+      /font-size: var\(--font-size-body\); line-height: var\(--tw-leading, var\(--line-height-body\)\);/,
+    );
   });
 
   test("shadow-pop uses the token, so the dark theme applies", () => {
@@ -68,7 +70,9 @@ describe("only tokens exist", () => {
   test("the page base uses Plex at 13/20", () => {
     const html = /html, :host \{([^}]*)\}/g;
     const blocks = [...css.matchAll(html)].map((m) => m[1] ?? "");
-    expect(blocks.some((b) => b.includes("font-family: var(--font-sans)") && b.includes("font-size: 13px"))).toBe(true);
+    expect(
+      blocks.some((b) => b.includes("font-family: var(--font-sans)") && b.includes("font-size: var(--font-size-body)")),
+    ).toBe(true);
   });
 
   test("both dark selectors ship with the tokens", () => {
