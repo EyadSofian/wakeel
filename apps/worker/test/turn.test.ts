@@ -683,6 +683,57 @@ describe("the janitor", () => {
     expect(ended).toEqual({ status: "ended", ended_reason: "inactivity" });
     expect(await outboxTypes(c)).toContain("conversation.ended");
   });
+
+  test("an inactivity trigger whose path keeps the conversation waiting runs once per period, not every scan", async () => {
+    // Found on production (Majed pilot, 2026-11-16): the follow-up and its webhook ran every 30 s,
+    // because the timeout run left expires_at = last_activity_at + timeout, already in the past.
+    const into = newElementId("var");
+    const trigger = newElementId("node");
+    const followUp = newElementId("node");
+    const c = await seed(
+      [card({ type: "capture", prompt: { type: "text", text: "رقم الطلب؟" }, kind: "text", into })],
+      { inactivityTimeoutMinutes: 15 },
+      {
+        nodes: [
+          { id: trigger, type: "trigger", name: "On inactivity", on: { kind: "inactivity" } },
+          {
+            id: followUp,
+            type: "standard",
+            name: "Follow up",
+            cards: [card({ type: "say", message: { type: "text", text: "هل لا تزال تحتاج مساعدة؟" } })],
+          },
+        ],
+        edges: [{ id: newElementId("edge"), from: { nodeId: trigger, port: "next" }, to: { nodeId: followUp } }],
+      },
+    );
+    await su(
+      "update bot_draft_docs set doc = jsonb_set(doc, '{variables}', $2::jsonb) where bot_id = $1 and kind = 'manifest'",
+      [c.botId, JSON.stringify([{ id: into, name: "order", scope: "conversation", type: "string" }])],
+    );
+    await send(c, "مرحبا");
+    await drainConversation(deps().d, c.conversationId);
+    await su(
+      "update conversations set expires_at = now() - interval '1 second', last_activity_at = now() - interval '16 minutes' where id = $1",
+      [c.conversationId],
+    );
+
+    await runJanitor({ db, logger, enqueueTurn: async () => {} });
+    await drainConversation(deps().d, c.conversationId);
+    expect(await botTexts(c)).toEqual(["رقم الطلب؟", "هل لا تزال تحتاج مساعدة؟"]);
+
+    // The next scans, 30 s apart, find nothing to time out: the deadline moved a full period ahead.
+    const again = await runJanitor({ db, logger, enqueueTurn: async () => {} });
+    expect(again.timedOut).toBe(0);
+    const [row] = await query<{ status: string; ahead: number; idle: number }>(
+      `select status,
+              round(extract(epoch from expires_at - now()) / 60)::int as ahead,
+              round(extract(epoch from now() - last_activity_at) / 60)::int as idle
+         from conversations where id = $1`,
+      [c.conversationId],
+    );
+    // Still waiting for the user; the user's last activity is unchanged (the bot's nudge is not theirs).
+    expect(row).toEqual({ status: "waiting_input", ahead: 15, idle: 16 });
+  });
 });
 
 describe("coalescing", () => {

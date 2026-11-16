@@ -226,7 +226,7 @@ When the cursor passes the last card, follow the node's `next` port. No edge the
 
 **Errors.** `fail(error)` resolves in order: the card's `error` port if connected → the workflow's Error handler node → the bot's error workflow → default: send `bot.settings.errorMessage`, emit an `error` bridge event, clear the stack. Every failure writes a span with `code`, `message`, `fix` and the card location. Error codes are an enum in `04-contracts/errors.ts`; each has a user-facing message and fix text.
 
-**Inactivity.** `conversations.expires_at = last_activity_at + timeout` (bot default 24 h; a card can change it; `0` = never). The janitor (every 30 s) inserts a `timeout` inbound event for expired conversations.
+**Inactivity.** `conversations.expires_at = last_activity_at + timeout` (bot default 24 h; a card can change it; `0` = never). The janitor (every 30 s) inserts a `timeout` inbound event for expired conversations. A timeout run that leaves the conversation waiting counts the next deadline from that run (`last_activity_at` is unchanged), so an inactivity trigger fires at most once per period of silence.
 
 **Typing.** At turn start the engine emits an ephemeral `typing {state:'on'}` event; at turn end `typing {state:'off'}`. Ephemeral events are delivered best-effort, never retried, carry no `seq`.
 

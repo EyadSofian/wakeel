@@ -259,6 +259,11 @@ export interface ConversationWrite {
   touchActivity?: boolean;
   /** Minutes after the last activity; 0 or null clears `expires_at`. */
   timeoutMinutes?: number | null;
+  /**
+   * Count the timeout from now instead of the last activity, without touching `last_activity_at`.
+   * Used after an inactivity run: the old deadline is already past, so the janitor would fire again.
+   */
+  expiryFromNow?: boolean;
   /** The version the conversation now runs (task 7.2). */
   versionId?: string;
 }
@@ -287,7 +292,7 @@ export async function writeConversation(
   if (write.versionId !== undefined) set["versionId"] = write.versionId;
   if (write.touchActivity) set["lastActivityAt"] = sql`now()`;
   if (write.timeoutMinutes !== undefined) {
-    const activity = write.touchActivity ? sql`now()` : conversations.lastActivityAt;
+    const activity = write.touchActivity || write.expiryFromNow ? sql`now()` : conversations.lastActivityAt;
     set["expiresAt"] = write.timeoutMinutes ? sql`${activity} + make_interval(mins => ${write.timeoutMinutes})` : null;
   }
   const rows = await tx

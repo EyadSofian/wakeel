@@ -456,7 +456,13 @@ class ConversationRun {
     const timeout = result?.state.inactivityTimeoutMinutes ?? definition.manifest.settings.inactivityTimeoutMinutes;
     if (result) {
       await this.#tx(async (tx) => {
-        await writeConversation(tx, this.conversationId, this.epoch, { touchActivity: touch, timeoutMinutes: timeout });
+        await writeConversation(tx, this.conversationId, this.epoch, {
+          touchActivity: touch,
+          timeoutMinutes: timeout,
+          // A timeout run that leaves the conversation open starts a new period from now; otherwise
+          // the deadline stays in the past and the janitor re-runs the trigger on every scan.
+          expiryFromNow: event.kind === "timeout",
+        });
         await this.#appendOutbox(tx, conversation, [
           {
             type: "turn.completed",
