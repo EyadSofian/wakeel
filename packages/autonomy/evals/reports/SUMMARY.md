@@ -8,6 +8,7 @@ provider fallbacks are disabled. Both completed candidates miss architecture §6
 |---|---|---|---|---|---|
 | `gpt-4.1-mini` | 208/240 (86.67%) | 103/120 | 105/120 | 181/240 | unsupported |
 | `gpt-4.1` | 198/240 (82.50%) | 99/120 | 99/120 | 174/240 | unsupported |
+| `gpt-6-luna` (2026-11-16) | 221/240 (92.08%) | 107/120 | 114/120 | 212/240 | untested (registry not updated) |
 
 The three Anthropic candidates could not be measured: the API returned HTTP 400 with
 `invalid_request_error` and an insufficient-credit message. This does not establish whether those
@@ -36,3 +37,12 @@ execution and repository credential setup have not been verified. This is not a 
 Autonomous Node launch gate. Improve the existing prompt's message guidance, then rerun this same
 corpus; adding a native-tool-calling protocol requires a separate proposed ADR and approval
 (ADR-002 and build-plan Phase 6).
+
+## 2026-11-16: gpt-6-luna
+
+Same corpus and prompt version 1, run without `--update-registry`. 221/240 protocol-valid, below the
+98% gate. By dialect: Gulf 30/30, Egyptian 28/30, MSA 28/30, code-switching 28/30. The weak spot is
+again choices, at 10/24: 14 replies wrote options as plain strings (`{"options":["Track","Cancel"]}`).
+PR #136 adds each message type's directive line to the node prompt. This corpus has not been re-run
+since that change. Tool order behaviour is 15/24.
+
