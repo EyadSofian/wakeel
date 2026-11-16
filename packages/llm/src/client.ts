@@ -311,8 +311,11 @@ export function createLlm(deps: LlmDeps): LlmClient {
           system: request.system,
           messages: request.messages,
           maxRetries: 0,
-          ...(request.stop ? { stopSequences: request.stop } : {}),
-          ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
+          // Left out for models whose provider rejects them, rather than failing every call.
+          ...(request.stop && model.capabilities.stopSequences ? { stopSequences: request.stop } : {}),
+          ...(request.temperature !== undefined && model.capabilities.temperature
+            ? { temperature: request.temperature }
+            : {}),
           ...(request.maxOutputTokens ? { maxOutputTokens: request.maxOutputTokens } : {}),
           ...(request.signal ? { abortSignal: request.signal } : {}),
         });

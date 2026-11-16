@@ -17,7 +17,15 @@ export const ModelEntry = z.object({
   kind: z.enum(["chat", "embedding", "rerank"]),
   contextWindow: z.number().int().positive(),
   maxOutput: z.number().int().positive(),
-  capabilities: z.object({ vision: z.boolean(), caching: z.boolean(), structuredOutput: z.boolean() }),
+  capabilities: z.object({
+    vision: z.boolean(),
+    caching: z.boolean(),
+    structuredOutput: z.boolean(),
+    /** False when the provider rejects a `temperature` (OpenAI's GPT-6 family accepts only its default). */
+    temperature: z.boolean().default(true),
+    /** False when the provider rejects stop sequences; the Autonomous Node then reads `:::end` from the text. */
+    stopSequences: z.boolean().default(true),
+  }),
   /** USD per million tokens; null for self-hosted or unpriced models (cost 0, still metered). */
   prices: z
     .object({
