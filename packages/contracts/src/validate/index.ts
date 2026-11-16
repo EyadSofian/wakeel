@@ -81,7 +81,8 @@ export function validateDefinition(def: BotDefinition, ctx: ValidationContext = 
     const byId = new Map<string, Variable>([...manifestVars, ...wf.variables].map((v) => [v.id, v]));
     const names = {
       bot: new Set(manifestVars.filter((v) => v.scope === "bot").map((v) => v.name)),
-      user: new Set(manifestVars.filter((v) => v.scope === "user").map((v) => v.name)),
+      // `user.attributes` is the bridge's read-only data about the user (architecture §4.5).
+      user: new Set([...manifestVars.filter((v) => v.scope === "user").map((v) => v.name), "attributes"]),
       conversation: new Set(manifestVars.filter((v) => v.scope === "conversation").map((v) => v.name)),
       workflow: new Set([...wf.variables.map((v) => v.name), ...wf.inputs.map((i) => i.name)]),
     };
