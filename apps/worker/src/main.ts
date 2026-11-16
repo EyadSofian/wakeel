@@ -31,6 +31,7 @@ import { evalProcessor } from "./eval/run";
 import {
   egressGet,
   enqueueDueSyncs,
+  ingestEmbedder,
   ingestEnqueuer,
   ingestProcessor,
   mimeOf,
@@ -215,17 +216,7 @@ if (config) {
             llm.readImage({ ...input, model, purpose: "kb_ocr", context: { workspaceId, mode: "live", botId } }),
           );
         },
-        embed:
-          ({ workspaceId, botId, model }) =>
-          async (values) =>
-            (
-              await llm.embed({
-                model,
-                values,
-                purpose: "kb_embed",
-                context: { workspaceId, mode: "live", botId },
-              })
-            ).embeddings,
+        embed: ingestEmbedder(llm),
         // URL, sitemap and crawl pages are fetched through egress (ADR-020), never directly.
         fetchRemote: async ({ workspaceId, url }) => {
           const res = await egressFor(workspaceId)(url, { "user-agent": CRAWLER_USER_AGENT });
