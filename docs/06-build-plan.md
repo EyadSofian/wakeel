@@ -20,7 +20,7 @@ Read before starting any task: `CLAUDE.md`, the sections of `03-architecture.md`
 ## Test levels
 
 - **Unit** (Vitest): pure logic; no network, no database.
-- **Integration** (Vitest + Testcontainers): real Postgres with pgvector, real Redis, MinIO; fake LLM and fake clock from `packages/testing`.
+- **Integration** (Vitest + Testcontainers): real Postgres with pgvector, real Redis, RustFS (S3-compatible, ADR-013); fake LLM and fake clock from `packages/testing`.
 - **E2E** (Playwright): Studio against a running stack with seeded data and the fake LLM.
 - **Evals** (custom runner): model-in-the-loop suites; run nightly and on changes to `packages/autonomy` or `packages/retrieval`, not on every PR.
 
@@ -35,7 +35,7 @@ Read before starting any task: `CLAUDE.md`, the sections of `03-architecture.md`
 | 0.1 | Monorepo scaffold: pnpm workspaces, turbo, TypeScript strict base config, Biome, Vitest, commit hooks | `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `biome.json` | `pnpm check` runs and passes on an empty workspace; CI workflow runs it |
 | 0.2 | `packages/contracts`: copy `docs/04-contracts/*.ts`, add `ids.ts` (`newId`, `newElementId`), JSON-schema subset validator, OpenAPI ↔ zod agreement test | `packages/contracts/**` | Unit: smoke fixtures parse; negative cases rejected; agreement test passes; ULID and nanoid formats match the regexes |
 | 0.3 | `packages/config`: env schema, limits, brand; fail-fast messages | `packages/config/**` | Unit: missing variable error names the variable |
-| 0.4 | Local infra: docker-compose with Postgres 17 + pgvector, Redis 7, MinIO; `pnpm dev:infra` | `docker-compose.yml`, `infra/postgres/init.sql` | `pnpm dev:infra` brings services up healthy; `create extension vector` succeeds |
+| 0.4 | Local infra: docker-compose with Postgres 17 + pgvector, Redis 7, RustFS (ADR-013); `pnpm dev:infra` | `docker-compose.yml`, `infra/postgres/init.sql` | `pnpm dev:infra` brings services up healthy; `create extension vector` succeeds |
 | 0.5 🔒 | `packages/db`: migration runner (plain SQL files, checksummed), roles `app_migrator` / `app_rw` / `app_admin_ro`, `withWorkspace`, RLS policy helper, lint rule banning the raw pool, test harness (two tenants) | `packages/db/**`, `tools/lint-rules/no-raw-pool.ts` | Integration: a table created by the test with the standard policy is invisible to the other tenant and to a connection with no workspace set; migration test asserts every table with `workspace_id` has forced RLS |
 | 0.6 | `packages/testing`: fake LLM (scripted streams), fake clock, factories, RTL fixtures | `packages/testing/**` | Unit: scripted stream yields chunks with controllable timing |
 | 0.7 | `packages/ui` tokens: `tokens.css` (light and dark), Tailwind 4 theme, `motion.ts`, fonts, lint rule banning raw colours and arbitrary values, contrast checker | `packages/ui/src/tokens.css`, `motion.ts`, `tools/lint-rules/tokens-only.ts`, `tools/contrast.ts` | `pnpm ui:contrast` passes; lint fails on a file containing `#fff` or `p-[7px]` |

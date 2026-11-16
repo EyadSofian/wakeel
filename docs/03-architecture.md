@@ -30,7 +30,7 @@ Code scope name: `@wakeel/*` (matches the repo folder). The user-facing brand st
                                       ▼              ▼              ▼
                                ┌───────────┐  ┌────────────┐  ┌───────────┐     ┌──────────────┐
                                │ sandbox   │  │ LLM / embed│  │ parser    │     │ object store │
-                               │ (QuickJS) │  │ providers  │  │ (Docling) │     │ (S3 / MinIO) │
+                               │ (QuickJS) │  │ providers  │  │ (Docling) │     │ (S3/RustFS)  │
                                └─────┬─────┘  └────────────┘  └───────────┘     └──────────────┘
                                      │ fetch
                                      ▼
@@ -48,7 +48,7 @@ Code scope name: `@wakeel/*` (matches the repo folder). The user-facing brand st
 | `apps/egress` | Node 22 forward proxy | no | The only route from sandbox, crawler and webhook delivery to the internet. |
 | `apps/studio` | Vite, React 19 | — | Static SPA served by any static host. |
 
-Infra: Postgres 17 with `pgvector` ≥ 0.8, Redis 7, S3-compatible object store. Local development uses `docker-compose.yml` with MinIO.
+Infra: Postgres 17 with `pgvector` ≥ 0.8, Redis 7, S3-compatible object store. Local development uses `docker-compose.yml` with RustFS (ADR-013).
 
 ### 1.2 Monorepo layout
 
