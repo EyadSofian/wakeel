@@ -41,17 +41,42 @@ export from them.
 
 | Gap | Status |
 |---|---|
-| OpenAI GPT-6 models reject `temperature` and `stop`; every call failed as `model_unavailable` | Fixed in PR #133 (registry capabilities) |
-| Validation rejected `user.attributes`, which architecture §4.5 documents as a built-in | Fixed in this branch |
-| No Chatwoot adapter | PR #134 (task 14.2) |
+| OpenAI GPT-6 models reject `temperature` and `stop`; every call failed as `model_unavailable` | Fixed (#133) |
+| Validation rejected `user.attributes`, which architecture §4.5 documents as a built-in | Fixed (#135) |
+| No Chatwoot adapter | Built (#134, task 14.2), running on Railway |
+| Every KB embed failed (`provider:id` passed to the registry), and a failed stage could never re-run | Fixed (#137) |
+| Choice options written as plain strings (10/24 in the adherence corpus) | Prompt guidance added (#136); not re-measured |
+| **Inactivity trigger fires every 30 s** while its path leaves the conversation waiting: `expires_at` is not moved, so the janitor re-runs it. Majed sent its follow-up and called the n8n `majed-timeout-handoff` webhook about 28 times for two test conversations before the fix | **Open, platform bug.** Majed now ends the conversation after the follow-up (as Botpress did). Fix in the worker: after a timeout run, move `expires_at` or end the conversation |
+| **Evaluations block every Code card**, even ones with no network access (`eval_side_effect_blocked`) | Open (ADR-053 behaviour). Majed loads website data with Set variable cards so its suite can run |
+| **Eval `judge` assertions fail on reasoning models**: `maxOutputTokens: 16` is used up before PASS/FAIL | **Open, platform bug** (`apps/worker/src/eval/run.ts`). 3 of 13 Majed cases end as `eval_assertion_unavailable` |
+| Knowledge-base search needs a rerank model, the TEI key and a reranker reachable through egress (no private hosts) | Set up: reranker got a public Railway domain (API-key protected); TEI base URL and key in Settings → Models → Rerank server |
+| Railway did not deploy `main` after CI passed | api, worker and studio were deployed with `railway up` from `main`; check the services' GitHub auto-deploy setting |
 | Bot code cannot read the stored user's name and email, only `user.attributes` | Worked around in the adapter (adds `contactName`, `contactEmail`, `contactPhone`) |
-| Knowledge bases and model keys cannot be managed with an API key; only a signed-in member can | Noted; the pilot used the Studio session for those steps |
-| Majed's 32 K prompt does not fit the 16 K instructions limit | Worked around by moving reference sections to the KB. Behaviour on those sections now depends on retrieval |
-| Full adherence report for `gpt-6-luna` | 38/38 protocol-valid before the provider key was revoked mid-run; the 240-case run is still to do |
-| Pilot eval suite (acceptance: "passes its eval suite") | Not written yet |
+| Knowledge bases, model keys and connections cannot be managed with an API key; only a signed-in member can | Noted |
+| Majed's 32 K prompt does not fit the 16 K instructions limit | Reference sections moved to the KB; behaviour on them depends on retrieval |
 
-## Deployment record
+## Results
 
-- Workspace `test`, bot `bot_01m7gxs7wjzrj9yeyv9prz5fvk`, knowledge base `kb_01m7gxtgpqh1ytwf9t49xyf1ww`.
-- Chatwoot: a new agent bot on the **test** web widget inbox (18) only. Live inboxes and the Botpress
-  agent bot are untouched.
+- **Adherence corpus, `gpt-6-luna`:** 221/240 protocol-valid (92%), below the 98% gate. See `packages/autonomy/evals/reports/`.
+- **Majed acceptance suite** (13 cases, in the workspace as "Majed acceptance"), draft of 2026-11-16: 8 passed. Failed: the HVAC case (the model did not search on the first message). Errors: 3 judge assertions unavailable (bug above), 1 turn failed (competitor question, not yet investigated). **The acceptance criterion is not met yet.**
+- **Live test through Chatwoot:** greeting with buttons, button pick as a postback, and an HVAC question that returned the real course page from the KB with the instructor's name. Replies take 4–30 s.
+
+## Deployment (production, 2026-11-16)
+
+| What | Where |
+|---|---|
+| Studio | https://studio-production-487a9416.up.railway.app, workspace `test` |
+| Bot | `bot_01m7gxs7wjzrj9yeyv9prz5fvk`, published version 6 ("Majed pilot v5"), model `openai:gpt-6-luna` |
+| Knowledge base | `kb_01m7gxtgpqh1ytwf9t49xyf1ww`, 5 documents, about 37 K tokens |
+| Bridge connection | `conn_01m7gy1y2yb8t2qmn5jwgd0s4a`, target production, webhook to the adapter |
+| Adapter | Railway service `adapter-chatwoot`, https://adapter-chatwoot-production.up.railway.app, Redis store, pair config in `ADAPTER_PAIRS` |
+| Chatwoot | Agent bot 8 "Majed (Wakeel)" on the **test** web widget inbox (18) only. Live inboxes and the Botpress agent bot (6) are untouched. Handoffs go to team 2 |
+| Reranker | Railway service `reranker`, public domain https://reranker-production-595bf139.up.railway.app (requires its API key) |
+
+## Handoff
+
+1. **Private files.** The prompt (`instructions.md`), the five KB files, the eval cases and the built export are not in this repository. Ask Eyad for `docs/pilot/majed/private/` and put it at that path; it is git-ignored. `pnpm tsx tools/pilot/build-majed.ts --kb <kb id>` rebuilds the export from it.
+2. **Changing the prompt.** Edit `private/instructions.md` (limit 16,000 characters), update the Main workflow's Autonomous Node, then publish: in the Studio, or `PUT …/bots/<bot>/docs/workflow/<wf>` with `If-Match`, then `POST …/bots/<bot>/versions`.
+3. **Credentials to rotate.** The OpenAI key and the Chatwoot administrator token were pasted into a chat. The administrator token was also hard-coded in the Botpress bot. The adapter uses the agent bot's own token, so the administrator token is no longer needed. The workspace API key `majed-pilot` was created for this migration; revoke it when it is no longer used.
+4. **Before live traffic:** fix the inactivity bug, get the acceptance suite green, decide `gpt-6-luna` vs `gpt-6.1-sol` on quality and cost, and close the production gaps in `docs/runbooks/releases/2026-11-15-phase-12.md` (sandbox isolation, backups). Then move agent bot 8 to a live inbox and take the Botpress bot off it, never both on one inbox.
+5. **n8n:** the test conversations above sent repeated `majed-timeout-handoff` calls with synthetic names ("fragrant-haze-764", "زائر"). Check the n8n workflow for test leads to delete.
