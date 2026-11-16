@@ -74,6 +74,8 @@ declare const tools: {
 };
 \`\`\`
 Message types you may send: text, choice.
+- text: :::say text, then the text on the next lines.
+- choice: :::say choice {"options":[{"label":"Track it","value":"track"},{"label":"Cancel","value":"cancel"}]}, then the question on the next lines. Each option is an object with a label (shown, at most 80 characters) and a value (returned when picked).
 Exits:
 - resolved: The customer's question is answered.
 - escalate: The customer wants a refund over the limit.
