@@ -108,11 +108,7 @@ export async function runAutoSearch(
   const earlier = earlierMessages(input.transcript);
   if (settings.rewrite && earlier.length > 0) {
     try {
-      const answer = await knowledge.rewrite({
-        system: REWRITE_SYSTEM,
-        messages: [{ role: "user", content: rewriteData(earlier, input.message, input.summary) }],
-        purpose: "rewrite",
-      });
+      const answer = await knowledge.rewrite(rewriteRequest(input.transcript, input.message, input.summary));
       rewriteCall = answer.call;
       const cleaned = cleanQuery(answer.text);
       if (cleaned === "" || cleaned.length > REWRITE_MAX_CHARS)
@@ -150,6 +146,22 @@ export async function runAutoSearch(
     warnings.push(`auto_search_failed: ${code}; the model was told it cannot check right now`);
     return { knowledge: { turnId: input.turnId, query, passages: [], error: code }, trace: trace(0, code), warnings };
   }
+}
+
+/**
+ * The rewrite call for the latest message: the fixed system text and, as data, the summary, the
+ * earlier messages and the message itself. Exported so the retrieval evals measure the same prompt.
+ */
+export function rewriteRequest(
+  transcript: readonly TranscriptMessage[],
+  latest: string,
+  summary?: string,
+): { system: string; messages: { role: "user"; content: string }[]; purpose: "rewrite" } {
+  return {
+    system: REWRITE_SYSTEM,
+    messages: [{ role: "user", content: rewriteData(earlierMessages(transcript), latest, summary) }],
+    purpose: "rewrite",
+  };
 }
 
 /** The messages before the latest inbound one, newest last, at most REWRITE_CONTEXT_MESSAGES. */
