@@ -1,5 +1,5 @@
 import type { StepLog } from "../ports";
-import { aiPort, CLASSIFY_SYSTEM, dataBlock, modelFor } from "./ai-prompts";
+import { aiPort, CLASSIFY_SYSTEM, dataBlock, modelFor, SHORT_ANSWER_MAX_TOKENS } from "./ai-prompts";
 import { CardEvaluator } from "./render";
 import type { ExecutorOf } from "./types";
 
@@ -20,11 +20,13 @@ export const aiBranch: ExecutorOf<"ai_branch"> = async (ctx) => {
     system: CLASSIFY_SYSTEM,
     messages: [{ role: "user", content: `Options:\n${options}\n\n${dataBlock("input", rendered.text(input))}` }],
     temperature: 0,
-    maxOutputTokens: 8,
+    maxOutputTokens: SHORT_ANSWER_MAX_TOKENS,
     turnId: ctx.turnId,
   });
   const answer = text.trim();
-  const chosen = /^\d+$/.test(answer) ? Number(answer) : Number.NaN;
+  // Models wrap the number in punctuation or Markdown ("1.", "**1**"); words are still not an answer.
+  const number = /^[^\p{L}\p{N}]*(\d+)[^\p{L}\p{N}]*$/u.exec(answer)?.[1];
+  const chosen = number !== undefined ? Number(number) : Number.NaN;
   if (chosen >= 1 && chosen <= card.branches.length) {
     const branch = card.branches[chosen - 1] as (typeof card.branches)[number];
     return { outcome: { type: "goto", port: `branch:${branch.id}` } };

@@ -1,5 +1,6 @@
 import { FakeLlm } from "@wakeel/testing";
 import { describe, expect, test } from "vitest";
+import { SHORT_ANSWER_MAX_TOKENS } from "../../src/cards/ai-prompts";
 import type { AiRequest } from "../../src/ports";
 import {
   cardId,
@@ -201,6 +202,22 @@ describe("AI condition", () => {
     const { h } = model("0");
     const { commits } = await run({ def: bot.def, h, event: message("السلام عليكم") });
     expect(commits.flatMap((c) => c.logs.map((l) => l.message))).toEqual(["no match"]);
+  });
+
+  test("leaves room for a reasoning model to think before it answers", async () => {
+    // Reasoning models bill their reasoning as output tokens; with a cap of 8 the answer was empty.
+    const bot = branchBot();
+    const { h } = model("1");
+    const { aiCalls } = await run({ def: bot.def, h, event: message("عايز فلوسي ترجع") });
+    expect(aiCalls[0]?.maxOutputTokens).toBe(SHORT_ANSWER_MAX_TOKENS);
+    expect(SHORT_ANSWER_MAX_TOKENS).toBeGreaterThanOrEqual(1_024);
+  });
+
+  test.each(["1.", "**1**", " 1\n", "(1)"])("reads the number when the model wraps it: %j", async (reply) => {
+    const bot = branchBot();
+    const { h } = model(reply);
+    const { commits } = await run({ def: bot.def, h, event: message("عايز فلوسي ترجع") });
+    expect(commits.flatMap((c) => c.logs.map((l) => l.message))).toEqual(["refund"]);
   });
 
   test("an answer that is not an option counts as none, with a warning on the step", async () => {
