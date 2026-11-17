@@ -85,6 +85,12 @@ export const EvalTurnResult = z.object({
   conversationId: ConversationId.optional(),
   silencePassed: z.boolean().optional(),
   assertions: z.array(z.object({ assertion: Assertion, passed: z.boolean(), detail: z.string().optional() })),
+  /** The whole turn, from its trace (ADR-056 G5). */
+  latencyMs: z.number().int().nonnegative().optional(),
+  /** From the turn's start to its first committed bot message: when the user starts reading (G5). */
+  firstMessageMs: z.number().int().nonnegative().optional(),
+  /** What the turn's model calls cost, from its `llm.call` spans (G6). */
+  costMicroUsd: z.number().int().nonnegative().optional(),
 });
 export type EvalTurnResult = z.infer<typeof EvalTurnResult>;
 export const EvalResult = z.object({
