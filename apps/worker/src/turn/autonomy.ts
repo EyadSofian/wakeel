@@ -164,7 +164,7 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
                         if (!knowledge) throw new AppError("model_not_configured");
                         const result = await knowledge.search(query, retrievalCitations);
                         retrievalCitations = result.citations;
-                        return result.passages.map((p) => ({ ...p, token: p.cite })) as unknown as Json;
+                        return result.passages;
                       },
                     }
                   : {}),

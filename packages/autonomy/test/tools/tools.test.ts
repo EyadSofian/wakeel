@@ -288,10 +288,35 @@ describe("explicit knowledge tools", () => {
     const seen: unknown[] = [];
     d.kbSearch = async (request) => {
       seen.push(request);
-      return [{ text: "الطلب اتشحن", cite: "[[c1]]" }];
+      return [
+        {
+          chunkId: "chk_01m7a256m0a13warwhczsjhx9b",
+          documentId: "doc_01m7a256m0a13warwhczsjhx9b",
+          title: "shipping.md",
+          uri: "https://example.test/shipping",
+          headingPath: ["الشحن", "داخل مصر"],
+          text: "الطلب اتشحن",
+          score: 0.91,
+          cite: "[[c1]]",
+          meta: { lang: "ar" },
+        },
+        {
+          chunkId: "chk_01m7a256m0a13warwhczsjhx9c",
+          documentId: "doc_01m7a256m0a13warwhczsjhx9b",
+          title: "faq.md",
+          headingPath: [],
+          text: "Returns within 14 days",
+          score: 0.4,
+          cite: "[[c2]]",
+          meta: {},
+        },
+      ];
     };
+    // Only the shape the tool declares reaches the model (ids, scores and metadata take space and
+    // say nothing to it); the heading path says which course or policy a passage is about.
     expect(await callTool(node, { tool: "searchHelp", input: "وين وصل ORD-12؟" }, d)).toEqual([
-      { text: "الطلب اتشحن", cite: "[[c1]]" },
+      { token: "[[c1]]", title: "shipping.md", section: "الشحن › داخل مصر", text: "الطلب اتشحن" },
+      { token: "[[c2]]", title: "faq.md", text: "Returns within 14 days" },
     ]);
     expect(seen[0]).toMatchObject({ query: "وين وصل ORD-12؟", kbIds: ["kb_01m7a256m0a13warwhczsjhx9b"] });
     await expect(callTool(node, { tool: "searchHelp", input: { kbIds: ["foreign"] } }, d)).rejects.toMatchObject({

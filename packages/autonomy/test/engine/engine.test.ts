@@ -1,7 +1,7 @@
 import { AppError, AutonomousNode, type AutonomyMemory, type BotDefinition } from "@wakeel/contracts";
 import { FakeLlm, makeBotDefinition } from "@wakeel/testing";
 import { describe, expect, test } from "vitest";
-import { type AutonomyStepInput, createAutonomy, type RunOutcome } from "../../src/engine";
+import { type AutonomyStepInput, createAutonomy, RUN_RESULT_MAX_CHARS, type RunOutcome } from "../../src/engine";
 
 /**
  * Task 6.5 (architecture §6.3): one iteration of the Autonomous Node, with the fake LLM and a
@@ -124,6 +124,58 @@ describe("one iteration", () => {
     expect(r.exit).toBeUndefined();
     expect(r.memory).toMatchObject({ iteration: 1, feedback: [{ kind: "run_result", text: '{"status":"shipped"}' }] });
     expect(s.codeCalls[0]?.source).toBe('return await tools.lookupOrder({ orderNumber: "5678" })');
+  });
+
+  /** A passage as big as the chunker makes one: 500 estimated tokens of Arabic. */
+  const passage = (n: number) => ({
+    token: `[[c${n}]]`,
+    title: "engosoft_courses.md",
+    section: "الدورات › التكييف والتبريد",
+    text: `${n} ${"دورة التكييف والتبريد المركزي للمهندسين، حساب الأحمال وتصميم مجاري الهواء. ".repeat(17)}`.slice(
+      0,
+      1250,
+    ),
+  });
+
+  test("five full-size Arabic passages from a knowledge search reach the model whole", async () => {
+    const value = [1, 2, 3, 4, 5].map(passage);
+    const s = setup(
+      [`${M}run\nreturn await tools.searchKnowledge("HVAC")\n${M}end`],
+      [{ ok: true, returned: true, value, patches: {} }],
+    );
+    const r = await s.autonomy.step(s.input());
+    const text = r.memory.feedback.find((f) => f.kind === "run_result")?.text ?? "";
+    expect(text).toBe(JSON.stringify(value));
+    expect(text).not.toContain("(cut)");
+  });
+
+  test("a list over the size limit keeps whole items and says how many were left out", async () => {
+    const value = Array.from({ length: 20 }, (_, i) => passage(i + 1));
+    const s = setup(
+      [`${M}run\nreturn await tools.searchKnowledge("HVAC")\n${M}end`],
+      [{ ok: true, returned: true, value, patches: {} }],
+    );
+    const r = await s.autonomy.step(s.input());
+    const text = r.memory.feedback.find((f) => f.kind === "run_result")?.text ?? "";
+    const [json = "", note] = text.split("\n");
+    const kept = JSON.parse(json) as unknown[];
+    expect(kept.length).toBeGreaterThan(5);
+    expect(kept).toEqual(value.slice(0, kept.length));
+    expect(note).toBe(
+      `${20 - kept.length} of 20 items were left out: the result is over the size limit. Return fewer or shorter items to see them.`,
+    );
+    expect(text.length).toBeLessThanOrEqual(RUN_RESULT_MAX_CHARS + 200);
+  });
+
+  test("a value over the size limit that is not a list is cut at the limit", async () => {
+    const s = setup(
+      [`${M}run\nreturn await tools.lookupOrder({ orderNumber: "5678" })\n${M}end`],
+      [{ ok: true, returned: true, value: { note: "ا".repeat(RUN_RESULT_MAX_CHARS + 10) }, patches: {} }],
+    );
+    const r = await s.autonomy.step(s.input());
+    const text = r.memory.feedback.find((f) => f.kind === "run_result")?.text ?? "";
+    expect(text).toHaveLength(RUN_RESULT_MAX_CHARS + "… (cut)".length);
+    expect(text.endsWith("… (cut)")).toBe(true);
   });
 
   test("a run without return followed by an exit leaves through it, with its data and the accepted writes", async () => {

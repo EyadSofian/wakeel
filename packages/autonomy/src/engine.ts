@@ -209,6 +209,12 @@ export interface AutonomyDeps {
 
 /** Feedback text is trimmed to this many characters: enough to act on, cheap to send again. */
 export const FEEDBACK_MAX_CHARS = 4_000;
+/**
+ * The budget for a run block's returned value (architecture §6.3 "truncated to budget"). It is larger
+ * than other feedback because it carries knowledge passages: five full-size Arabic chunks are about
+ * 6,500 characters, and a cut at 4,000 sent the model three of them and half of a fourth.
+ */
+export const RUN_RESULT_MAX_CHARS = 12_000;
 /** `memo` stays small: it is resent on every iteration. */
 export const MEMO_MAX_BYTES = 16 * 1024;
 
@@ -371,7 +377,7 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
         const next = afterRun(result, { returned: run.returned });
         if (run.returned) trace.result = run.value ?? null;
         if (next.action === "iterate") {
-          if (run.returned) memory.feedback.push({ kind: "run_result", text: trim(JSON.stringify(run.value ?? null)) });
+          if (run.returned) memory.feedback.push({ kind: "run_result", text: fitResult(run.value ?? null) });
           return iterate({ ...(writes.length > 0 ? { writes } : {}), ...(turn ? { turn } : {}) });
         }
         return leave(next.exit);
@@ -602,6 +608,25 @@ function describeValue(value: Json): string {
 }
 
 const trim = (text: string, max = FEEDBACK_MAX_CHARS) => (text.length > max ? `${text.slice(0, max)}… (cut)` : text);
+
+/**
+ * A returned value as feedback, within RUN_RESULT_MAX_CHARS. A list over the budget keeps its leading
+ * items whole (search results come best first) and says how many it left out, so the model never
+ * reads half a passage as if it were the whole one. Anything else over the budget is cut.
+ */
+export function fitResult(value: Json, max = RUN_RESULT_MAX_CHARS): string {
+  const json = JSON.stringify(value);
+  if (json.length <= max || !Array.isArray(value)) return trim(json, max);
+  const kept: Json[] = [];
+  let size = 2;
+  for (const item of value) {
+    const cost = JSON.stringify(item).length + (kept.length > 0 ? 1 : 0);
+    if (size + cost > max) break;
+    kept.push(item);
+    size += cost;
+  }
+  return `${JSON.stringify(kept)}\n${value.length - kept.length} of ${value.length} items were left out: the result is over the size limit. Return fewer or shorter items to see them.`;
+}
 
 function asFinishReason(reason: string): FinishReason {
   return reason === "length" || reason === "error" ? reason : "stop";
