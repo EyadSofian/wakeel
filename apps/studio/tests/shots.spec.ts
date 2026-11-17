@@ -1,10 +1,10 @@
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import type { CanvasFixture } from "./canvas-fixtures";
+import { BOT, type CanvasFixture } from "./canvas-fixtures";
 import { type EmulatorScenario, SENT } from "./emulator-fixtures";
 import { mockEvalReview } from "./eval-review-fixtures";
-import { type MockState, mockApi } from "./mock-api";
+import { type MockState, mockApi, WS } from "./mock-api";
 import { type Screen, type ScreenState, selectedScreens, THEMES } from "./screens";
 
 /**
@@ -29,6 +29,7 @@ const mockStateFor = (screen: Screen, state: ScreenState): MockState => {
     [
       "card-rtl",
       "agent-rtl",
+      "agent-search-rtl",
       "palette-search",
       "workflows-rtl",
       "issues-panel-rtl",
@@ -304,7 +305,7 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
     // Select the Autonomous Node by its header (task 6.8).
     await page
       .locator(".react-flow__node")
-      .filter({ hasText: state === "agent-rtl" ? "مساعد الطلبات" : "Order assistant" })
+      .filter({ hasText: state.endsWith("-rtl") ? "مساعد الطلبات" : "Order assistant" })
       .locator("header")
       .click();
     const inspector = page.getByRole("complementary", { name: /^Inspector: / });
@@ -315,6 +316,16 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
       await expect(page.getByText("Saved", { exact: true })).toBeVisible();
     }
     if (state === "agent-exit") await inspector.getByRole("button", { name: /^resolved/ }).click();
+    if (state.startsWith("agent-search")) {
+      // The first knowledge tool turns searching before every reply on (ADR-055); back on the node,
+      // the Tools section shows it.
+      await inspector.getByRole("button", { name: "Add knowledge tool" }).click();
+      await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+      await inspector.getByRole("button", { name: "Back to the node" }).click();
+      const toggle = inspector.getByRole("switch", { name: /Search before every reply/ });
+      await expect(toggle).toHaveAttribute("aria-checked", "true");
+      await toggle.scrollIntoViewIfNeeded();
+    }
   }
   const index = CARD_ROW[state];
   if (index !== undefined) {
@@ -453,6 +464,22 @@ async function prepare(page: Page, screen: Screen, state: ScreenState): Promise<
   }
 }
 
+/** One knowledge base on the canvas bot, for the knowledge-tool states (task 6.13). */
+async function mockKnowledgeBase(page: Page, rtl: boolean) {
+  const kb = {
+    id: "kb_01m7a256m0a13warwhczsjhx9b",
+    botId: BOT,
+    name: rtl ? "سياسة الاسترجاع" : "Returns policy",
+    description: "",
+    embeddingModel: "openai:text-embedding-3-large",
+    settings: {},
+    revision: '"fixture"',
+  };
+  await page.route(`**/v1/workspaces/${WS}/bots/${BOT}/knowledge-bases`, (route) =>
+    route.fulfill({ json: { data: [kb], nextCursor: null } }),
+  );
+}
+
 for (const screen of selectedScreens()) {
   for (const theme of THEMES) {
     for (const [width, height] of screen.sizes) {
@@ -469,6 +496,8 @@ for (const screen of selectedScreens()) {
               emulatorScenario(state),
             );
             if (screen.id === "evals") await mockEvalReview(page, mockStateFor(screen, state));
+            // Task 6.13: the bot has a knowledge base, so the node can be given a knowledge tool.
+            if (state.startsWith("agent-search")) await mockKnowledgeBase(page, state.endsWith("-rtl"));
           }
           // Relative dates ("3 days ago") follow the clock; a fixed one keeps shots the same every day.
           await page.clock.setFixedTime(SHOT_TIME);

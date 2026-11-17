@@ -6,6 +6,7 @@ import { useCanvas } from "../../canvas/context";
 import { FieldShell, SchemaField, Section, StringField, useDraft, useVariables } from "../fields";
 import { KnowledgeFields, useBotKnowledge } from "../KnowledgeFields";
 import { TableSelect, useBotTables } from "../TableFields";
+import { setAutoSearch, setAutoSearchRewrite, setAutoSearchTool, withKnowledgeTool, withoutTool } from "./auto-search";
 import { ModelField } from "./ModelSection";
 
 /**
@@ -220,7 +221,7 @@ function ToolsSection({ node, edit, open }: { node: Auto; edit: Edit; open: (id:
                 kbIds: [kbId],
                 topK: 5,
               };
-              edit((n) => ({ ...n, tools: [...n.tools, tool] }));
+              edit((n) => withKnowledgeTool(n, tool));
               open(id);
             }}
           >
@@ -248,7 +249,54 @@ function ToolsSection({ node, edit, open }: { node: Auto; edit: Edit; open: (id:
           </Button>
         </div>
       )}
+      <AutoSearchFields node={node} edit={edit} />
     </Section>
+  );
+}
+
+/**
+ * Searching before every reply (ADR-055, task 6.13): shown once the node has a knowledge tool. The
+ * picker appears only when there is more than one tool to choose from.
+ */
+function AutoSearchFields({ node, edit }: { node: Auto; edit: Edit }) {
+  const pickerId = useId();
+  const tools = node.tools.filter((t) => t.type === "kb_search");
+  if (tools.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-5 border-t border-hairline pt-5">
+      <Switch
+        label="Search before every reply"
+        hint="Searches knowledge with the customer's message before the agent answers, so it answers from your content."
+        checked={node.autoSearch !== undefined}
+        onChange={(on) => edit((n) => setAutoSearch(n, on))}
+      />
+      {node.autoSearch && tools.length > 1 ? (
+        <div className="flex flex-col gap-3">
+          <label htmlFor={pickerId} className="text-small font-medium text-primary">
+            Knowledge tool
+          </label>
+          <Select
+            id={pickerId}
+            value={node.autoSearch.toolId}
+            onChange={(e) => edit((n) => setAutoSearchTool(n, e.target.value))}
+          >
+            {tools.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+      ) : null}
+      {node.autoSearch ? (
+        <Switch
+          label="Rewrite follow-up questions"
+          hint="Uses the conversation to turn a short follow-up into a full question before searching."
+          checked={node.autoSearch.rewrite}
+          onChange={(rewrite) => edit((n) => setAutoSearchRewrite(n, rewrite))}
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -354,7 +402,7 @@ function ToolView({ node, tool, edit, onDeleted }: { node: Auto; tool: Tool; edi
           variant="danger"
           icon={<Trash2 className="size-icon" strokeWidth={1.75} aria-hidden="true" />}
           onClick={() => {
-            edit((n) => ({ ...n, tools: n.tools.filter((t) => t.id !== tool.id) }));
+            edit((n) => withoutTool(n, tool.id));
             onDeleted();
           }}
         >

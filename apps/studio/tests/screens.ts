@@ -48,6 +48,9 @@ export type ScreenState =
   | "agent-rtl"
   | "agent-tool"
   | "agent-exit"
+  // Task 6.13: searching before every reply, after the node's first knowledge tool is added.
+  | "agent-search"
+  | "agent-search-rtl"
   // Task 2.8: the command palette, the Issues panel and the Workflows panel with its menu and dialog.
   | "palette"
   | "palette-search"
@@ -215,6 +218,8 @@ SCREENS.push({
     "agent-rtl",
     "agent-tool",
     "agent-exit",
+    "agent-search",
+    "agent-search-rtl",
     "palette",
     "palette-search",
     "issues-panel",
