@@ -173,32 +173,32 @@ export async function knowledgeRoutes(
       );
     }),
   );
-  app.post(root, (r, reply) =>
-    scoped(r, reply, true, async (tx, p) => {
+  // Every handler sends after `scoped` returns, that is after the transaction commits. Sending from
+  // inside it let a client act on a 201 before the row existed for its next request.
+  app.post(root, async (r, reply) => {
+    const b = await scoped(r, reply, true, async (tx, p) => {
       const body = NewKnowledgeBase.parse(r.body);
       const model = registry.get(body.embeddingModel.split(":").slice(1).join(":"));
       if (model.kind !== "embedding" || !body.embeddingModel.startsWith(`${model.provider}:`))
         throw new AppError("validation_failed");
-      const b = summary(await createKnowledgeBase(tx, { ...body, botId: p.botId }));
-      return reply.code(201).header("etag", b.revision).send(b);
-    }),
-  );
-  app.get(item, (r, reply) =>
-    scoped(r, reply, false, async (tx, p) => {
-      const b = summary(await kb(tx, p));
-      return reply.header("etag", b.revision).send(b);
-    }),
-  );
-  app.patch(item, (r, reply) =>
-    scoped(r, reply, true, async (tx, p) => {
+      return summary(await createKnowledgeBase(tx, { ...body, botId: p.botId }));
+    });
+    return reply.code(201).header("etag", b.revision).send(b);
+  });
+  app.get(item, async (r, reply) => {
+    const b = await scoped(r, reply, false, async (tx, p) => summary(await kb(tx, p)));
+    return reply.header("etag", b.revision).send(b);
+  });
+  app.patch(item, async (r, reply) => {
+    const b = await scoped(r, reply, true, async (tx, p) => {
       const current = await kb(tx, p, true);
       match(r, summary(current).revision);
-      const b = summary(await updateKnowledgeBase(tx, current.id, PatchKnowledgeBase.parse(r.body)));
-      return reply.header("etag", b.revision).send(b);
-    }),
-  );
-  app.delete(item, (r, reply) =>
-    scoped(r, reply, true, async (tx, p) => {
+      return summary(await updateKnowledgeBase(tx, current.id, PatchKnowledgeBase.parse(r.body)));
+    });
+    return reply.header("etag", b.revision).send(b);
+  });
+  app.delete(item, async (r, reply) => {
+    await scoped(r, reply, true, async (tx, p) => {
       await tx.execute(sql`select id from bots where id=${p.botId} for update`);
       const bot = await getBot(tx, p.botId);
       const current = await kb(tx, p, true);
@@ -216,9 +216,9 @@ export async function knowledgeRoutes(
         if (uses.length) throw new AppError("resource_in_use", { usages: uses.join(", ") });
       }
       await deleteKnowledgeBase(tx, current.id);
-      return reply.code(204).send();
-    }),
-  );
+    });
+    return reply.code(204).send();
+  });
   app.get(`${item}/sources`, (r, reply) =>
     scoped(r, reply, false, async (tx, p) => {
       const b = await kb(tx, p);
@@ -260,15 +260,15 @@ export async function knowledgeRoutes(
     await queue()(job);
     return reply.code(202).send({ accepted: true });
   });
-  app.delete(`${item}/sources/:sourceId`, (r, reply) =>
-    scoped(r, reply, true, async (tx, p) => {
+  app.delete(`${item}/sources/:sourceId`, async (r, reply) => {
+    await scoped(r, reply, true, async (tx, p) => {
       await kb(tx, p, true);
       const s = await source(tx, p);
       match(r, sourceRevision(s));
       await deleteSource(tx, s.id);
-      return reply.code(204).send();
-    }),
-  );
+    });
+    return reply.code(204).send();
+  });
   app.get(`${item}/documents`, (r, reply) =>
     scoped(r, reply, false, async (tx, p) => {
       const b = await kb(tx, p);

@@ -61,6 +61,59 @@ test("knowledge bases are bot-scoped and reject stale writes", async () => {
   expect((await owner.get(base)).json().data).toMatchObject([{ name: "سياسة جديدة" }]);
 });
 
+test("a write is committed before its response is sent", async () => {
+  // The routes used to call reply.send inside the transaction, so a client could read the 201 and
+  // send its next request before the row was committed. Under CI load the test above then got 404
+  // on PATCH for a knowledge base it had just created (2026-11-16 and 2026-11-17).
+  const owner = await signUp(stack.app);
+  const ws = (await owner.send("POST", "/v1/workspaces", { name: "Commit", slug: "commit" })).json().id;
+  const bots = `/v1/workspaces/${ws}/bots`;
+  const bot = (await owner.send("POST", bots, { name: "المتجر", slug: "shop" })).json().id;
+  const base = `${bots}/${bot}/knowledge-bases`;
+
+  const original = stack.db.withWorkspace.bind(stack.db);
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let reachedGate = () => {};
+  const reached = new Promise<void>((resolve) => {
+    reachedGate = resolve;
+  });
+  let calls = 0;
+  // Holds the route's own transaction (the request's second; the first is the membership check)
+  // open after its work is done and before it commits.
+  stack.db.withWorkspace = ((id, fn, config) =>
+    original(
+      id,
+      async (tx) => {
+        const value = await fn(tx);
+        calls += 1;
+        if (calls === 2) {
+          reachedGate();
+          await gate;
+        }
+        return value;
+      },
+      config,
+    )) as typeof stack.db.withWorkspace;
+  try {
+    const pending = owner.send("POST", base, { name: "الشحن", embeddingModel: "openai:text-embedding-3-large" });
+    let sent = false;
+    void pending.then(() => {
+      sent = true;
+    });
+    await reached;
+    // Let anything already handed to Fastify reach the client. No timers: event-loop turns only.
+    for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+    expect(sent).toBe(false);
+    release();
+    expect((await pending).statusCode).toBe(201);
+  } finally {
+    stack.db.withWorkspace = original;
+  }
+});
+
 test("a completed file attaches to its bot and search returns Arabic passages and stages", async () => {
   const member = await signUp(stack.app);
   const ws = (await member.send("POST", "/v1/workspaces", { name: "Arabic KB", slug: "arabic-kb" })).json()
