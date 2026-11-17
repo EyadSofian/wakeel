@@ -1,0 +1,465 @@
+/**
+ * The realistic golden set's course catalogue (task 8.9, ADR-056): a fictional training academy's
+ * twelve engineering courses. Every name, price, date and person is invented for this fixture; no
+ * customer or company content is used. Courses come in near-miss pairs (Revit Architecture and Revit
+ * MEP, AutoCAD Civil and AutoCAD MEP, ETABS and SAP2000, …) so a search must tell similar pages apart.
+ */
+
+export interface Module {
+  name: string;
+  hours: number;
+}
+
+export interface Cohort {
+  /** Cohort label, as written on the page. */
+  label: string;
+  start: string;
+  days: string;
+  time: string;
+  mode: "أونلاين" | "حضوري بالقاهرة" | "حضوري بالرياض";
+}
+
+export interface Course {
+  code: string;
+  ar: string;
+  en: string;
+  field: string;
+  instructor: string;
+  instructorBio: string;
+  hours: number;
+  weeks: number;
+  /** EGP. */
+  price: number;
+  installments: number;
+  earlyDiscount: number;
+  language: string;
+  software: string;
+  project: string;
+  certificate: string;
+  requirement: string;
+  recordingsDays: number;
+  modules: Module[];
+  cohorts: Cohort[];
+  /** One fact only this course's FAQ states. */
+  faqQuestion: string;
+  faqAnswer: string;
+}
+
+export const ACADEMY = "أكاديمية السراج الهندسية (اسم خيالي)";
+
+export const courses: Course[] = [
+  {
+    code: "SRJ-HVAC",
+    ar: "تصميم التكييف والتبريد المركزي",
+    en: "HVAC Design",
+    field: "ميكانيكا المباني",
+    instructor: "م. ياسر الفخراني",
+    instructorBio: "مهندس ميكانيكا بخبرة 14 سنة في تصميم أنظمة التكييف للمستشفيات والمولات",
+    hours: 48,
+    weeks: 8,
+    price: 7400,
+    installments: 3,
+    earlyDiscount: 10,
+    language: "العربية مع المصطلحات بالإنجليزية",
+    software: "HAP وElite Duct Sizer",
+    project: "تصميم تكييف دور كامل في مبنى إداري من حساب الأحمال حتى لوحات التنفيذ",
+    certificate: "شهادة إتمام معتمدة من الأكاديمية بكود تحقق إلكتروني",
+    requirement: "بكالوريوس هندسة ميكانيكا أو طالب في السنة الرابعة",
+    recordingsDays: 90,
+    modules: [
+      { name: "أساسيات التكييف وخواص الهواء Psychrometrics", hours: 6 },
+      { name: "حساب الأحمال الحرارية Cooling Load", hours: 10 },
+      { name: "اختيار المعدات Chillers وAHU وFCU", hours: 8 },
+      { name: "تصميم مجاري الهواء Duct Design", hours: 10 },
+      { name: "أنظمة VRF والتهوية", hours: 6 },
+      { name: "المشروع النهائي ولوحات التنفيذ", hours: 8 },
+    ],
+    cohorts: [
+      { label: "دفعة يناير", start: "10 يناير 2027", days: "السبت والثلاثاء", time: "7 إلى 10 مساءً", mode: "أونلاين" },
+      {
+        label: "دفعة مارس",
+        start: "6 مارس 2027",
+        days: "الأحد والأربعاء",
+        time: "6 إلى 9 مساءً",
+        mode: "حضوري بالقاهرة",
+      },
+    ],
+    faqQuestion: "هل يشرح الكورس حسابات غرف العمليات؟",
+    faqAnswer: "نعم، يوجد درس كامل عن ضغط الغرف وتغيير الهواء في غرف العمليات ضمن وحدة التهوية.",
+  },
+  {
+    code: "SRJ-PLMB",
+    ar: "تصميم الصحي والتغذية والصرف",
+    en: "Plumbing Design",
+    field: "ميكانيكا المباني",
+    instructor: "م. منى الشرقاوي",
+    instructorBio: "استشارية أعمال صحية بخبرة 11 سنة في مشروعات سكنية وفندقية",
+    hours: 36,
+    weeks: 6,
+    price: 5200,
+    installments: 2,
+    earlyDiscount: 10,
+    language: "العربية مع المصطلحات بالإنجليزية",
+    software: "AutoCAD وجداول Excel للحسابات",
+    project: "تصميم شبكة تغذية وصرف لعمارة سكنية من 8 أدوار",
+    certificate: "شهادة إتمام معتمدة من الأكاديمية بكود تحقق إلكتروني",
+    requirement: "بكالوريوس هندسة ميكانيكا أو مدني",
+    recordingsDays: 90,
+    modules: [
+      { name: "أنظمة التغذية بالمياه الباردة والساخنة", hours: 8 },
+      { name: "حساب وحدات التغذية Fixture Units", hours: 6 },
+      { name: "شبكات الصرف والتهوية", hours: 8 },
+      { name: "خزانات المياه والطلمبات", hours: 6 },
+      { name: "صرف الأمطار والمشروع النهائي", hours: 8 },
+    ],
+    cohorts: [
+      { label: "دفعة فبراير", start: "7 فبراير 2027", days: "الأحد والأربعاء", time: "7 إلى 9 مساءً", mode: "أونلاين" },
+    ],
+    faqQuestion: "هل الكورس يغطي الكود المصري للصرف؟",
+    faqAnswer: "نعم، تتم المقارنة بين الكود المصري والكود الأمريكي IPC في كل حسابات الصرف.",
+  },
+  {
+    code: "SRJ-FIRE",
+    ar: "تصميم أنظمة مكافحة الحريق",
+    en: "Fire Fighting Design",
+    field: "ميكانيكا المباني",
+    instructor: "م. طارق عبد الغفار",
+    instructorBio: "مهندس سلامة وإطفاء بخبرة 12 سنة واعتماد NFPA",
+    hours: 40,
+    weeks: 7,
+    price: 6100,
+    installments: 3,
+    earlyDiscount: 15,
+    language: "العربية مع المصطلحات بالإنجليزية",
+    software: "AutoCAD وبرنامج حسابات هيدروليكية",
+    project: "تصميم شبكة رشاشات وحنفيات حريق لمول تجاري",
+    certificate: "شهادة إتمام معتمدة من الأكاديمية بكود تحقق إلكتروني",
+    requirement: "بكالوريوس هندسة ميكانيكا",
+    recordingsDays: 120,
+    modules: [
+      { name: "تصنيف المباني ودرجات الخطورة NFPA 13", hours: 6 },
+      { name: "شبكات الرشاشات Sprinklers", hours: 10 },
+      { name: "صناديق وحنفيات الحريق", hours: 6 },
+      { name: "الحسابات الهيدروليكية وغرفة الطلمبات", hours: 10 },
+      { name: "أنظمة الإطفاء بالغاز والمشروع", hours: 8 },
+    ],
+    cohorts: [
+      { label: "دفعة يناير", start: "17 يناير 2027", days: "الإثنين والخميس", time: "7 إلى 10 مساءً", mode: "أونلاين" },
+      {
+        label: "دفعة أبريل",
+        start: "3 أبريل 2027",
+        days: "السبت فقط",
+        time: "10 صباحًا إلى 4 عصرًا",
+        mode: "حضوري بالرياض",
+      },
+    ],
+    faqQuestion: "هل يؤهل الكورس لامتحان الدفاع المدني؟",
+    faqAnswer: "لا يؤهل مباشرة، لكنه يغطي أغلب متطلبات ملف التصميم الذي يقدم للدفاع المدني.",
+  },
+  {
+    code: "SRJ-ELEC",
+    ar: "التصميم الكهربائي للمباني",
+    en: "Electrical Building Design",
+    field: "كهرباء المباني",
+    instructor: "م. حسام النجار",
+    instructorBio: "مهندس قوى كهربائية بخبرة 16 سنة في تصميم لوحات التوزيع",
+    hours: 54,
+    weeks: 9,
+    price: 7900,
+    installments: 4,
+    earlyDiscount: 10,
+    language: "العربية مع المصطلحات بالإنجليزية",
+    software: "DIALux وAutoCAD",
+    project: "التصميم الكهربائي الكامل لفيلا من الإنارة حتى المحول",
+    certificate: "شهادة إتمام معتمدة من الأكاديمية بكود تحقق إلكتروني",
+    requirement: "بكالوريوس هندسة كهرباء قوى أو اتصالات",
+    recordingsDays: 90,
+    modules: [
+      { name: "حسابات الإنارة باستخدام DIALux", hours: 10 },
+      { name: "دوائر القوى والبرايز", hours: 8 },
+      { name: "حساب الأحمال واختيار الكابلات", hours: 10 },
+      { name: "لوحات التوزيع والقواطع", hours: 10 },
+      { name: "التأريض والحماية من الصواعق", hours: 6 },
+      { name: "المحولات والمولدات والمشروع", hours: 10 },
+    ],
+    cohorts: [
+      {
+        label: "دفعة فبراير",
+        start: "14 فبراير 2027",
+        days: "الأحد والثلاثاء",
+        time: "8 إلى 11 مساءً",
+        mode: "أونلاين",
+      },
+    ],
+    faqQuestion: "هل يشرح الكورس أنظمة التيار الخفيف؟",
+    faqAnswer: "يقدم مقدمة فقط عن الإنذار والكاميرات، والتفاصيل في كورس منفصل للتيار الخفيف.",
+  },
+  {
+    code: "SRJ-REVA",
+    ar: "ريفيت معماري",
+    en: "Revit Architecture",
+    field: "التصميم المعماري",
+    instructor: "م. سارة القاضي",
+    instructorBio: "معمارية متخصصة في BIM بخبرة 9 سنوات في مكاتب تصميم خليجية",
+    hours: 42,
+    weeks: 7,
+    price: 5800,
+    installments: 3,
+    earlyDiscount: 10,
+    language: "العربية مع واجهة البرنامج بالإنجليزية",
+    software: "Revit 2027",
+    project: "نمذجة فيلا دورين كاملة وإخراج لوحات تنفيذية وجداول كميات",
+    certificate: "شهادة إتمام معتمدة من الأكاديمية بكود تحقق إلكتروني",
+    requirement: "معرفة أساسية بالرسم المعماري؛ لا يشترط أوتوكاد",
+    recordingsDays: 90,
+    modules: [
+      { name: "واجهة البرنامج والمستويات والمحاور", hours: 6 },
+      { name: "الحوائط والأبواب والشبابيك", hours: 8 },
+      { name: "الأسقف والسلالم والأسطح", hours: 8 },
+      { name: "العائلات Families", hours: 8 },
+      { name: "الجداول واللوحات والإخراج", hours: 6 },
+      { name: "المشروع النهائي", hours: 6 },
+    ],
+    cohorts: [
+      { label: "دفعة يناير", start: "9 يناير 2027", days: "السبت والإثنين", time: "6 إلى 9 مساءً", mode: "أونلاين" },
+      { label: "دفعة مارس", start: "13 مارس 2027", days: "الجمعة فقط", time: "2 إلى 8 مساءً", mode: "حضوري بالقاهرة" },
+    ],
+    faqQuestion: "هل يشمل الكورس الإظهار المعماري؟",
+    faqAnswer: "لا، الإظهار في كورس Lumion منفصل؛ هذا الكورس يركز على النمذجة واللوحات التنفيذية.",
+  },
+  {
+    code: "SRJ-REVM",
+    ar: "ريفيت ميكانيكا وكهرباء",
+    en: "Revit MEP",
+    field: "التصميم الميكانيكي والكهربائي",
+    instructor: "م. عمرو حمدان",
+    instructorBio: "منسق BIM لأعمال الكهروميكانيكا بخبرة 10 سنوات",
+    hours: 45,
+    weeks: 8,
+    price: 6300,
+    installments: 3,
+    earlyDiscount: 15,
+    language: "العربية مع واجهة البرنامج بالإنجليزية",
+    software: "Revit 2027 وNavisworks",
+    project: "نمذجة تكييف وصحي وكهرباء لدور إداري وعمل كشف تعارضات",
+    certificate: "شهادة إتمام معتمدة من الأكاديمية بكود تحقق إلكتروني",
+    requirement: "دراسة كورس تصميم في أحد تخصصات الكهروميكانيكا",
+    recordingsDays: 90,
+    modules: [
+      { name: "إعداد المشروع والربط مع النموذج المعماري", hours: 6 },
+      { name: "نمذجة مجاري الهواء والمواسير", hours: 10 },
+      { name: "نمذجة الصحي والحريق", hours: 8 },
+      { name: "نمذجة الكهرباء واللوحات", hours: 9 },
+      { name: "كشف التعارضات Clash Detection", hours: 6 },
+      { name: "المشروع النهائي", hours: 6 },
+    ],
+    cohorts: [
+      {
+        label: "دفعة فبراير",
+        start: "20 فبراير 2027",
+        days: "الأحد والأربعاء",
+        time: "7 إلى 10 مساءً",
+        mode: "أونلاين",
+      },
+    ],
+    faqQuestion: "هل لازم أكون درست ريفيت معماري قبله؟",
+    faqAnswer: "لا يشترط، لكن الأسبوع الأول يراجع أساسيات الواجهة بسرعة لمن لم يستخدم البرنامج.",
+  },
+  {
+    code: "SRJ-CADC",
+    ar: "أوتوكاد مدني",
+    en: "AutoCAD Civil",
+    field: "الهندسة المدنية",
+    instructor: "م. كريم العطار",
+    instructorBio: "مهندس مدني بخبرة 13 سنة في لوحات الخرسانة والطرق",
+    hours: 30,
+    weeks: 5,
+    price: 3900,
+    installments: 2,
+    earlyDiscount: 10,
+    language: "العربية",
+    software: "AutoCAD 2027",
+    project: "رسم لوحات إنشائية كاملة لمبنى خرساني: أساسات وأعمدة وبلاطات",
+    certificate: "شهادة إتمام معتمدة من الأكاديمية بكود تحقق إلكتروني",
+    requirement: "لا يوجد متطلب سابق",
+    recordingsDays: 60,
+    modules: [
+      { name: "أوامر الرسم والتعديل", hours: 6 },
+      { name: "الطبقات والمقاسات والنصوص", hours: 6 },
+      { name: "رسم الأساسات والأعمدة", hours: 6 },
+      { name: "رسم البلاطات والكمرات وتفاصيل التسليح", hours: 6 },
+      { name: "الطباعة والإخراج والمشروع", hours: 6 },
+    ],
+    cohorts: [
+      { label: "دفعة يناير", start: "12 يناير 2027", days: "الثلاثاء والخميس", time: "7 إلى 9 مساءً", mode: "أونلاين" },
+      {
+        label: "دفعة فبراير",
+        start: "16 فبراير 2027",
+        days: "الثلاثاء والخميس",
+        time: "7 إلى 9 مساءً",
+        mode: "حضوري بالقاهرة",
+      },
+    ],
+    faqQuestion: "هل ينفع الكورس لخريج تجارة؟",
+    faqAnswer: "الكورس مصمم للمهندسين والفنيين، ويمكن لغيرهم الحضور لكن الأمثلة كلها إنشائية.",
+  },
+  {
+    code: "SRJ-CADM",
+    ar: "أوتوكاد ميكانيكا وكهرباء",
+    en: "AutoCAD MEP",
+    field: "الكهروميكانيكا",
+    instructor: "م. نهى بدير",
+    instructorBio: "مهندسة رسم كهروميكانيكا بخبرة 8 سنوات في لوحات الورش",
+    hours: 32,
+    weeks: 5,
+    price: 4200,
+    installments: 2,
+    earlyDiscount: 10,
+    language: "العربية",
+    software: "AutoCAD 2027",
+    project: "رسم لوحات ورش للتكييف والكهرباء لدور سكني",
+    certificate: "شهادة إتمام معتمدة من الأكاديمية بكود تحقق إلكتروني",
+    requirement: "لا يوجد متطلب سابق",
+    recordingsDays: 60,
+    modules: [
+      { name: "أوامر الرسم والتعديل", hours: 6 },
+      { name: "رموز التكييف والصحي", hours: 7 },
+      { name: "رموز الكهرباء ومخططات الدوائر", hours: 7 },
+      { name: "لوحات الورش Shop Drawings", hours: 6 },
+      { name: "الإخراج والمشروع", hours: 6 },
+    ],
+    cohorts: [
+      { label: "دفعة يناير", start: "11 يناير 2027", days: "الإثنين والأربعاء", time: "7 إلى 9 مساءً", mode: "أونلاين" },
+    ],
+    faqQuestion: "هل أحتاج لابتوب بمواصفات عالية؟",
+    faqAnswer: "يكفي لابتوب بمعالج Core i5 وذاكرة 8 جيجا، ويُرسل رابط النسخة التعليمية من البرنامج.",
+  },
+  {
+    code: "SRJ-ETAB",
+    ar: "التحليل الإنشائي بإيتابس",
+    en: "ETABS Structural Analysis",
+    field: "الهندسة الإنشائية",
+    instructor: "د. وليد السنباطي",
+    instructorBio: "أستاذ مساعد خرسانة واستشاري إنشائي بخبرة 18 سنة",
+    hours: 40,
+    weeks: 8,
+    price: 6900,
+    installments: 3,
+    earlyDiscount: 10,
+    language: "العربية مع المصطلحات بالإنجليزية",
+    software: "ETABS 22 وSAFE",
+    project: "نمذجة وتحليل وتصميم برج سكني 12 دور مع حمل الزلازل",
+    certificate: "شهادة إتمام معتمدة من الأكاديمية بكود تحقق إلكتروني",
+    requirement: "بكالوريوس هندسة مدنية ومعرفة بأساسيات تصميم الخرسانة",
+    recordingsDays: 120,
+    modules: [
+      { name: "النمذجة والمواد والقطاعات", hours: 6 },
+      { name: "الأحمال وتركيباتها", hours: 6 },
+      { name: "التحليل الزلزالي Response Spectrum", hours: 10 },
+      { name: "تصميم الأعمدة والكمرات والحوائط", hours: 8 },
+      { name: "تصميم الأساسات في SAFE", hours: 10 },
+    ],
+    cohorts: [
+      { label: "دفعة يناير", start: "16 يناير 2027", days: "السبت والثلاثاء", time: "8 إلى 11 مساءً", mode: "أونلاين" },
+    ],
+    faqQuestion: "الكورس بيمشي على أي كود؟",
+    faqAnswer: "على الكود المصري ECP 203 مع مقارنة بالكود الأمريكي ACI 318 في التصميم.",
+  },
+  {
+    code: "SRJ-SAP2",
+    ar: "التحليل الإنشائي بساب 2000",
+    en: "SAP2000 Structural Analysis",
+    field: "الهندسة الإنشائية",
+    instructor: "م. رانيا الحسيني",
+    instructorBio: "مهندسة إنشائية متخصصة في المنشآت المعدنية والجمالونات بخبرة 10 سنوات",
+    hours: 36,
+    weeks: 6,
+    price: 6200,
+    installments: 3,
+    earlyDiscount: 10,
+    language: "العربية مع المصطلحات بالإنجليزية",
+    software: "SAP2000 v25",
+    project: "تحليل وتصميم هنجر معدني وخزان مياه علوي",
+    certificate: "شهادة إتمام معتمدة من الأكاديمية بكود تحقق إلكتروني",
+    requirement: "بكالوريوس هندسة مدنية",
+    recordingsDays: 120,
+    modules: [
+      { name: "النمذجة الإطارية والجمالونات", hours: 8 },
+      { name: "الأحمال المتحركة والرياح", hours: 6 },
+      { name: "تحليل المنشآت المعدنية", hours: 8 },
+      { name: "الخزانات والعناصر القشرية Shells", hours: 8 },
+      { name: "المشروع النهائي", hours: 6 },
+    ],
+    cohorts: [{ label: "دفعة مارس", start: "4 مارس 2027", days: "الخميس فقط", time: "4 إلى 10 مساءً", mode: "أونلاين" }],
+    faqQuestion: "هل الكورس فيه تصميم وصلات المعادن؟",
+    faqAnswer: "يوجد تمرين واحد على الوصلات المسمارية، والتصميم التفصيلي للوصلات خارج نطاق الكورس.",
+  },
+  {
+    code: "SRJ-PRIM",
+    ar: "التخطيط والجدولة ببريمافيرا P6",
+    en: "Primavera P6 Planning",
+    field: "إدارة المشروعات",
+    instructor: "م. أحمد زهران",
+    instructorBio: "مخطط مشروعات معتمد PMP بخبرة 15 سنة في مشروعات البنية التحتية",
+    hours: 30,
+    weeks: 5,
+    price: 4800,
+    installments: 2,
+    earlyDiscount: 15,
+    language: "العربية مع المصطلحات بالإنجليزية",
+    software: "Primavera P6 Professional",
+    project: "عمل جدول زمني كامل لمبنى سكني وتحميل الموارد والتكاليف وعمل تقرير التحديث",
+    certificate: "شهادة إتمام معتمدة من الأكاديمية بكود تحقق إلكتروني",
+    requirement: "خبرة عملية في موقع أو مكتب فني لا تقل عن سنة",
+    recordingsDays: 90,
+    modules: [
+      { name: "هيكل تجزئة العمل WBS والأنشطة", hours: 6 },
+      { name: "العلاقات والمسار الحرج", hours: 6 },
+      { name: "الموارد والتكاليف", hours: 6 },
+      { name: "خط الأساس والتحديث Updating", hours: 6 },
+      { name: "التقارير والمشروع النهائي", hours: 6 },
+    ],
+    cohorts: [
+      { label: "دفعة فبراير", start: "8 فبراير 2027", days: "الإثنين والخميس", time: "7 إلى 9 مساءً", mode: "أونلاين" },
+      {
+        label: "دفعة أبريل",
+        start: "10 أبريل 2027",
+        days: "السبت فقط",
+        time: "10 صباحًا إلى 3 عصرًا",
+        mode: "حضوري بالرياض",
+      },
+    ],
+    faqQuestion: "هل الكورس بيشرح Earned Value؟",
+    faqAnswer: "نعم، وحدة الموارد والتكاليف تنتهي بحساب القيمة المكتسبة وتقرير مؤشرات الأداء.",
+  },
+  {
+    code: "SRJ-PMPX",
+    ar: "التحضير لشهادة PMP",
+    en: "PMP Exam Preparation",
+    field: "إدارة المشروعات",
+    instructor: "أ. دينا مراد",
+    instructorBio: "مدربة إدارة مشروعات معتمدة PMP وPMI-ACP بخبرة تدريب 12 سنة",
+    hours: 35,
+    weeks: 6,
+    price: 8500,
+    installments: 4,
+    earlyDiscount: 10,
+    language: "العربية مع مادة علمية بالإنجليزية",
+    software: "منصة اختبارات تجريبية",
+    project: "ثلاثة اختبارات محاكاة كاملة بنظام 180 سؤال",
+    certificate: "شهادة 35 ساعة تدريبية Contact Hours المطلوبة للتقديم على الامتحان",
+    requirement: "خبرة في إدارة المشروعات 36 شهرًا لحملة البكالوريوس",
+    recordingsDays: 180,
+    modules: [
+      { name: "الأشخاص People", hours: 12 },
+      { name: "العمليات Process", hours: 14 },
+      { name: "بيئة الأعمال Business Environment", hours: 4 },
+      { name: "اختبارات المحاكاة والمراجعة", hours: 5 },
+    ],
+    cohorts: [
+      { label: "دفعة يناير", start: "23 يناير 2027", days: "السبت والثلاثاء", time: "7 إلى 10 مساءً", mode: "أونلاين" },
+    ],
+    faqQuestion: "هل رسوم الامتحان داخلة في سعر الكورس؟",
+    faqAnswer: "لا، رسوم الامتحان تدفع مباشرة لمعهد PMI ولا تشملها رسوم الكورس.",
+  },
+];

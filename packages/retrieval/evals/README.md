@@ -27,3 +27,31 @@ The optional Railway fixture service uses `infra/railway/reranker.Dockerfile` wi
 CPU-compatible ONNX export and revision recorded in THIRD_PARTY_NOTICES. Set the TEI bearer key
 through the deployment environment and keep `LOG_LEVEL=error`. Verify `/rerank` rejects requests
 without the key before sending fixtures. The service needs no application database credentials.
+
+## Realistic set (8.9, ADR-056)
+
+`realistic/` holds a fictional academy's twelve engineering course pages (prose, a modules table, a
+cohorts table, a price and installments table, an FAQ) and 200 hand-written questions. Pages go
+through the production chunker; a chunk is relevant when it belongs to the question's course and
+contains the answer text after Arabic normalisation. If no single chunk holds an answer, the set
+refuses to build: that is chunking losing a fact, not a label to relax.
+
+| Slice | Questions | What it tests |
+|---|---|---|
+| single | 50 | Facts in a page's prose |
+| follow-up | 50 | "طب وبكام؟" after an opener about a course; only the conversation names it |
+| table | 40 | Prices, installments, early-bird prices, cohort dates, inside tables |
+| near-miss | 30 | Look-alike courses (Revit Architecture / MEP, AutoCAD Civil / MEP, ETABS / SAP2000, …) |
+| unanswerable | 30 | Not in the catalogue; counted, not scored, for the grounding gate (G2) |
+
+Every slice is spread evenly over MSA, Egyptian, Gulf and code-switched questions. ADR-056 G1 asks
+for recall@5 ≥ 0.90 on every answerable slice.
+
+Run it as written, then with ADR-055's rewrite (the production prompt from `@wakeel/autonomy`):
+
+```bash
+pnpm evals:retrieval --set realistic --env-file /path/to/model.env --env-file /path/to/reranker.env
+pnpm evals:retrieval --set realistic --rewrite-model gpt-6-luna --env-file /path/to/model.env --env-file /path/to/reranker.env
+```
+
+Reports go to `reports/realistic-as-asked.json` and `reports/realistic-rewritten.json`.
