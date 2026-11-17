@@ -126,6 +126,18 @@ export const AutonomousNode = z.object({
     .default(["text", "choice"]),
   /** Reply when a user writes while a suspended tool is pending. */
   busyMessage: Template.optional(),
+  /**
+   * Search a knowledge tool on this node before the first iteration of each user message (ADR-055).
+   * The tool stays listed and callable; this runs it once, with the tool's own KBs and topK.
+   */
+  autoSearch: z
+    .object({
+      /** A `kb_search` tool listed on this node. */
+      toolId: ToolId,
+      /** Rewrite the latest message into a standalone query with the utility model. */
+      rewrite: z.boolean().default(true),
+    })
+    .optional(),
 });
 export type AutonomousNode = z.infer<typeof AutonomousNode>;
 

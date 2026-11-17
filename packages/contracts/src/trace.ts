@@ -85,9 +85,19 @@ const attrs = {
     code: Payload.optional(),
     /** Value returned by the run block or the error fed back. */
     result: Payload.optional(),
+    /** The automatic search that ran before this iteration (ADR-055). */
+    autoSearch: z
+      .object({
+        query: z.string(),
+        /** The user's message, when the query is a rewrite of it. */
+        original: z.string().optional(),
+        returned: z.number().int().nonnegative(),
+        error: z.string().optional(),
+      })
+      .optional(),
   }),
   "llm.call": z.object({
-    purpose: z.enum(["autonomy", "generate", "extract", "classify", "summarise", "judge", "answer", "ocr"]),
+    purpose: z.enum(["autonomy", "generate", "extract", "classify", "summarise", "judge", "answer", "ocr", "rewrite"]),
     model: z.string(),
     provider: z.string(),
     usage: Usage,
@@ -121,6 +131,8 @@ const attrs = {
     fused: Payload.optional(),
     reranked: Payload.optional(),
     returned: z.number().int().nonnegative(),
+    /** What ran the search; absent for searches recorded before ADR-055. */
+    trigger: z.enum(["auto", "tool", "card", "code"]).optional(),
   }),
   "table.op": z.object({ tableId: z.string(), operation: z.string(), rowCount: z.number().int().nonnegative() }),
   "webhook.delivery": z.object({

@@ -189,6 +189,8 @@ export function validateDefinition(def: BotDefinition, ctx: ValidationContext = 
               add("table_unknown", { node: node.name }, at(field));
             }
           });
+          if (node.autoSearch && !node.tools.some((t) => t.id === node.autoSearch?.toolId && t.type === "kb_search"))
+            add("auto_search_tool_invalid", { node: node.name }, at("autoSearch.toolId"));
           break;
         case "exit": {
           const declared = new Map(wf.outputs.map((o) => [o.name, o]));

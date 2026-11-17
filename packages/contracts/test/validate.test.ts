@@ -11,6 +11,7 @@ import {
   type IssueCode,
   type Node,
   newElementId,
+  newId,
   parseCodeBody,
   parseExpression,
   parseTemplate,
@@ -288,6 +289,13 @@ const CASES: Record<IssueCode, (d: BotDefinition) => void> = {
   autonomous_no_exit: (d) => {
     agentOf(d).conversational = false;
   },
+  auto_search_tool_invalid: (d) => {
+    // The node's workflow tool, not a knowledge tool (ADR-055).
+    const agent = agentOf(d);
+    const tool = agent.tools[0];
+    if (!tool) throw new Error("the fixture agent has no tool");
+    agent.autoSearch = { toolId: tool.id, rewrite: true };
+  },
   routing_port_unconnected: (d) => {
     mainOf(d).edges = mainOf(d).edges.filter((e) => !e.from.port.includes(":branch:"));
   },
@@ -394,6 +402,22 @@ const CTX = { knowledgeBaseIds: new Set<string>(), tableIds: new Set<string>() }
 describe("validateDefinition", () => {
   test("the passing fixture has no issues at all", () => {
     expect(validateDefinition(base(), CTX)).toEqual([]);
+  });
+
+  test("searching before every reply with one of the node's knowledge tools is valid (ADR-055)", () => {
+    const d = base();
+    const kbId = newId("kb");
+    const toolId = newElementId("tool");
+    agentOf(d).tools.push({
+      id: toolId,
+      type: "kb_search",
+      name: "searchCourses",
+      description: "يدور في صفحات الكورسات.",
+      kbIds: [kbId],
+      topK: 5,
+    });
+    agentOf(d).autoSearch = { toolId, rewrite: true };
+    expect(validateDefinition(d, { ...CTX, knowledgeBaseIds: new Set([kbId]) })).toEqual([]);
   });
 
   test("a freshly seeded bot only asks for the Autonomous node's instructions", () => {

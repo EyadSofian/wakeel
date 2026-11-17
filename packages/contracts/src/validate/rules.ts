@@ -100,6 +100,11 @@ export const ISSUE_RULES = {
     message: 'Exit "{exit}" on "{node}" leads nowhere.',
     fix: "Connect it to a node or remove the exit.",
   },
+  auto_search_tool_invalid: {
+    severity: "error",
+    message: '"{node}" searches before every reply with a tool that is not one of its knowledge tools.',
+    fix: "Pick one of the node's knowledge tools, or turn off searching before every reply.",
+  },
   tool_name_duplicate: { severity: "error", message: 'Two tools on "{node}" are named "{tool}".', fix: "Rename one." },
   autonomous_no_exit: {
     severity: "error",

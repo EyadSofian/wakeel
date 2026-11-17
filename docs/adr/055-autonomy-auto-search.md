@@ -1,6 +1,6 @@
 # ADR-055 — Search the knowledge base before the Autonomous Node replies
 
-Status: proposed · Date: 2026-11-17 · Tasks: new 6.12 and 6.13 (below)
+Status: accepted (Eyad approved in writing on 2026-11-17) · Date: 2026-11-17 · Tasks: 6.12 and 6.13
 
 ## Context
 
@@ -170,6 +170,10 @@ counted as live conversations (CLAUDE.md §9).
   adherence suite.
 
 ## Questions for Eyad
+
+Answered on acceptance (2026-11-17): Eyad approved the ADR without changing the recommendations, so
+all three take the recommended answer: a failed search continues and tells the model; existing nodes
+stay off and new nodes with a knowledge tool start on; the rewrite uses the workspace's utility model.
 
 1. **A failed automatic search:** continue and tell the model (recommended, above), or fail the turn
    with `model_unavailable`?
