@@ -441,7 +441,7 @@ Quota checks use Redis counters keyed by workspace and period, reconciled from `
 
 ## 14. Evals
 
-A case is a script of turns (`user` message, `event`, `expectSilence`, `newConversation`) with assertions: `contains`, `notContains`, `matches`, `judge` (utility model with a rubric), `toolCalled` (with input matchers), `toolNotCalled`, `toolOrder`, `reachedNode`, `exitTaken`, `variable`, `handoffRequested`, `messageType`, `citesDocument`, `maxLatencyMs` (schema: `04-contracts/eval.ts`). Runs execute through the Bridge API in `eval` mode against the draft or a version, so they exercise the real engine. Results link to the conversation and its traces.
+A case is a script of turns (`user` message, `event`, `expectSilence`, `newConversation`) with assertions: `contains`, `notContains`, `matches`, `judge` (utility model with a rubric; it answers with a verdict and a reason), `grounded` (the judge checks every factual claim against the passages the turn retrieved, ADR-056), `toolCalled` (with input matchers), `toolNotCalled`, `toolOrder`, `reachedNode`, `exitTaken`, `variable`, `handoffRequested`, `messageType`, `citesDocument`, `maxLatencyMs` (schema: `04-contracts/eval.ts`). A case may be `critical` (ADR-056 G4). Runs execute through the Bridge API in `eval` mode against the draft or a version, so they exercise the real engine. Results link to the conversation and its traces.
 
 ## 15. Scaling and cost
 

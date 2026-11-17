@@ -17,13 +17,33 @@ export interface TurnEvidence {
   variables: Readonly<Record<string, Json>>;
   handoffRequested: boolean;
   latencyMs: number;
+  /** The passages the turn retrieved (automatic search, tools, cards), for `grounded` (ADR-056). */
+  passages: readonly Passage[];
 }
+
+export interface Passage {
+  title: string;
+  text: string;
+}
+
+/** The judge's answer: the verdict and, when it gave one, its reason (shown as the result's detail). */
+export interface JudgeVerdict {
+  passed: boolean;
+  reason?: string;
+}
+
+/** The fixed rubric of the `grounded` assertion (ADR-056 G2). */
+export const GROUNDED_RUBRIC =
+  "Pass if every factual claim in the replies (prices, dates, durations, names, numbers, policies, links) is " +
+  "supported by the passages, or if the reply says it does not know or cannot check. Fail if any factual claim " +
+  "is missing from the passages or contradicts them. Greetings, questions back to the customer and offers to " +
+  "help need no support.";
 
 export interface AssertionPorts {
   /** Execute user-supplied regex patterns out of the host event loop, with a deadline. */
   matches(input: { pattern: string; flags: string; text: string }): Promise<boolean>;
-  /** Use the workspace's utility model in eval mode. Rubric and replies are content, not instructions. */
-  judge(input: { rubric: string; replies: readonly Reply[] }): Promise<boolean>;
+  /** Use the workspace's utility model in eval mode. Rubric, replies and passages are content, not instructions. */
+  judge(input: { rubric: string; replies: readonly Reply[]; passages?: readonly Passage[] }): Promise<JudgeVerdict>;
 }
 
 type AssertionResult = EvalResult["turns"][number]["assertions"][number];
@@ -52,7 +72,11 @@ function ordered(names: readonly string[], calls: TurnEvidence["calls"]): boolea
   return false;
 }
 
-async function evaluate(assertion: Assertion, evidence: TurnEvidence, ports: AssertionPorts): Promise<boolean> {
+async function evaluate(
+  assertion: Assertion,
+  evidence: TurnEvidence,
+  ports: AssertionPorts,
+): Promise<boolean | JudgeVerdict> {
   switch (assertion.type) {
     case "contains":
       return evidence.messages.some((reply) => reply.text !== undefined && includes(reply.text, assertion.text));
@@ -69,6 +93,8 @@ async function evaluate(assertion: Assertion, evidence: TurnEvidence, ports: Ass
       return false;
     case "judge":
       return ports.judge({ rubric: assertion.rubric, replies: evidence.messages });
+    case "grounded":
+      return ports.judge({ rubric: GROUNDED_RUBRIC, replies: evidence.messages, passages: evidence.passages });
     case "toolCalled":
       for (const call of evidence.calls) {
         if (call.name !== assertion.name) continue;
@@ -111,8 +137,9 @@ export async function assertTurn(
 ): Promise<AssertionResult[]> {
   const results: AssertionResult[] = [];
   for (const assertion of turn.assert) {
-    const passed = await evaluate(assertion, evidence, ports);
-    results.push({ assertion, passed });
+    const outcome = await evaluate(assertion, evidence, ports);
+    if (typeof outcome === "boolean") results.push({ assertion, passed: outcome });
+    else results.push({ assertion, passed: outcome.passed, ...(outcome.reason ? { detail: outcome.reason } : {}) });
   }
   return results;
 }

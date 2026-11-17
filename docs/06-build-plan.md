@@ -186,6 +186,7 @@ Read before starting any task: `CLAUDE.md`, the sections of `03-architecture.md`
 | 8.6 | Search: dense + lexical + RRF + rerank, retrieval spans, citations; wire `kb_search` card and tool | `packages/retrieval/src/search.ts` | Integration: filtered search never returns another KB's chunks; span contains per-stage candidates |
 | 8.7 | Retrieval golden sets (MSA, Egyptian, Gulf, code-switched; ≥ 60 queries each over a shared corpus) and CI report of recall@5 and MRR | `packages/retrieval/evals/**` | Baseline report committed; hybrid + rerank beats dense-only on every set |
 | 8.8 | Studio: KB list and detail (Sources, Documents with chunk view, Test search with "why", Settings), Search knowledge card and tool forms | `apps/studio/src/routes/knowledge/**` | E2E: upload, wait for ready, search in Arabic, open the retrieval trace; screenshot review with RTL documents |
+| 8.9 | Realistic golden set (ADR-056): a hand-written synthetic course catalogue (long pages, tables, installments) and 200 questions in MSA, Egyptian, Gulf and code-switched Arabic, sliced into single-turn, follow-up, table, unanswerable and near-miss | `packages/retrieval/evals/**` | Baseline report committed with recall@5 and MRR per slice |
 
 **Risks:** parser container size and cold start; OCR cost (cap pages per document, show the estimate before running).
 
@@ -233,6 +234,8 @@ Read before starting any task: `CLAUDE.md`, the sections of `03-architecture.md`
 | 12.2 | Studio: suites, case editor, run view with per-assertion results and trace links, per-tag scores, "Add case from conversation" | `apps/studio/src/routes/evals/**` | E2E; screenshot review |
 | 12.3 | Publish dialog shows eval status; optional "block publish on failing evals" bot setting | publish flow | E2E |
 | 12.4 | CLI: `wakeel evals run --bot … --suite …` returning a non-zero exit code on failure | `packages/cli/**` | Integration |
+| 12.5 | Quality gate (ADR-056): `pnpm evals:gate --base --candidate` runs the retrieval, adherence, grounding and bot suites on both refs with trials, writes the before/after report with G0–G7, and an `ai-layer` label check that requires the report in the PR | `packages/evals/**`, `tools/**`, `.github/workflows/**` | A report committed for the first real comparison; the label check fails a labelled PR with no report |
+| 12.6 | Eval contract for the gate (ADR-056): `critical` cases, the `grounded` assertion with the turn's passages, a judge verdict with a reason, judge calibration against human labels | `packages/contracts/src/eval.ts`, `packages/evals/**`, `apps/worker/src/eval/**` | Unit: grounded gets replies and passages under a fixed rubric; verdict reasons reach the result; no verdict is unavailable; turn passages from automatic search and citations |
 
 ---
 

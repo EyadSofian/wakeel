@@ -33,7 +33,7 @@ import { z } from "zod";
 import { drainConversation, type TurnDeps } from "../turn/drain";
 import { modelId } from "../turn/handoff-summary";
 import type { Processor } from "../workers";
-import { judgeReplies } from "./judge";
+import { judgeReplies, turnPassages } from "./judge";
 
 const jobInput = z.object({ workspaceId: WorkspaceId, runId: EvalRunId });
 type Receipt = { conversationId: string; turnId: string };
@@ -173,6 +173,7 @@ async function turnEvidence(tx: Tx, definition: BotDefinition, receipt: Receipt)
     nodeNames: spans.flatMap((span) => (span.kind === "node" ? [span.name] : [])),
     exits: spans.flatMap((span) => (span.kind === "autonomy.iteration" && span.attrs.exit ? [span.attrs.exit] : [])),
     handoffRequested: events.some((event) => event.type === "handoff.requested"),
+    passages: turnPassages(state, turnId),
   };
 }
 
@@ -210,13 +211,14 @@ function assertionPorts({
       if (result.t !== "result" || typeof result.value !== "boolean") throw new AppError("eval_assertion_unavailable");
       return result.value;
     },
-    async judge({ rubric, replies }) {
+    async judge({ rubric, replies, passages }) {
       const ref = run.definition.manifest.settings.models.utility ?? (await tx(getWorkspace)).settings.utilityModel;
       if (!ref) throw new AppError("model_not_configured");
       return judgeReplies(llm, {
         model: modelId(ref),
         rubric,
         replies,
+        ...(passages ? { passages } : {}),
         context: { workspaceId, mode: "eval", botId: run.botId, ...receipt },
       });
     },

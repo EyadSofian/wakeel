@@ -1,6 +1,6 @@
 # ADR-056 — Quality gates for every change to the AI layer
 
-Status: proposed · Date: 2026-11-17 · Review: `docs/research/2026-11-17-ai-layer-review.md`
+Status: accepted (Eyad approved in writing on 2026-11-17) · Date: 2026-11-17 · Tasks: 12.5, 12.6, 8.9 · Review: `docs/research/2026-11-17-ai-layer-review.md`
 
 ## Context
 
@@ -126,10 +126,15 @@ removes cases to pass (the rule `packages/retrieval/evals/README.md` already sta
 - New tasks:
   - **12.5** — gate command, report, `ai-layer` label check.
   - **12.6** — `critical`, `grounded`, structured judge, calibration file.
-  - **8.8** — realistic golden set.
+  - **8.9** — realistic golden set.
 - Thresholds will move as we learn. Changing one is a one-line edit to this ADR with Eyad's approval.
 
 ## Questions for Eyad
+
+Answered on acceptance (2026-11-17): Eyad approved the ADR without changing the recommendations, so the
+bars stand as proposed; the gate runs on demand before merge; and until the Anthropic account has
+credits, `gpt-6.1-sol` is the strongest model the gate can run for G0 (`claude-opus-5-5` replaces it
+once it can be measured).
 
 1. Are the bars in the table right, especially G5 latency and G2 faithfulness?
 2. Should the gate run automatically on PRs labelled `ai-layer`, or only on demand before merge

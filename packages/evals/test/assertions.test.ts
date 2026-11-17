@@ -1,7 +1,7 @@
-import { Assertion, type EvalCase } from "@wakeel/contracts";
+import { Assertion, EvalCase } from "@wakeel/contracts";
 import { RTL_FIXTURES } from "@wakeel/testing";
 import { expect, test } from "vitest";
-import { type AssertionPorts, assertTurn, type TurnEvidence } from "../src/index";
+import { type AssertionPorts, assertTurn, GROUNDED_RUBRIC, type TurnEvidence } from "../src/index";
 
 const evidence: TurnEvidence = {
   messages: [{ type: "text", text: "أُرسلت الفاتورة ORD-٤٥١٢٣", citationTitles: ["سِياسة الإرجاع"] }],
@@ -11,11 +11,15 @@ const evidence: TurnEvidence = {
   variables: { "conversation.order": "ORD-45123" },
   handoffRequested: true,
   latencyMs: 35,
+  passages: [{ title: "سِياسة الإرجاع", text: "الإرجاع خلال ١٤ يومًا من الاستلام." }],
 };
 const ports: AssertionPorts = {
   // Test-only adapters take fixed fixtures. Production accepts patterns through a bounded port.
   matches: async ({ pattern, flags, text }) => new RegExp(pattern, flags).test(text),
-  judge: async ({ rubric, replies }) => rubric === "Send the invoice" && replies.length === 1,
+  judge: async ({ rubric, replies }) => ({
+    passed: rubric === "Send the invoice" && replies.length === 1,
+    reason: `checked: ${rubric}`,
+  }),
 };
 
 test.each([
@@ -76,6 +80,7 @@ test.each([
   const script: EvalCase = {
     name: "فاتورة ORD-45123",
     tags: ["ar-EG"],
+    critical: false,
     turns: [
       {
         user: "وين الفاتورة؟",
@@ -97,4 +102,31 @@ test.each(RTL_FIXTURES)("preserves %s when matching replies", async ({ text }) =
     ports,
   );
   expect(results[0]?.passed).toBe(true);
+});
+
+test("a judge's reason becomes the assertion's detail", async () => {
+  const [result] = await assertTurn({ assert: [{ type: "judge", rubric: "Send the invoice" }] }, evidence, ports);
+  expect(result).toMatchObject({ passed: true, detail: "checked: Send the invoice" });
+});
+
+test("grounded asks the judge, under a fixed rubric, whether the replies stay within the passages the turn read", async () => {
+  const seen: Parameters<AssertionPorts["judge"]>[0][] = [];
+  const judging: AssertionPorts = {
+    ...ports,
+    judge: async (input) => {
+      seen.push(input);
+      return { passed: false, reason: "ORD-45123 is not in any passage" };
+    },
+  };
+  const [result] = await assertTurn({ assert: [Assertion.parse({ type: "grounded" })] }, evidence, judging);
+  expect(seen).toEqual([{ rubric: GROUNDED_RUBRIC, replies: evidence.messages, passages: evidence.passages }]);
+  expect(result).toMatchObject({ passed: false, detail: "ORD-45123 is not in any passage" });
+  // The rubric lets a reply that admits it does not know pass with no passages at all.
+  expect(GROUNDED_RUBRIC).toContain("does not know");
+});
+
+test("a case is not critical unless it says so (ADR-056 G4)", () => {
+  const base = { name: "سعر الكورس", turns: [{ user: "بكام؟" }] };
+  expect(EvalCase.parse(base).critical).toBe(false);
+  expect(EvalCase.parse({ ...base, critical: true }).critical).toBe(true);
 });

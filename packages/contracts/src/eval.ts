@@ -26,6 +26,11 @@ export const Assertion = z.discriminatedUnion("type", [
   z.object({ type: z.literal("matches"), pattern: z.string().min(1), flags: z.string().max(4).default("iu") }),
   /** The utility model judges the turn's replies against this rubric; passes on a yes. */
   z.object({ type: z.literal("judge"), rubric: z.string().min(1).max(2_000) }),
+  /**
+   * The utility model checks every factual claim in the turn's replies against the passages the turn
+   * retrieved; passes when all are supported or the reply says it does not know (ADR-056 G2).
+   */
+  z.object({ type: z.literal("grounded") }),
   z.object({ type: z.literal("toolCalled"), name: z.string(), input: z.record(z.string(), Matcher).optional() }),
   z.object({ type: z.literal("toolNotCalled"), name: z.string() }),
   z.object({ type: z.literal("toolOrder"), names: z.array(z.string()).min(2) }),
@@ -66,6 +71,8 @@ export const EvalCase = z.object({
   description: z.string().max(1_000).optional(),
   /** Tags such as `ar-EG`, `code-switch`, `kb`, `handoff`; used for filtering and per-language scores. */
   tags: z.array(z.string().max(32)).max(10).default([]),
+  /** A case that must pass for the suite to meet the task-success gate (ADR-056 G4). */
+  critical: z.boolean().default(false),
   /** User data applied before the first turn. */
   user: UserData.optional(),
   turns: z.array(EvalTurn).min(1).max(50),
@@ -114,3 +121,34 @@ export const EvalPublishStatus = z.object({
   failed: z.number().int().nonnegative(),
   errors: z.number().int().nonnegative(),
 });
+
+/**
+ * Human-labelled judge cases for one suite (ADR-056 G7). The gate runs the judge on each and reports
+ * agreement; the judge's scores count only at 90% or more over at least 50 cases.
+ */
+export const JudgeCalibration = z.object({
+  items: z
+    .array(
+      z.object({
+        assertion: z.union([
+          z.object({ type: z.literal("judge"), rubric: z.string().min(1).max(2_000) }),
+          z.object({ type: z.literal("grounded") }),
+        ]),
+        replies: z
+          .array(
+            z.object({
+              type: z.string(),
+              text: z.string().optional(),
+              citationTitles: z.array(z.string()).default([]),
+            }),
+          )
+          .min(1),
+        /** The passages the judge sees for `grounded`. */
+        passages: z.array(z.object({ title: z.string(), text: z.string() })).default([]),
+        /** The person's verdict. */
+        human: z.enum(["pass", "fail"]),
+      }),
+    )
+    .max(1_000),
+});
+export type JudgeCalibration = z.infer<typeof JudgeCalibration>;
