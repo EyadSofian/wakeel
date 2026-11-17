@@ -1,5 +1,5 @@
 import { AppError } from "@wakeel/contracts";
-import { APICallError, embedMany, type LanguageModelUsage, streamText } from "ai";
+import { APICallError, embedMany, type LanguageModelUsage, type SystemModelMessage, streamText } from "ai";
 import { z } from "zod";
 import { aiSdkModels, type Credential, type ModelFactory } from "./adapters";
 import { costMicroUsd, type ModelEntry, type Registry, registry as shippedRegistry, type TokenUsage } from "./registry";
@@ -308,7 +308,7 @@ export function createLlm(deps: LlmDeps): LlmClient {
           // fullStream below still delivers the failure to our problem/trace boundary.
           onError: () => {},
           model: models.language(model, cred),
-          system: request.system,
+          instructions: instructionsFor(model, request.system),
           messages: request.messages,
           maxRetries: 0,
           // Left out for models whose provider rejects them, rather than failing every call.
@@ -443,6 +443,18 @@ function isRetryable(error: unknown): boolean {
 
 function isAuthFailure(error: unknown): boolean {
   return APICallError.isInstance(error) && (error.statusCode === 401 || error.statusCode === 403);
+}
+
+/**
+ * The system text of a call, as the SDK's `instructions`. Anthropic caches only up to a marked
+ * breakpoint, so a caching Claude model gets one on the system text, which architecture §6.4 keeps
+ * stable for a conversation (ADR-031 §5); without it every iteration paid full input price for the
+ * whole prefix. OpenAI caches long prefixes without a marker. Only the system text (fixed platform
+ * and builder text) is ever marked; messages are left as they are.
+ */
+function instructionsFor(model: ModelEntry, system: string): string | SystemModelMessage {
+  if (model.provider !== "anthropic" || !model.capabilities.caching || system.length === 0) return system;
+  return { role: "system", content: system, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } };
 }
 
 /** The SDK's usage, split the way prices are: uncached input, cache reads, cache writes, output. */
