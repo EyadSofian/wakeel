@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CardId, Identifier, IsoDateTime, Json, NodeId, ToolId, VariableId, WorkflowId } from "./common";
+import { CardId, Identifier, IsoDateTime, Json, NodeId, ToolId, TurnId, VariableId, WorkflowId } from "./common";
 import { BotMessagePayload } from "./message";
 import { SearchCitations } from "./retrieval";
 
@@ -72,6 +72,22 @@ export const AutonomyMemory = z.object({
     .default([]),
   /** Set while a suspended tool is pending. */
   pendingTool: z.object({ toolId: ToolId, toolCallId: z.string(), name: z.string(), input: Json }).optional(),
+  /**
+   * The automatic search of the turn it ran in (ADR-055). Shown to the model only during that turn;
+   * the next user message replaces it.
+   */
+  knowledge: z
+    .object({
+      turnId: TurnId,
+      /** The query that was searched (rewritten or the message itself). */
+      query: z.string(),
+      passages: z
+        .array(z.object({ token: z.string(), title: z.string(), section: z.string().optional(), text: z.string() }))
+        .default([]),
+      /** The error code when the search failed; the model is told and the turn carries on. */
+      error: z.string().optional(),
+    })
+    .optional(),
 });
 export type AutonomyMemory = z.infer<typeof AutonomyMemory>;
 

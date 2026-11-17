@@ -69,6 +69,8 @@ export const RetrievalRecord = SearchTrace.extend({
   startedAt: IsoDateTime,
   durationMs: z.number().nonnegative(),
   error: z.string().optional(),
+  /** What ran the search (ADR-055); absent when the caller did not say. */
+  trigger: z.enum(["auto", "tool", "card", "code"]).optional(),
 });
 export type RetrievalRecord = z.infer<typeof RetrievalRecord>;
 

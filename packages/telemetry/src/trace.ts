@@ -73,6 +73,14 @@ export interface IterationStep {
     startedAt: string;
     durationMs: number;
   }[];
+  /** The automatic search before this iteration (ADR-055), with its rewrite call if there was one. */
+  autoSearch?: {
+    query: string;
+    original?: string;
+    returned: number;
+    error?: string;
+    rewrite?: IterationStep["llm"] & { completion: string };
+  };
 }
 
 export interface TraceContext {
@@ -280,7 +288,12 @@ export class TraceBuilder {
     for (const trace of step.retrieval ?? []) {
       const started = new Date(trace.startedAt);
       out.push({
-        ...this.#base(this.#seq++, "Search knowledge", started, new Date(started.getTime() + trace.durationMs)),
+        ...this.#base(
+          this.#seq++,
+          trace.trigger === "auto" ? "Search knowledge (automatic)" : "Search knowledge",
+          started,
+          new Date(started.getTime() + trace.durationMs),
+        ),
         parentId: parent,
         kind: "kb.search",
         status: trace.error ? "error" : "ok",
@@ -293,6 +306,7 @@ export class TraceBuilder {
           fused: inlinePayload(trace.fused),
           reranked: inlinePayload(trace.reranked),
           returned: trace.returned,
+          ...(trace.trigger ? { trigger: trace.trigger } : {}),
         },
       });
     }
@@ -359,8 +373,51 @@ export class TraceBuilder {
         response: inlinePayload(it.response),
         ...(it.code !== undefined ? { code: inlinePayload(it.code) } : {}),
         ...(it.result !== undefined ? { result: inlinePayload(it.result) } : {}),
+        ...(it.autoSearch
+          ? {
+              autoSearch: {
+                query: it.autoSearch.query,
+                ...(it.autoSearch.original !== undefined ? { original: it.autoSearch.original } : {}),
+                returned: it.autoSearch.returned,
+                ...(it.autoSearch.error !== undefined ? { error: it.autoSearch.error } : {}),
+              },
+            }
+          : {}),
       },
     };
+    // The query rewrite ran before the iteration's own model call (ADR-055).
+    const rewrite = it.autoSearch?.rewrite;
+    const rewriteSpans: Span[] = rewrite
+      ? [
+          {
+            ...this.#base(
+              this.#seq++,
+              rewrite.model || "Query rewrite",
+              new Date(rewrite.startedAt),
+              new Date(new Date(rewrite.startedAt).getTime() + rewrite.durationMs),
+            ),
+            parentId: iteration.id,
+            location,
+            kind: "llm.call",
+            attrs: {
+              purpose: "rewrite",
+              model: rewrite.model,
+              provider: rewrite.provider ?? "unknown",
+              usage: {
+                inputTokens: rewrite.usage?.inputTokens ?? 0,
+                cachedInputTokens: rewrite.usage?.cachedInputTokens ?? 0,
+                outputTokens: rewrite.usage?.outputTokens ?? 0,
+                costMicroUsd: rewrite.costMicroUsd ?? 0,
+              },
+              ...(rewrite.ttftMs !== undefined ? { ttftMs: Math.max(0, Math.round(rewrite.ttftMs)) } : {}),
+              finishReason: rewrite.finishReason,
+              attempt: 1,
+              prompt: inlinePayload(rewrite.prompt),
+              completion: inlinePayload(rewrite.completion),
+            },
+          },
+        ]
+      : [];
     const llmStart = new Date(it.llm.startedAt);
     const call: Span = {
       ...this.#base(this.#seq++, it.llm.model || "Model", llmStart, new Date(llmStart.getTime() + it.llm.durationMs)),
@@ -405,7 +462,7 @@ export class TraceBuilder {
         },
       };
     });
-    return [iteration, call, ...tools];
+    return [iteration, ...rewriteSpans, call, ...tools];
   }
 
   #closeNode(at: Date): NodeSpan {

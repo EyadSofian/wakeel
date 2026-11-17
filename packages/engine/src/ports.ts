@@ -128,6 +128,14 @@ export interface IterationTrace {
     startedAt: string;
     durationMs: number;
   }[];
+  /** The automatic search before this iteration (ADR-055), with its rewrite call if there was one. */
+  autoSearch?: {
+    query: string;
+    original?: string;
+    returned: number;
+    error?: string;
+    rewrite?: IterationTrace["llm"] & { completion: string };
+  };
 }
 
 /** A line for the conversation log and the trace (Log card, `log.*` in code). */
@@ -298,6 +306,8 @@ export interface KnowledgePort {
   search(
     request: SearchRequest,
     citations?: SearchCitations,
+    /** What started the search, for its span (ADR-055). */
+    options?: { trigger?: "auto" | "tool" | "card" | "code" },
   ): Promise<{ passages: Passage[]; citations: SearchCitations }>;
 }
 

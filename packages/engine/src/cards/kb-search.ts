@@ -19,6 +19,7 @@ export const kbSearch: ExecutorOf<"kb_search"> = async (ctx) => {
   const found = await ctx.knowledge.search(
     { query: rendered.text(query), kbIds: card.kbIds, topK: card.topK },
     ctx.retrievalCitations,
+    { trigger: "card" },
   );
   const index = indexDefinition(ctx.definition);
   const writes = card.into ? [writeFor(index, card.into, { passages: found.passages } as unknown as Json)] : [];

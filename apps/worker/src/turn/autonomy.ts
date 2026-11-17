@@ -2,6 +2,7 @@ import type { ToolCodeRunner } from "@wakeel/autonomy";
 import {
   type AutonomyCode,
   type AutonomyContext,
+  type AutonomyKnowledge,
   type AutonomyStepInput,
   callTool,
   createAutonomy,
@@ -36,6 +37,11 @@ const TRANSCRIPT_MESSAGES = 60;
 /** A run block may not outlast the turn, nor the sandbox's own ceiling. */
 const RUN_MAX_MS = 30_000;
 const RUN_MEMORY_MB = 64;
+/**
+ * The automatic search's query rewrite answers in one line, but reasoning models spend output tokens
+ * on reasoning first; a cap sized for the line alone would leave them nothing to answer with.
+ */
+const REWRITE_MAX_OUTPUT_TOKENS = 4_096;
 
 export interface AutonomyTurn {
   workspaceId: string;
@@ -81,13 +87,68 @@ export { recordUsage, workspaceCredentials } from "@wakeel/retrieval/service";
 /** The engine's `AutonomyPort` for one turn. */
 export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePort): AutonomyPort {
   const now = w.now ?? Date.now;
-  let workspaceDefault: Promise<string | undefined> | undefined;
-  const defaultModel = () => {
-    workspaceDefault ??= w.db
-      .withWorkspace(turn.workspaceId, (tx) => getWorkspace(tx))
-      .then((ws) => ws.settings.defaultModel);
-    return workspaceDefault;
+  let settings: Promise<Awaited<ReturnType<typeof getWorkspace>>["settings"]> | undefined;
+  const workspaceSettings = () => {
+    settings ??= w.db.withWorkspace(turn.workspaceId, (tx) => getWorkspace(tx)).then((ws) => ws.settings);
+    return settings;
   };
+  const defaultModel = () => workspaceSettings().then((s) => s.defaultModel);
+  const callContext = {
+    workspaceId: turn.workspaceId,
+    mode: turn.mode,
+    botId: turn.botId,
+    conversationId: turn.conversationId,
+    turnId: turn.turnId,
+  };
+
+  // ADR-055: the automatic search uses the turn's shared search service (one citation registry) and
+  // the utility model for the query rewrite.
+  const knowledge: AutonomyKnowledge | undefined = w.knowledge
+    ? {
+        search: async (request, citations) => {
+          const found = await (w.knowledge as KnowledgePort).search(request, citations, { trigger: "auto" });
+          return { passages: found.passages, citations: found.citations };
+        },
+        rewrite: async (request) => {
+          const ref = turn.definition.manifest.settings.models.utility ?? (await workspaceSettings()).utilityModel;
+          if (!ref) throw new AppError("model_not_configured");
+          const started = now();
+          const handle = w.llm.stream({
+            model: modelId(ref),
+            system: request.system,
+            messages: request.messages,
+            maxOutputTokens: REWRITE_MAX_OUTPUT_TOKENS,
+            purpose: request.purpose,
+            context: callContext,
+          });
+          for await (const _chunk of handle.textStream) {
+            // The whole text is in `result`, which settles once the stream is read.
+          }
+          const r = await handle.result;
+          return {
+            text: r.text,
+            call: {
+              model: r.model,
+              ...(providerOf(r.model) ? { provider: providerOf(r.model) as string } : {}),
+              usage: {
+                inputTokens: r.usage.inputTokens + (r.usage.cacheWriteTokens ?? 0),
+                cachedInputTokens: r.usage.cachedInputTokens,
+                outputTokens: r.usage.outputTokens,
+              },
+              costMicroUsd: r.costMicroUsd,
+              finishReason: r.finishReason,
+              prompt: {
+                system: request.system,
+                messages: request.messages.map((m) => ({ role: m.role, content: m.content })),
+              },
+              completion: r.text,
+              startedAt: new Date(started).toISOString(),
+              durationMs: Math.max(0, now() - started),
+            },
+          };
+        },
+      }
+    : undefined;
 
   const context = async (_input: AutonomyStepInput): Promise<AutonomyContext> => {
     const rows = await w.db.withWorkspace(turn.workspaceId, (tx) =>
@@ -162,7 +223,7 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
                       kbSearch: async (query) => {
                         const knowledge = w.knowledge;
                         if (!knowledge) throw new AppError("model_not_configured");
-                        const result = await knowledge.search(query, retrievalCitations);
+                        const result = await knowledge.search(query, retrievalCitations, { trigger: "tool" });
                         retrievalCitations = result.citations;
                         return result.passages;
                       },
@@ -289,6 +350,7 @@ export function autonomyPort(w: AutonomyWiring, turn: AutonomyTurn, code: CodePo
     code: run,
     context,
     now,
+    ...(knowledge ? { knowledge } : {}),
   });
   return { step: (input) => autonomy.step(input as never) as never };
 }

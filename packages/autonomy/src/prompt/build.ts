@@ -51,6 +51,8 @@ export interface PromptInput {
   /** ISO time; per iteration, so it lives in the final block, never in the system text. */
   now: string;
   windowTokens?: number;
+  /** This turn's automatic search (ADR-055); its passages are untrusted and go in a data block. */
+  knowledge?: { query: string; passages: readonly Json[]; error?: string };
 }
 
 export interface BuiltPrompt {
@@ -87,7 +89,19 @@ function nodeBlock(node: AutonomousNode, definition: BotDefinition): string {
     `Message types you may send: ${node.messageTypes.join(", ")}.`,
     ...node.messageTypes.map((t) => MESSAGE_FORMS[t]),
     exits.length > 0 ? `Exits:\n${exits.join("\n")}` : "Exits: none. Finish with a message.",
+    ...autoSearchRule(node),
   ].join("\n");
+}
+
+/** Part 2 for a node that searches before every reply (ADR-055): fixed text naming its own tool. */
+function autoSearchRule(node: AutonomousNode): string[] {
+  const tool = node.tools.find((t) => t.id === node.autoSearch?.toolId);
+  if (!node.autoSearch || !tool) return [];
+  return [
+    `Before each reply you get passages from ${tool.name} that match the user's latest message, in the knowledge data block. ` +
+      `Answer questions of fact from those passages, or call ${tool.name} for more. ` +
+      "If neither covers the question, say you do not know; never answer it from memory.",
+  ];
 }
 
 /**
@@ -121,12 +135,30 @@ function finalBlock(input: PromptInput): string {
       `${v.path} (${v.mode === "write" ? "read and write" : "read only"}) = ${v.value === undefined ? "unset" : JSON.stringify(v.value)}`,
   );
   const parts = [
+    ...knowledgeBlock(input.knowledge),
     readable.length > 0 ? dataBlock("variables", readable.join("\n")) : "No variables are available to you.",
     `Now: ${input.now}. Step ${input.iteration} of ${input.node.maxIterations}.`,
     ...input.feedback.map((f) => dataBlock(`feedback:${f.kind}`, f.text)),
     `Respond with directives and finish with ${M}end.`,
   ];
   return parts.join("\n\n");
+}
+
+/**
+ * Part 5's knowledge block (ADR-055). The query and passages are data; what the engine says about a
+ * failed or empty search is its own text, outside the block, so the model can act on it.
+ */
+function knowledgeBlock(knowledge: PromptInput["knowledge"]): string[] {
+  if (!knowledge) return [];
+  const lines = [`Query: ${knowledge.query}`];
+  if (knowledge.passages.length > 0) lines.push(JSON.stringify(knowledge.passages));
+  const block = dataBlock("knowledge", lines.join("\n"));
+  if (knowledge.error)
+    return [
+      block,
+      `The knowledge search failed (${knowledge.error}). Do not answer questions of fact from memory; tell the user you cannot check right now.`,
+    ];
+  return knowledge.passages.length > 0 ? [block] : [block, "No passages matched this message."];
 }
 
 /** Providers reject two consecutive messages of one role on some APIs; join them instead. */
