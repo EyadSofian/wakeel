@@ -34,7 +34,8 @@ export function turnKnowledge(
   let tail: Promise<void> = Promise.resolve();
   let citations: SearchCitations | undefined;
   return {
-    search(raw: unknown, previous?: SearchCitations) {
+    /** `trigger` labels the search's span: the automatic search, a node's tool, a card, or code (ADR-055). */
+    search(raw: unknown, previous?: SearchCitations, options: { trigger?: RetrievalRecord["trigger"] } = {}) {
       const run = tail.then(async () => {
         const request = SearchRequest.parse(raw);
         const now = deps.now ?? Date.now,
@@ -89,7 +90,12 @@ export function turnKnowledge(
           });
           const result = await search(request, citations ?? previous);
           citations = result.citations;
-          record({ ...attrs, startedAt: new Date(start).toISOString(), durationMs: Math.max(0, now() - start) });
+          record({
+            ...attrs,
+            startedAt: new Date(start).toISOString(),
+            durationMs: Math.max(0, now() - start),
+            ...(options.trigger ? { trigger: options.trigger } : {}),
+          });
           return result;
         } catch (error) {
           record({
@@ -97,6 +103,7 @@ export function turnKnowledge(
             startedAt: new Date(start).toISOString(),
             durationMs: Math.max(0, now() - start),
             error: error instanceof AppError ? error.code : "internal_error",
+            ...(options.trigger ? { trigger: options.trigger } : {}),
           });
           throw error;
         }

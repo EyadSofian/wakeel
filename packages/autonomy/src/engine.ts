@@ -8,6 +8,12 @@ import {
   type SearchCitations,
   type Variable,
 } from "@wakeel/contracts";
+import {
+  type AutonomyKnowledge,
+  type AutoSearchTrace,
+  runAutoSearch,
+  searchableMessage,
+} from "./knowledge/auto-search";
 import { buildPrompt } from "./prompt/build";
 import type { TranscriptMessage } from "./prompt/transcript";
 import { afterRun, feedbackFor } from "./protocol/outcome";
@@ -121,6 +127,8 @@ export interface IterationTrace {
   result?: Json;
   llm: LlmCallTrace;
   tools: ToolCallTrace[];
+  /** The automatic search that ran before this iteration (ADR-055). */
+  autoSearch?: AutoSearchTrace;
 }
 
 /** The model, already resolved for this node and workspace by the worker (llm client `stream`). */
@@ -203,6 +211,8 @@ export interface AutonomyDeps {
   code: AutonomyCode;
   context(input: AutonomyStepInput): Promise<AutonomyContext>;
   protocol?: AutonomyProtocol;
+  /** The turn's knowledge search and the utility model, for `autoSearch` (ADR-055). */
+  knowledge?: AutonomyKnowledge;
   /** Milliseconds since the epoch, for the trace's timings. Tests pass a fake clock. */
   now?(): number;
 }
@@ -237,6 +247,37 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
 
       const ctx = await deps.context(input);
       const access = accessible(node, ctx.definition, input.location.workflowId);
+
+      // ADR-055: a user message that starts the node's turn (a reply after listen, or the message
+      // that entered the node) is searched once, before the first iteration. Later iterations of the
+      // turn reuse the result from memory; tool results and triggers never search.
+      let retrievalCitations = input.retrievalCitations;
+      const searchWarnings: string[] = [];
+      let autoSearch: AutoSearchTrace | undefined;
+      const startsTurn = input.resume?.kind === "message" || (input.memory === undefined && input.resume === undefined);
+      const asked =
+        startsTurn && node.autoSearch
+          ? searchableMessage(input.resume?.kind === "message" ? input.resume.event : input.scopes.event)
+          : undefined;
+      if (asked !== undefined) {
+        const found = await runAutoSearch(
+          {
+            node,
+            message: asked,
+            transcript: ctx.transcript,
+            ...(ctx.summary ? { summary: ctx.summary } : {}),
+            turnId: input.turnId,
+            ...(retrievalCitations ? { citations: retrievalCitations } : {}),
+            maxChars: RUN_RESULT_MAX_CHARS,
+          },
+          deps.knowledge,
+        );
+        memory.knowledge = found.knowledge;
+        retrievalCitations = found.citations ?? retrievalCitations;
+        autoSearch = found.trace;
+        searchWarnings.push(...found.warnings);
+      }
+      const knowledge = memory.knowledge?.turnId === input.turnId ? memory.knowledge : undefined;
       const prompt = buildPrompt({
         node,
         definition: ctx.definition,
@@ -255,6 +296,7 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
         feedback: memory.feedback,
         iteration: memory.iteration,
         now: ctx.now,
+        ...(knowledge ? { knowledge } : {}),
       });
       memory.feedback = [];
 
@@ -302,10 +344,10 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
           durationMs: Math.max(0, now() - llmStarted),
         },
         tools: [],
+        ...(autoSearch ? { autoSearch } : {}),
       };
-      // Citation tokens never reach the user (§6.5). Until kb_search exists there are no sources.
+      // Citation tokens never reach the user (§6.5); only tokens registered this turn map to sources.
       // A text that was nothing but tokens is dropped rather than sent empty.
-      let retrievalCitations = input.retrievalCitations;
       const messages = result.messages
         .map((m) =>
           m.type === "text"
@@ -320,6 +362,7 @@ export function createAutonomy(deps: AutonomyDeps): { step(input: AutonomyStepIn
         .filter((m) => m.type !== "text" || mapCitations(m.text, retrievalCitations?.sources ?? {}).text.trim() !== "");
       const logs: NonNullable<AutonomyStepResult["logs"]> = [];
       if (result.recovered) logs.push({ level: "warn", message: "protocol_recovered: the reply had no directives" });
+      for (const message of searchWarnings) logs.push({ level: "warn", message });
 
       const iterate = (extra: Partial<AutonomyStepResult> = {}): AutonomyStepResult => ({
         outcome: { type: "next" },

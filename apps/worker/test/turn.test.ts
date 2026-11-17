@@ -1284,7 +1284,7 @@ describe("config variables (task 7.3, ADR-037)", () => {
 });
 
 describe("knowledge search in committed turns", () => {
-  async function knowledgeFixture(kind: "card" | "tool" = "card") {
+  async function knowledgeFixture(kind: "card" | "tool" | "auto" = "card") {
     const kbId = newId("kb");
     const answerInto = newElementId("var");
     const c = await seed([card({ type: "kb_search", kbIds: [kbId], answer: { into: answerInto, send: true } })], {
@@ -1314,7 +1314,8 @@ describe("knowledge search in committed turns", () => {
       if (!main) throw new Error("missing fixture main");
       const workflow = Workflow.parse(JSON.parse(JSON.stringify(main.doc).replaceAll(kbId, kb.id)));
       const node = workflow.nodes[1];
-      if (kind === "tool" && node)
+      const toolId = newElementId("tool");
+      if (kind !== "card" && node)
         workflow.nodes[1] = {
           id: node.id,
           type: "autonomous",
@@ -1323,7 +1324,7 @@ describe("knowledge search in committed turns", () => {
           model: "openai:gpt-4.1-mini",
           tools: [
             {
-              id: newElementId("tool"),
+              id: toolId,
               type: "kb_search",
               name: "searchHelp",
               description: "Finds the store policy.",
@@ -1331,6 +1332,7 @@ describe("knowledge search in committed turns", () => {
               topK: 1,
             },
           ],
+          ...(kind === "auto" ? { autoSearch: { toolId, rewrite: true } } : {}),
         } as typeof node;
       await saveDraftDoc(tx, {
         botId: c.botId,
@@ -1489,6 +1491,95 @@ describe("knowledge search in committed turns", () => {
       name: "searchHelp",
       toolType: "kb_search",
     });
+    model.expectDone();
+  });
+
+  test("an Autonomous Node that searches before every reply: once per message, rewritten follow-ups, traced (6.12)", async () => {
+    const c = await knowledgeFixture("auto");
+    const prompts: { purpose: string; content: string }[] = [];
+    const model = new FakeLlm()
+      // Turn 1: the first message is searched as written, then the model answers from the passage.
+      .scriptText(":::say text\nتقدر ترجعه خلال ١٤ يومًا [[c1]]\n:::exit listen\n:::end")
+      // Turn 2: the utility model rewrites the follow-up, then the node answers.
+      .scriptText("مدة استرجاع الأوردر")
+      .scriptText(":::say text\n١٤ يومًا من الاستلام [[c1]]\n:::exit listen\n:::end");
+    const fullLlm: LlmClient = {
+      ...llm,
+      stream: (r) => {
+        prompts.push({ purpose: r.purpose, content: r.messages.map((m) => m.content).join("\n") });
+        const handle = model.stream(r);
+        return {
+          textStream: handle.textStream,
+          result: handle.result.then((out) => ({
+            ...out,
+            model: r.model,
+            costMicroUsd: 0,
+            usage: { ...out.usage, cacheWriteTokens: 0 },
+          })),
+        };
+      },
+      readImage: async () => {
+        throw new Error("not an OCR test");
+      },
+    };
+    const { d } = deps({
+      knowledge: (turn, record) => turnKnowledge({ db, llm: fullLlm }, turn, record),
+      autonomy: (turn, code, knowledge) =>
+        autonomyPort(
+          {
+            db,
+            llm: fullLlm,
+            knowledge,
+            logger,
+            runPort: {
+              run: async () => {
+                throw new Error("the model never wrote a run block here");
+              },
+            },
+          },
+          turn,
+          code,
+        ),
+    });
+    await send(c, "عايز أرجع الأوردر ORD-12");
+    await drainConversation(d, c.conversationId);
+    await send(c, "طب في كام يوم؟");
+    await drainConversation(d, c.conversationId);
+
+    expect(await botTexts(c)).toEqual(["تقدر ترجعه خلال ١٤ يومًا", "١٤ يومًا من الاستلام"]);
+    const messages = await query<{ citations: unknown[] }>(
+      "select citations from messages where conversation_id=$1 and direction='out' order by created_at",
+      [c.conversationId],
+    );
+    expect(messages.map((m) => m.citations)).toMatchObject([[{ title: "الاسترجاع" }], [{ title: "الاسترجاع" }]]);
+    // The passage reached the model as data in both turns; the rewrite saw the earlier messages.
+    const autonomyPrompts = prompts.filter((p) => p.purpose === "autonomy");
+    expect(autonomyPrompts).toHaveLength(2);
+    for (const p of autonomyPrompts) expect(p.content).toContain("يمكن الاسترجاع خلال ١٤ يومًا");
+    expect(prompts.find((p) => p.purpose === "rewrite")?.content).toContain("عايز أرجع الأوردر ORD-12");
+
+    const spans = await spansOf(c);
+    const searches = spans.filter((s) => s.kind === "kb.search");
+    expect(
+      searches.map((s) => [
+        s.name,
+        (s.attrs as { trigger?: string; query: string }).trigger,
+        (s.attrs as { query: string }).query,
+      ]),
+    ).toEqual([
+      ["Search knowledge (automatic)", "auto", "عايز أرجع الأوردر ORD-12"],
+      ["Search knowledge (automatic)", "auto", "مدة استرجاع الأوردر"],
+    ]);
+    const iterations = spans.filter((s) => s.kind === "autonomy.iteration");
+    expect(iterations.map((s) => (s.attrs as { autoSearch?: unknown }).autoSearch)).toEqual([
+      { query: "عايز أرجع الأوردر ORD-12", returned: 1 },
+      { query: "مدة استرجاع الأوردر", original: "طب في كام يوم؟", returned: 1 },
+    ]);
+    expect(spans.filter((s) => s.kind === "llm.call").map((s) => (s.attrs as { purpose: string }).purpose)).toEqual([
+      "autonomy",
+      "rewrite",
+      "autonomy",
+    ]);
     model.expectDone();
   });
 });

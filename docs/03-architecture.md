@@ -279,7 +279,7 @@ Own engine in `packages/autonomy`. Concepts follow LLMz; no source is copied.
 
 ### 6.1 Node configuration
 
-`04-contracts/node.ts → AutonomousNode`: `instructions` (template), `model?`, `tools[]`, `variableAccess[] {ref, mode: read|write}`, `exits[] {id, name, description, schema?}`, `conversational` (may message the user and listen), `allowHandoff`, `maxIterations`, `temperature`.
+`04-contracts/node.ts → AutonomousNode`: `instructions` (template), `model?`, `tools[]`, `variableAccess[] {ref, mode: read|write}`, `exits[] {id, name, description, schema?}`, `conversational` (may message the user and listen), `allowHandoff`, `maxIterations`, `temperature`, `autoSearch?` (ADR-055: a knowledge tool on the node searched once per user message before the first iteration, with the query rewritten by the utility model).
 
 Tools (`04-contracts/tool.ts`) are one of: `code` (name, description, input and output schema, source), `kb_search` (KB ids, instructions), `table` (table id, allowed operations), `workflow` (workflow id; inputs and outputs become the signature). There are no implicit tools.
 
@@ -343,7 +343,7 @@ Suspending tools: a workflow tool whose workflow waits for user input, or a code
 2. System, static per node version: `tools.d.ts` generated from tool schemas (TypeScript declarations with doc comments), message types available, exit list with schemas.
 3. System, per conversation: rendered instructions, bot identity, locale guidance ("reply in the user's language and dialect unless instructed otherwise").
 4. Messages: conversation summary (if any) then the transcript window, user and assistant roles. Inbound content is always in user-role messages and tool output is wrapped in a clearly delimited data block; neither is ever placed in the system prompt.
-5. Final user-role block: current variable values the node may read, date and time, iteration feedback, remaining iterations.
+5. Final user-role block: this turn's automatic search as a `knowledge` data block (ADR-055), current variable values the node may read, date and time, iteration feedback, remaining iterations. With `autoSearch`, part 2 also states that answers of fact come from those passages or another search.
 
 Transcript window: newest messages up to a token budget (default 6,000). Older content is summarised by the utility model into `state.summary` when the window overflows.
 
