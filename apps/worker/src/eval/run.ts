@@ -76,6 +76,9 @@ export function evalProcessor(turns: TurnDeps, llm: LlmClient, sandbox: SandboxC
             index,
             ...begun,
             assertions,
+            latencyMs: Math.round(evidence.latencyMs),
+            ...(evidence.firstMessageMs !== undefined ? { firstMessageMs: Math.round(evidence.firstMessageMs) } : {}),
+            ...(evidence.costMicroUsd !== undefined ? { costMicroUsd: evidence.costMicroUsd } : {}),
             ...(step.expectSilence ? { silencePassed: evidence.messages.length === 0 } : {}),
           };
           await tx((table) => saveEvalTurn(table, runId, entry.id, item));
@@ -121,10 +124,20 @@ async function turnEvidence(tx: Tx, definition: BotDefinition, receipt: Receipt)
   const { turnId, conversationId } = receipt;
   const turn = await getTurnSummary(tx, turnId);
   const spans = await listTurnSpans(tx, turnId);
-  const duration = spans.find((span) => span.kind === "turn")?.durationMs;
+  const turnSpan = spans.find((span) => span.kind === "turn");
+  const duration = turnSpan?.durationMs;
   if (!turn || turn.conversationId !== conversationId || turn.status === "failed" || duration === undefined)
     throw new AppError("eval_turn_failed");
-  const messages = (await botMessagesOfTurn(tx, turnId)).map((row) => {
+  const rows = await botMessagesOfTurn(tx, turnId);
+  const firstAt = rows[0]?.createdAt;
+  // The first committed bot message is when the user starts reading (ADR-056 G5).
+  const firstMessageMs =
+    turnSpan && firstAt ? Math.max(0, firstAt.getTime() - new Date(turnSpan.startedAt).getTime()) : undefined;
+  const costMicroUsd = spans.reduce(
+    (sum, span) => sum + (span.kind === "llm.call" ? (span.attrs.usage.costMicroUsd ?? 0) : 0),
+    0,
+  );
+  const messages = rows.map((row) => {
     const payload = Message.shape.payload.parse(row.payload);
     return {
       type: payload.type,
@@ -174,6 +187,8 @@ async function turnEvidence(tx: Tx, definition: BotDefinition, receipt: Receipt)
     exits: spans.flatMap((span) => (span.kind === "autonomy.iteration" && span.attrs.exit ? [span.attrs.exit] : [])),
     handoffRequested: events.some((event) => event.type === "handoff.requested"),
     passages: turnPassages(state, turnId),
+    ...(firstMessageMs !== undefined ? { firstMessageMs } : {}),
+    costMicroUsd: Math.round(costMicroUsd),
   };
 }
 

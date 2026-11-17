@@ -1791,6 +1791,12 @@ test("runs an Arabic case against the saved draft through eval-mode Bridge, with
   expect(result.results).toMatchObject([
     { caseId, result: { status: "passed", turns: [{ assertions: [{ passed: true }] }, {}] } },
   ]);
+  // ADR-056 G5 and G6: every eval turn records how long it took, when its first reply landed, and its cost.
+  const firstTurn = result.results[0]?.result.turns[0];
+  expect(firstTurn?.latencyMs).toEqual(expect.any(Number));
+  expect(firstTurn?.firstMessageMs).toEqual(expect.any(Number));
+  expect(firstTurn?.firstMessageMs ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(firstTurn?.latencyMs ?? 0);
+  expect(firstTurn?.costMicroUsd).toEqual(expect.any(Number));
   const counts = await db.withWorkspace(c.ws, (tx) =>
     tx.execute(sql`select mode, count(*)::int as n from usage_events
     where kind='conversation' and bot_id=${c.botId} group by mode`),

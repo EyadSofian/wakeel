@@ -26,7 +26,8 @@
     "licences": "node tools/licences.ts",
     "e2e": "pnpm --filter @wakeel/studio e2e",
     "evals:autonomy": "tsx tools/evals-autonomy.ts",
-    "evals:retrieval": "tsx tools/evals-retrieval.ts"
+    "evals:retrieval": "tsx tools/evals-retrieval.ts",
+    "evals:gate": "tsx tools/evals-gate.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.7",

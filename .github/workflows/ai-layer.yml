@@ -1,0 +1,40 @@
+name: ai-layer
+
+# ADR-056: a pull request that changes the AI layer needs a gate report in its description. A failing
+# gate blocks it; a cost rise needs the cost-approved label from a maintainer.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ai-layer-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate-report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # Actions are pinned to commit SHAs (threat T11, dependency compromise).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json files,body,labels | pnpm exec tsx tools/ai-layer-check.ts
+      - if: always() && steps.check.outputs.ai_layer == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --add-label ai-layer

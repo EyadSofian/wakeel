@@ -22,3 +22,6 @@ apps/parser/**/__pycache__/
 
 # Customer content for pilots (prompts, knowledge bases); the repository is public.
 docs/pilot/*/private/
+
+# AI quality gate measurements (pnpm evals:gate, ADR-056)
+.gate/

@@ -17,6 +17,10 @@ export interface TurnEvidence {
   variables: Readonly<Record<string, Json>>;
   handoffRequested: boolean;
   latencyMs: number;
+  /** From the turn's start to its first committed bot message (ADR-056 G5). */
+  firstMessageMs?: number;
+  /** What the turn's model calls cost (G6). */
+  costMicroUsd?: number;
   /** The passages the turn retrieved (automatic search, tools, cards), for `grounded` (ADR-056). */
   passages: readonly Passage[];
 }
