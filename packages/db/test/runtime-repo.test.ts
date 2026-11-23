@@ -241,6 +241,28 @@ describe("the inbox, turns, transcript and outbox", () => {
     expect(conv.state.status).toBe("ended");
   });
 
+  test("expiryFromNow moves the deadline from now and leaves the last activity alone", async () => {
+    const c = await conversation();
+    const epoch = (await db.withWorkspace(c.ws, (tx) =>
+      acquireConversationLease(tx, c.conversationId, "a", 30_000),
+    )) as number;
+    await su.query("update conversations set last_activity_at = now() - interval '20 minutes' where id = $1", [
+      c.conversationId,
+    ]);
+    await db.withWorkspace(c.ws, (tx) =>
+      writeConversation(tx, c.conversationId, epoch, { timeoutMinutes: 15, expiryFromNow: true }),
+    );
+    const row = (
+      await su.query(
+        `select round(extract(epoch from expires_at - now()) / 60)::int as ahead,
+                round(extract(epoch from now() - last_activity_at) / 60)::int as idle
+           from conversations where id = $1`,
+        [c.conversationId],
+      )
+    ).rows[0];
+    expect(row).toEqual({ ahead: 15, idle: 20 });
+  });
+
   test("end-user variables and attributes are replaced whole", async () => {
     const c = await conversation();
     await db.withWorkspace(c.ws, (tx) => updateEndUser(tx, c.endUserId, { vars: { var_AAAAAAAAAA: 3 } }));
