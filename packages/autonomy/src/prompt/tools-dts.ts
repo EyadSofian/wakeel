@@ -35,7 +35,7 @@ function member(tool: Tool, definition: BotDefinition): string {
       return `${doc(notes)}\n  ${tool.name}(input: ${schemaToTs(tool.input, "  ")}): Promise<${schemaToTs(tool.output, "  ")}>;`;
     }
     case "kb_search":
-      return `${doc([description, "Returns passages; cite one by writing its token, for example [[c1]]."])}\n  ${tool.name}(query: string): Promise<Array<{ token: string; text: string; title: string }>>;`;
+      return `${doc([description, "Returns passages; cite one by writing its token, for example [[c1]]."])}\n  ${tool.name}(query: string): Promise<Array<{ token: string; title: string; section?: string; text: string }>>;`;
     case "table": {
       const ops = tool.operations.map((op) => `    ${tableMethods[op]}`).join("\n");
       return `${doc([description])}\n  ${tool.name}: {\n${ops}\n  };`;

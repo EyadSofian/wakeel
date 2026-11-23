@@ -63,7 +63,7 @@ declare const tools: {
    * Search the help centre.
    * Returns passages; cite one by writing its token, for example [[c1]].
    */
-  searchHelp(query: string): Promise<Array<{ token: string; text: string; title: string }>>;
+  searchHelp(query: string): Promise<Array<{ token: string; title: string; section?: string; text: string }>>;
 
   /**
    * Find an order by number.

@@ -36,7 +36,7 @@ export type ToolCodeOutcome =
 
 export interface ToolDeps {
   table?(request: TableRuntimeCall): Promise<Json>;
-  kbSearch?(request: SearchRequest): Promise<Json>;
+  kbSearch?(request: SearchRequest): Promise<readonly SearchPassage[]>;
   definition: BotDefinition;
   code: ToolCodeRunner;
   /** The node's scopes, read by code tools (they cannot write them). */
@@ -103,7 +103,8 @@ export async function callTool(
           tool: tool.name,
           message: "pass a non-empty query string without an operation",
         });
-      return deps.kbSearch({ query: call.input, kbIds: tool.kbIds, topK: tool.topK });
+      const passages = await deps.kbSearch({ query: call.input, kbIds: tool.kbIds, topK: tool.topK });
+      return passages.map(toolPassage);
     }
     case "table": {
       const operation = TableOperation.safeParse(call.operation);
@@ -124,6 +125,28 @@ export async function callTool(
       });
     }
   }
+}
+
+/** The fields of a retrieval passage a knowledge tool needs (contracts `Passage`, structurally). */
+export interface SearchPassage {
+  cite: string;
+  title: string;
+  headingPath: readonly string[];
+  text: string;
+}
+
+/**
+ * A passage as the knowledge tool declares it (tools-dts.ts). Ids, scores and metadata are left out:
+ * they cost the model's budget and tell it nothing. The heading path stays, as `section`, because a
+ * chunk's text often does not name what it is about (a price under a course's heading).
+ */
+export function toolPassage(p: SearchPassage): { token: string; title: string; section?: string; text: string } {
+  return {
+    token: p.cite,
+    title: p.title,
+    ...(p.headingPath.length > 0 ? { section: p.headingPath.join(" › ") } : {}),
+    text: p.text,
+  };
 }
 
 /**
