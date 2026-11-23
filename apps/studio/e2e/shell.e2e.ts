@@ -70,10 +70,12 @@ const COVERED = [
   "canvas.zoom-out",
   "shell.delete-workflow",
   "shell.duplicate-workflow",
+  "shell.export",
   "shell.issues",
   "shell.new-workflow",
   "shell.next-issue",
   "shell.previous-issue",
+  "shell.publish",
   "shell.rename-workflow",
 ];
 
@@ -198,6 +200,13 @@ test("the palette runs every registered action", async ({ page }) => {
   await remove.getByRole("button", { name: "Delete workflow" }).click();
   await expect(crumb(page)).toHaveText("Main");
   await expect(page.getByRole("list", { name: "Workflows" })).not.toContainText("copy");
+
+  const download = page.waitForEvent("download");
+  await run(page, "Export bot");
+  expect((await download).suggestedFilename()).toMatch(/\.wakeel\.json$/);
+  await run(page, "Publish");
+  await expect(page.getByRole("dialog", { name: /Publish v\d+/ })).toBeVisible();
+  await page.keyboard.press("Escape");
 });
 
 test("deleting a workflow that is called warns and lists the callers", async ({ page }) => {

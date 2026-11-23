@@ -2,6 +2,7 @@ import { BRAND } from "@wakeel/config/brand";
 import { Brand, type Category, IconTile } from "@wakeel/ui";
 import { ArrowRight, type LucideIcon, MessageSquare, Play, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
+import { ThemeToggle } from "../../shell/ThemeToggle";
 
 /**
  * Sign in and its siblings (design system §5.14, ADR-017): the form on the start side, and on the
@@ -10,11 +11,14 @@ import type { ReactNode } from "react";
  */
 export function AuthLayout({ heading, children }: { heading: string; children: ReactNode }) {
   return (
-    <main className="grid min-h-dvh grid-cols-2 bg-surface">
-      <div className="flex flex-col px-11 py-9">
-        <Brand name={BRAND.name} />
+    <main className="wk-auth-layout grid min-h-dvh grid-cols-2 bg-surface">
+      <div className="wk-auth-content flex min-w-0 flex-col px-11 py-9">
+        <div className="flex items-center justify-between gap-4">
+          <Brand name={BRAND.name} markSrc={BRAND.logo.mark} />
+          <ThemeToggle />
+        </div>
         <div className="flex flex-1 items-center justify-center py-11">
-          <div className="flex w-sign-in flex-col gap-8">
+          <div className="wk-auth-form flex w-sign-in flex-col gap-8">
             <div className="flex flex-col gap-3">
               <h1 className="text-display text-primary">{heading}</h1>
               <p className="text-content text-secondary">Build, test and run agents that speak Arabic and English.</p>
@@ -95,7 +99,7 @@ function Preview() {
   return (
     <aside
       aria-hidden="true"
-      className="flex flex-col justify-center gap-9 overflow-hidden border-s border-hairline bg-canvas px-11 py-11"
+      className="wk-auth-preview flex flex-col justify-center gap-9 overflow-hidden border-s border-hairline bg-canvas px-11 py-11"
     >
       <div className="flex items-start gap-5">
         <PreviewNode category="trigger" icon={Play} title="Start" subtitle="A customer writes in" />

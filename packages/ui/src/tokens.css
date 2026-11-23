@@ -7,22 +7,40 @@
 :root {
   color-scheme: light;
 
+  /* Approved foundation. Derived semantic and component values below reference these anchors. */
+  --brand-off-white: #fafafa;
+  --brand-light-gray: #cdcdcf;
+  --brand-medium-gray: #939599;
+  --brand-turquoise: #2bcfce;
+  --brand-orange: #ec4d25;
+  --neutral-white: #ffffff;
+  --neutral-950: #111a1b;
+  --neutral-900: #192425;
+  --neutral-850: #202c2d;
+  --neutral-800: #293637;
+  --neutral-700: #3a4a4b;
+  --neutral-600: #516163;
+  --neutral-500: #637476;
+  --neutral-300: #aab8b9;
+  --neutral-200: #cbd4d4;
+  --neutral-100: #f1f4f4;
+
   /* §2.1 Colour, light */
-  --bg-canvas: oklch(0.982 0.003 270);
-  --bg-surface: oklch(1 0 0);
-  --bg-subtle: oklch(0.97 0.004 270);
-  --bg-muted: oklch(0.945 0.006 270);
-  --border-hairline: oklch(0.92 0.006 270);
-  --border-strong: oklch(0.86 0.008 270);
-  --text-primary: oklch(0.21 0.02 275);
-  --text-secondary: oklch(0.46 0.018 275);
-  --text-tertiary: oklch(0.58 0.014 275);
-  --text-on-accent: oklch(1 0 0);
-  --accent: oklch(0.53 0.22 277);
-  --accent-hover: oklch(0.48 0.22 277);
-  --accent-subtle: oklch(0.955 0.03 277);
-  --accent-border: oklch(0.72 0.14 277);
-  --accent-text: oklch(0.5 0.22 277);
+  --bg-canvas: var(--brand-off-white);
+  --bg-surface: var(--neutral-white);
+  --bg-subtle: color-mix(in srgb, var(--brand-off-white) 75%, var(--brand-light-gray));
+  --bg-muted: color-mix(in srgb, var(--brand-off-white) 55%, var(--brand-light-gray));
+  --border-hairline: var(--brand-light-gray);
+  --border-strong: var(--brand-medium-gray);
+  --text-primary: var(--neutral-950);
+  --text-secondary: var(--neutral-600);
+  --text-tertiary: var(--neutral-500);
+  --text-on-accent: var(--neutral-950);
+  --accent: var(--brand-turquoise);
+  --accent-hover: color-mix(in srgb, var(--brand-turquoise) 82%, var(--neutral-950));
+  --accent-subtle: color-mix(in srgb, var(--brand-turquoise) 12%, var(--neutral-white));
+  --accent-border: color-mix(in srgb, var(--brand-turquoise) 45%, var(--brand-light-gray));
+  --accent-text: color-mix(in srgb, var(--brand-turquoise) 50%, var(--neutral-950));
   --error: oklch(0.55 0.2 27);
   --error-subtle: oklch(0.96 0.025 27);
   --warning: oklch(0.52 0.12 70);
@@ -31,6 +49,44 @@
   --success-subtle: oklch(0.96 0.03 152);
   --scrim: oklch(0.21 0.02 275 / 0.32);
 
+  /* Shared semantic contract. Existing shorter aliases above remain for established components. */
+  --semantic-background: var(--bg-canvas);
+  --semantic-foreground: var(--text-primary);
+  --semantic-surface: var(--bg-surface);
+  --semantic-surface-elevated: var(--glass-surface-strong);
+  --semantic-surface-subtle: var(--bg-subtle);
+  --semantic-primary: var(--brand-turquoise);
+  --semantic-primary-foreground: var(--text-on-accent);
+  --semantic-secondary: var(--bg-muted);
+  --semantic-secondary-foreground: var(--text-primary);
+  --semantic-accent: var(--brand-orange);
+  --semantic-accent-foreground: var(--neutral-950);
+  --semantic-muted: var(--bg-muted);
+  --semantic-muted-foreground: var(--text-secondary);
+  --semantic-border: var(--border-hairline);
+  --semantic-input: var(--bg-surface);
+  --semantic-ring: var(--accent);
+  --semantic-destructive: var(--error);
+  --semantic-destructive-foreground: var(--neutral-white);
+  --semantic-warning: var(--warning);
+  --semantic-success: var(--success);
+  --semantic-information: var(--cat-logic);
+  --semantic-disabled: var(--text-tertiary);
+  --semantic-selected: var(--accent-subtle);
+  --semantic-hover: var(--bg-subtle);
+  --semantic-active: var(--bg-muted);
+  --semantic-overlay: var(--scrim);
+
+  /* Component mappings are only defined where the component needs a distinct contract. */
+  --button-primary-background: var(--semantic-primary);
+  --button-primary-foreground: var(--semantic-primary-foreground);
+  --input-background: var(--semantic-input);
+  --dialog-background: var(--semantic-surface-elevated);
+  --canvas-background: var(--semantic-background);
+  --canvas-selection: var(--semantic-ring);
+  --editor-background: var(--semantic-surface);
+  --navigation-background: var(--semantic-surface);
+
   /* Node categories (ADR-017): strong = icon, port and border accent; subtle = icon tile. */
   --cat-trigger: oklch(0.58 0.11 185);
   --cat-trigger-subtle: oklch(0.955 0.03 185);
@@ -38,12 +94,12 @@
   --cat-logic: oklch(0.56 0.15 250);
   --cat-logic-subtle: oklch(0.955 0.025 250);
   --cat-logic-border: oklch(0.8 0.08 250);
-  --cat-ai: oklch(0.55 0.2 295);
-  --cat-ai-subtle: oklch(0.955 0.035 295);
-  --cat-ai-border: oklch(0.79 0.1 295);
-  --cat-tool: oklch(0.6 0.14 60);
-  --cat-tool-subtle: oklch(0.965 0.04 75);
-  --cat-tool-border: oklch(0.84 0.09 70);
+  --cat-ai: var(--accent-text);
+  --cat-ai-subtle: var(--accent-subtle);
+  --cat-ai-border: var(--accent-border);
+  --cat-tool: color-mix(in srgb, var(--brand-orange) 78%, var(--neutral-950));
+  --cat-tool-subtle: color-mix(in srgb, var(--brand-orange) 12%, var(--neutral-white));
+  --cat-tool-border: color-mix(in srgb, var(--brand-orange) 38%, var(--brand-light-gray));
   --cat-human: oklch(0.57 0.18 15);
   --cat-human-subtle: oklch(0.96 0.025 15);
   --cat-human-border: oklch(0.81 0.08 15);
@@ -54,6 +110,24 @@
   /* §2.2 Type */
   --font-sans: "IBM Plex Sans", "IBM Plex Sans Arabic", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-size-micro: 11px;
+  --font-size-small: 12px;
+  --font-size-body: 13px;
+  --font-size-content: 14px;
+  --font-size-title: 16px;
+  --font-size-heading: 20px;
+  --font-size-display: 24px;
+  --line-height-micro: 16px;
+  --line-height-small: 16px;
+  --line-height-body: 20px;
+  --line-height-content: 22px;
+  --line-height-title: 24px;
+  --line-height-heading: 28px;
+  --line-height-display: 32px;
+  --line-height-code-small: 18px;
+  --type-weight-normal: 400;
+  --type-weight-medium: 500;
+  --type-weight-semibold: 600;
 
   /* §2.3 Space: 4 px grid */
   --space-0: 0px;
@@ -129,13 +203,13 @@
   --glass-blur: 16px;
   --glass-saturate: 1.6;
   --scrim-blur: 3px;
-  --ambient-a: radial-gradient(60rem 40rem at 6% -10%, oklch(0.6 0.2 277 / 0.16), transparent 64%);
-  --ambient-b: radial-gradient(52rem 36rem at 100% 4%, oklch(0.62 0.18 300 / 0.12), transparent 62%);
-  --ambient-c: radial-gradient(64rem 40rem at 70% 112%, oklch(0.7 0.12 200 / 0.1), transparent 62%);
+  --ambient-a: none;
+  --ambient-b: none;
+  --ambient-c: none;
   --shadow-lift: 0 10px 24px -10px oklch(0.21 0.02 275 / 0.22), 0 2px 6px -2px oklch(0.21 0.02 275 / 0.08);
-  --shadow-halo: 0 0 0 4px oklch(0.53 0.22 277 / 0.14), 0 10px 28px -8px oklch(0.53 0.22 277 / 0.32);
+  --shadow-halo: 0 0 0 3px var(--accent-border);
   --shadow-press: 0 1px 0 oklch(1 0 0 / 0.28) inset, 0 1px 2px oklch(0.21 0.02 275 / 0.2);
-  --run-sweep: oklch(0.53 0.22 277 / 0.85);
+  --run-sweep: var(--brand-turquoise);
 
   /* §2.6 Motion for CSS transitions; must equal packages/ui/src/motion.ts (a test checks). */
   --duration-instant: 80ms;
@@ -174,21 +248,21 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg-canvas: oklch(0.155 0.012 275);
-    --bg-surface: oklch(0.195 0.014 275);
-    --bg-subtle: oklch(0.225 0.016 275);
-    --bg-muted: oklch(0.26 0.018 275);
-    --border-hairline: oklch(0.29 0.018 275);
-    --border-strong: oklch(0.37 0.02 275);
-    --text-primary: oklch(0.95 0.005 275);
-    --text-secondary: oklch(0.75 0.014 275);
-    --text-tertiary: oklch(0.62 0.014 275);
-    --text-on-accent: oklch(1 0 0);
-    --accent: oklch(0.55 0.2 277);
-    --accent-hover: oklch(0.5 0.2 277);
-    --accent-subtle: oklch(0.28 0.07 277);
-    --accent-border: oklch(0.6 0.17 277);
-    --accent-text: oklch(0.76 0.13 277);
+    --bg-canvas: var(--neutral-950);
+    --bg-surface: var(--neutral-900);
+    --bg-subtle: var(--neutral-850);
+    --bg-muted: var(--neutral-800);
+    --border-hairline: var(--neutral-700);
+    --border-strong: var(--neutral-500);
+    --text-primary: var(--neutral-100);
+    --text-secondary: var(--neutral-200);
+    --text-tertiary: var(--neutral-300);
+    --text-on-accent: var(--neutral-950);
+    --accent: var(--brand-turquoise);
+    --accent-hover: color-mix(in srgb, var(--brand-turquoise) 86%, var(--neutral-white));
+    --accent-subtle: color-mix(in srgb, var(--brand-turquoise) 15%, var(--neutral-900));
+    --accent-border: color-mix(in srgb, var(--brand-turquoise) 55%, var(--neutral-700));
+    --accent-text: var(--brand-turquoise);
     --error: oklch(0.7 0.17 27);
     --error-subtle: oklch(0.27 0.06 27);
     --warning: oklch(0.8 0.13 80);
@@ -202,12 +276,12 @@
     --cat-logic: oklch(0.74 0.13 250);
     --cat-logic-subtle: oklch(0.27 0.055 250);
     --cat-logic-border: oklch(0.5 0.11 250);
-    --cat-ai: oklch(0.74 0.15 295);
-    --cat-ai-subtle: oklch(0.28 0.075 295);
-    --cat-ai-border: oklch(0.52 0.14 295);
-    --cat-tool: oklch(0.8 0.14 75);
-    --cat-tool-subtle: oklch(0.28 0.05 75);
-    --cat-tool-border: oklch(0.55 0.1 70);
+    --cat-ai: var(--brand-turquoise);
+    --cat-ai-subtle: var(--accent-subtle);
+    --cat-ai-border: var(--accent-border);
+    --cat-tool: color-mix(in srgb, var(--brand-orange) 70%, var(--neutral-white));
+    --cat-tool-subtle: color-mix(in srgb, var(--brand-orange) 16%, var(--neutral-900));
+    --cat-tool-border: color-mix(in srgb, var(--brand-orange) 48%, var(--neutral-700));
     --cat-human: oklch(0.74 0.15 15);
     --cat-human-subtle: oklch(0.27 0.055 15);
     --cat-human-border: oklch(0.52 0.11 15);
@@ -223,33 +297,33 @@
     --glass-surface-strong: oklch(0.2 0.016 275 / 0.86);
     --glass-border: oklch(1 0 0 / 0.09);
     --glass-highlight: oklch(1 0 0 / 0.07);
-    --ambient-a: radial-gradient(60rem 40rem at 6% -10%, oklch(0.55 0.2 277 / 0.3), transparent 64%);
-    --ambient-b: radial-gradient(52rem 36rem at 100% 4%, oklch(0.55 0.2 300 / 0.2), transparent 62%);
-    --ambient-c: radial-gradient(64rem 40rem at 70% 112%, oklch(0.6 0.12 200 / 0.14), transparent 62%);
+    --ambient-a: none;
+    --ambient-b: none;
+    --ambient-c: none;
     --shadow-lift: 0 12px 28px -10px oklch(0 0 0 / 0.65), 0 2px 6px -2px oklch(0 0 0 / 0.4);
-    --shadow-halo: 0 0 0 4px oklch(0.55 0.2 277 / 0.24), 0 10px 32px -8px oklch(0.55 0.2 277 / 0.5);
+    --shadow-halo: 0 0 0 3px var(--accent-border);
     --shadow-press: 0 1px 0 oklch(1 0 0 / 0.16) inset, 0 1px 2px oklch(0 0 0 / 0.4);
-    --run-sweep: oklch(0.76 0.13 277 / 0.9);
+    --run-sweep: var(--brand-turquoise);
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg-canvas: oklch(0.155 0.012 275);
-  --bg-surface: oklch(0.195 0.014 275);
-  --bg-subtle: oklch(0.225 0.016 275);
-  --bg-muted: oklch(0.26 0.018 275);
-  --border-hairline: oklch(0.29 0.018 275);
-  --border-strong: oklch(0.37 0.02 275);
-  --text-primary: oklch(0.95 0.005 275);
-  --text-secondary: oklch(0.75 0.014 275);
-  --text-tertiary: oklch(0.62 0.014 275);
-  --text-on-accent: oklch(1 0 0);
-  --accent: oklch(0.55 0.2 277);
-  --accent-hover: oklch(0.5 0.2 277);
-  --accent-subtle: oklch(0.28 0.07 277);
-  --accent-border: oklch(0.6 0.17 277);
-  --accent-text: oklch(0.76 0.13 277);
+  --bg-canvas: var(--neutral-950);
+  --bg-surface: var(--neutral-900);
+  --bg-subtle: var(--neutral-850);
+  --bg-muted: var(--neutral-800);
+  --border-hairline: var(--neutral-700);
+  --border-strong: var(--neutral-500);
+  --text-primary: var(--neutral-100);
+  --text-secondary: var(--neutral-200);
+  --text-tertiary: var(--neutral-300);
+  --text-on-accent: var(--neutral-950);
+  --accent: var(--brand-turquoise);
+  --accent-hover: color-mix(in srgb, var(--brand-turquoise) 86%, var(--neutral-white));
+  --accent-subtle: color-mix(in srgb, var(--brand-turquoise) 15%, var(--neutral-900));
+  --accent-border: color-mix(in srgb, var(--brand-turquoise) 55%, var(--neutral-700));
+  --accent-text: var(--brand-turquoise);
   --error: oklch(0.7 0.17 27);
   --error-subtle: oklch(0.27 0.06 27);
   --warning: oklch(0.8 0.13 80);
@@ -263,12 +337,12 @@
   --cat-logic: oklch(0.74 0.13 250);
   --cat-logic-subtle: oklch(0.27 0.055 250);
   --cat-logic-border: oklch(0.5 0.11 250);
-  --cat-ai: oklch(0.74 0.15 295);
-  --cat-ai-subtle: oklch(0.28 0.075 295);
-  --cat-ai-border: oklch(0.52 0.14 295);
-  --cat-tool: oklch(0.8 0.14 75);
-  --cat-tool-subtle: oklch(0.28 0.05 75);
-  --cat-tool-border: oklch(0.55 0.1 70);
+  --cat-ai: var(--brand-turquoise);
+  --cat-ai-subtle: var(--accent-subtle);
+  --cat-ai-border: var(--accent-border);
+  --cat-tool: color-mix(in srgb, var(--brand-orange) 70%, var(--neutral-white));
+  --cat-tool-subtle: color-mix(in srgb, var(--brand-orange) 16%, var(--neutral-900));
+  --cat-tool-border: color-mix(in srgb, var(--brand-orange) 48%, var(--neutral-700));
   --cat-human: oklch(0.74 0.15 15);
   --cat-human-subtle: oklch(0.27 0.055 15);
   --cat-human-border: oklch(0.52 0.11 15);
@@ -284,13 +358,13 @@
   --glass-surface-strong: oklch(0.2 0.016 275 / 0.86);
   --glass-border: oklch(1 0 0 / 0.09);
   --glass-highlight: oklch(1 0 0 / 0.07);
-  --ambient-a: radial-gradient(60rem 40rem at 6% -10%, oklch(0.55 0.2 277 / 0.3), transparent 64%);
-  --ambient-b: radial-gradient(52rem 36rem at 100% 4%, oklch(0.55 0.2 300 / 0.2), transparent 62%);
-  --ambient-c: radial-gradient(64rem 40rem at 70% 112%, oklch(0.6 0.12 200 / 0.14), transparent 62%);
+  --ambient-a: none;
+  --ambient-b: none;
+  --ambient-c: none;
   --shadow-lift: 0 12px 28px -10px oklch(0 0 0 / 0.65), 0 2px 6px -2px oklch(0 0 0 / 0.4);
-  --shadow-halo: 0 0 0 4px oklch(0.55 0.2 277 / 0.24), 0 10px 32px -8px oklch(0.55 0.2 277 / 0.5);
+  --shadow-halo: 0 0 0 3px var(--accent-border);
   --shadow-press: 0 1px 0 oklch(1 0 0 / 0.16) inset, 0 1px 2px oklch(0 0 0 / 0.4);
-  --run-sweep: oklch(0.76 0.13 277 / 0.9);
+  --run-sweep: var(--brand-turquoise);
 }
 
 /* §2.2: Arabic content gets more line height and no tracking; §2.7: one focus ring everywhere. */

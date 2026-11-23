@@ -4,7 +4,7 @@ Reasoned from `01-research-report.md`. This is a point of view, not a survey. Wh
 
 ## 1. What the product is
 
-`{{PLATFORM_NAME}}` is a hosted workbench for building, running and debugging conversational LLM agents, sold to teams that already own their customer channels.
+Wakeelk is a hosted workbench for building, running and debugging conversational LLM agents, sold to teams that already own their customer channels.
 
 It has three parts that matter:
 

@@ -14,7 +14,7 @@ export function Gallery() {
       <Section
         id="colour"
         title="Colour"
-        note="Neutral surfaces; the indigo accent marks selection, focus and the one primary action."
+        note="Neutral surfaces; turquoise marks selection, focus and the primary action."
       >
         <ColourSection />
       </Section>

@@ -14,7 +14,7 @@ Botpress Studio is the functional reference. Its branding, colours, icons and la
 6. **Content is bilingual.** Chrome is English and left-to-right. Anything written by a builder, a user or a model renders with `dir="auto"` and must look right in Arabic, English and both mixed.
 7. **Words are plain.** Names say what a thing does. Errors say what happened and what to do.
 
-Never: gradients, glows, blurred glass (except the bounded uses in ADR-033: the ambient backdrop, glass on floating surfaces, the selection halo and the run sweep), decorative colour, emoji as icons, ALL-CAPS labels, letter-spaced eyebrow text, pulsing dots, identical rounded-card grids, a second accent colour, category colours outside nodes and the node library, drop shadows on things that do not float.
+Never: decorative gradients, glows, decorative colour, emoji as icons, ALL-CAPS labels, letter-spaced eyebrow text, pulsing dots, identical rounded-card grids, category colours outside nodes and the node library, drop shadows on things that do not float. Orange is an approved selective brand accent; turquoise remains the primary action colour (ADR-054).
 
 ## 2. Tokens
 
@@ -22,28 +22,17 @@ Tokens are CSS custom properties in `packages/ui/src/tokens.css`, exposed to Tai
 
 ### 2.1 Colour
 
-Cool blue-grey neutrals (hue 270–275, chroma ≤ 0.02) with an indigo accent; the dark theme is blue-black (ADR-017). Values are OKLCH; `packages/ui/src/tokens.css` is the source of truth.
+Wakeelk uses neutral surfaces and turquoise primary actions in both themes. Orange is reserved for selective highlights and the tool category. The five approved anchors are off-white `#FAFAFA`, light gray `#CDCDCF`, medium gray `#939599`, turquoise `#2BCFCE`, and orange `#EC4D25`. `packages/ui/src/tokens.css` is the source of truth; semantic values derive from those anchors and accessible neutral shades (ADR-054).
 
-| Token | Light | Dark | Use |
+| Token group | Light | Dark | Use |
 |---|---|---|---|
-| `--bg-canvas` | `oklch(0.982 0.003 270)` | `oklch(0.155 0.012 275)` | Canvas, app background |
-| `--bg-surface` | `oklch(1 0 0)` | `oklch(0.195 0.014 275)` | Panels, nodes, inputs, tables |
-| `--bg-subtle` | `oklch(0.97 0.004 270)` | `oklch(0.225 0.016 275)` | Hover, card rows inside nodes, table header |
-| `--bg-muted` | `oklch(0.945 0.006 270)` | `oklch(0.26 0.018 275)` | Pressed, counts, skeletons |
-| `--border-hairline` | `oklch(0.92 0.006 270)` | `oklch(0.29 0.018 275)` | Default 1 px lines, control borders |
-| `--border-strong` | `oklch(0.86 0.008 270)` | `oklch(0.37 0.02 275)` | Hovered controls and nodes |
-| `--text-primary` | `oklch(0.21 0.02 275)` | `oklch(0.95 0.005 275)` | Main text |
-| `--text-secondary` | `oklch(0.46 0.018 275)` | `oklch(0.75 0.014 275)` | Labels, secondary text |
-| `--text-tertiary` | `oklch(0.58 0.014 275)` | `oklch(0.62 0.014 275)` | Placeholders, metadata, transitions |
-| `--text-on-accent` | `oklch(1 0 0)` | `oklch(1 0 0)` | Text on the accent fill |
-| `--accent` | `oklch(0.53 0.22 277)` | `oklch(0.55 0.2 277)` | Selection, focus ring, primary button, active rail item |
-| `--accent-hover` | `oklch(0.48 0.22 277)` | `oklch(0.5 0.2 277)` | Primary button hover |
-| `--accent-subtle` | `oklch(0.955 0.03 277)` | `oklch(0.28 0.07 277)` | Selected row, pressed tool button |
-| `--accent-border` | `oklch(0.72 0.14 277)` | `oklch(0.6 0.17 277)` | Connection line while dragging |
-| `--accent-text` | `oklch(0.5 0.22 277)` | `oklch(0.76 0.13 277)` | The accent used as text: links, pressed tool buttons |
-| `--error` / `--error-subtle` | `oklch(0.55 0.2 27)` / `oklch(0.96 0.025 27)` | `oklch(0.7 0.17 27)` / `oklch(0.27 0.06 27)` | Errors only |
-| `--warning` / `--warning-subtle` | `oklch(0.52 0.12 70)` / `oklch(0.965 0.035 85)` | `oklch(0.8 0.13 80)` / `oklch(0.28 0.05 80)` | Warnings only |
-| `--success` / `--success-subtle` | `oklch(0.52 0.13 152)` / `oklch(0.96 0.03 152)` | `oklch(0.74 0.14 152)` / `oklch(0.26 0.05 152)` | Success only |
+| `--bg-*` | Off-white and white surfaces | Layered deep neutrals | Canvas, panels, inputs, rows |
+| `--text-*` | Dark neutrals | Light neutrals | Primary, secondary and tertiary content |
+| `--border-*` | Approved gray anchors | Neutral dark shades | Hairlines and strong boundaries |
+| `--accent*` | Turquoise and derived shades | Turquoise and derived shades | Primary action, selected state, focus, links |
+| `--error*`, `--warning*`, `--success*` | Accessible status colors | Accessible status colors | Status only |
+
+Actual values and derivations are maintained in `packages/ui/src/tokens.css`; this table describes their role and deliberately does not duplicate the source of truth.
 
 **Node categories** (ADR-017). Each category has `--cat-<c>` (icon, port, minimap), `--cat-<c>-subtle` (icon tile) and `--cat-<c>-border` (node border), light and dark.
 
@@ -51,8 +40,8 @@ Cool blue-grey neutrals (hue 270–275, chroma ≤ 0.02) with an indigo accent; 
 |---|---|---|
 | `trigger` | teal 185 | Start, Entry, Trigger |
 | `logic` | blue 250 | Standard node; Say, Ask, Condition, Set variable, Set timeout, Log cards |
-| `ai` | violet 295 | Autonomous node; AI condition, Generate text, Extract data cards |
-| `tool` | amber 60–75 | Run code, Search knowledge, Table, Call workflow cards; Note |
+| `ai` | turquoise | Autonomous node; AI condition, Generate text, Extract data cards |
+| `tool` | orange | Run code, Search knowledge, Table, Call workflow cards; Note |
 | `human` | rose 15 | Handoff card; Error handler |
 | `flow` | slate 270 | End, Exit; End card |
 
@@ -139,7 +128,7 @@ Panels docked to the window edge have radius 0.
 
 Dark theme: same offsets with alpha 0.4 / 0.5 / 0.6 and `--border-strong` instead of the hairline. Overlay scrim: `oklch(0 0 0 / 0.32)` light, `/ 0.5` dark, with a light `--scrim-blur` (ADR-033).
 
-ADR-033 adds: `--glass-surface` / `--glass-surface-strong` with `--glass-blur` for floating surfaces (`.wk-glass`, `.wk-glass-strong`, `.wk-glass-bar`, `.wk-panel` in `packages/ui/src/effects.css`), `--shadow-lift` for a card under the pointer, `--shadow-halo` for the selected node, and the `--ambient-a/b/c` app backdrop. Docked panels with editable content stay opaque. `prefers-reduced-transparency` makes every glass surface opaque.
+ADR-033 adds: `--glass-surface` / `--glass-surface-strong` with `--glass-blur` for floating surfaces (`.wk-glass`, `.wk-glass-strong`, `.wk-glass-bar`, `.wk-panel` in `packages/ui/src/effects.css`), `--shadow-lift` for a card under the pointer, and `--shadow-halo` for the selected node. The ambient backdrop tokens are disabled by ADR-054. Docked panels with editable content stay opaque. `prefers-reduced-transparency` makes every glass surface opaque.
 
 ### 2.6 Motion
 
@@ -229,7 +218,7 @@ Wireframes show structure and density, not final pixels. `│` and `─` are hai
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ ▣ Botbress │ Engosoft / Store assistant / Main [Draft]        ✓ Saved  ⓘ2 ⚠1 │ [▷ Test] [Publish] │ 52
+│ ▣ Wakeelk  │ Engosoft / Store assistant / Main [Draft]        ✓ Saved  ⓘ2 ⚠1 │ [▷ Test] [Publish] │ 52
 ├────┬─────────────────┬──────────────────────────────────────────────────────┬───────────────────────┤
 │ ⌂  │ Nodes  Workflows│            [ ↖ ✋ │ ↶ ↷ │ ⤢ ▦ ]                       │ ✦ Order assistant   × │
 │ ── │ ┌ Search nodes ┐│  · · · · · · · · · · · · · · · · · · · · · · · · · ·   │   Autonomous · 2 exits│

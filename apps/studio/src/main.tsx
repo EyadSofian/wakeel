@@ -1,10 +1,14 @@
 import "./styles.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
+import { BRAND } from "@wakeel/config/brand";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ApiError } from "./api/client";
 import { router } from "./router";
+
+document.title = `${BRAND.name} Studio`;
+document.documentElement.lang = "en";
 
 const queryClient = new QueryClient({
   defaultOptions: {

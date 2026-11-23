@@ -2,7 +2,7 @@
 
 Normative. Words "must", "never" and "always" bind the executor. Decisions with alternatives are recorded in `/docs/adr`. Contracts referenced here live in `/docs/04-contracts`.
 
-Code scope name: `@wakeel/*` (matches the repo folder). The user-facing brand string is `{{PLATFORM_NAME}}` and must only ever be read from `packages/config/src/brand.ts`.
+Code scope name: `@wakeel/*` (matches the repo folder). The user-facing brand is Wakeelk and must only ever be read from `packages/config/src/brand.ts` in application code (ADR-054).
 
 ## 1. System overview
 
